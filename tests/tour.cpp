@@ -172,11 +172,11 @@ void runTourCapture(Backend *b, QQuickWindow *w) {
   b->home();
   c.check(c.until([&] { return !b->busy(); }), "Home loads");
   w->setProperty("side", "");
-  c.shot("home", "homeBackdrop");
+  c.shot("home", "windowBackdrop");
 
   b->setTheme("light");
   QTest::qWait(500);
-  c.shot("home-light", "homeBackdrop");
+  c.shot("home-light", "windowBackdrop");
   b->setTheme("dark");
   QTest::qWait(500);
 
@@ -200,6 +200,8 @@ void runTourCapture(Backend *b, QQuickWindow *w) {
   b->addItemsToPlaylist(playlist, b->results()->rows);
   b->saveSmartPlaylist({}, "Recent 2026", {{"yearFrom", 2026}, {"yearTo", 2026}});
   QMetaObject::invokeMethod(w, "chooseLibrary", Q_ARG(QVariant, QVariant("playlists")));
+  c.check(c.until([&] { return w->property("libraryTab") == "playlists"; }),
+          "the library arrives on Playlists");
   b->setViewMode("grid");
   c.check(c.until([&] { return b->playlists().size() >= 2 && b->viewMode() == "grid"; }),
           "playlists appear in the cover grid");
