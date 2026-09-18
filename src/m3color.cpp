@@ -294,6 +294,19 @@ QVariantMap scheme(const QColor &source, bool dark) {
     put("inverseSurface", p.neutral.tone(20));
     put("inverseOnSurface", p.neutral.tone(95));
   }
+  // The fixed accents. Every other role flips its tone between light and dark;
+  // these hold the same tone in both, so anything painted with them keeps its
+  // identity when the theme changes underneath it.
+  const auto putFixed = [&roles](const QString &accent, const TonalPalette &palette) {
+    const QString capital = accent.at(0).toUpper() + accent.mid(1);
+    roles.insert(accent + "Fixed", palette.tone(90));
+    roles.insert(accent + "FixedDim", palette.tone(80));
+    roles.insert("on" + capital + "Fixed", palette.tone(10));
+    roles.insert("on" + capital + "FixedVariant", palette.tone(30));
+  };
+  putFixed("primary", p.primary);
+  putFixed("secondary", p.secondary);
+  putFixed("tertiary", p.tertiary);
   return roles;
 }
 

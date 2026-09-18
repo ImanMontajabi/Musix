@@ -87,6 +87,7 @@ QtObject {
     readonly property int bodyMedium: 14
     readonly property int labelLarge: 14
     readonly property int labelMedium: 12
+    readonly property int labelSmall: 11
     readonly property real hoverOpacity: 0.08
     readonly property real pressedOpacity: 0.10
     readonly property bool followDesktop: app.theme === "system" && desktopTheme.available
@@ -106,6 +107,13 @@ QtObject {
     readonly property color containerText: useSource ? role("onPrimaryContainer",readable(primary,[primaryContainer])) : followDesktop ? desktopTheme.colors.containerText : (dark ? "#ffdbcb" : "#743419")
     readonly property color secondary: followDesktop ? desktopTheme.colors.secondary : role("secondary", dark ? "#d8c4a0" : "#6c5b3b")
     readonly property color error: dark ? "#ffb4ab" : "#ba1a1a"
+    readonly property color errorText: dark ? "#690005" : "#ffffff"
+    // Material's fixed accents keep one tone in both themes, so anything drawn
+    // with them holds its identity when the rest of the window flips.
+    readonly property color primaryFixed: role("primaryFixed","#ffdbcb")
+    readonly property color primaryFixedDim: role("primaryFixedDim","#ffb596")
+    readonly property color primaryFixedText: role("onPrimaryFixed","#360f00")
+    readonly property color primaryFixedVariantText: role("onPrimaryFixedVariant","#743419")
     // The names the rest of the application already uses, now resolved through
     // the spring tokens above rather than carrying their own numbers. Changing
     // the motion scheme therefore reaches every animation in the app at once.

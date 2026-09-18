@@ -70,15 +70,19 @@ MDialog {
                     Layout.preferredHeight: 84
                     Layout.minimumHeight: 72
                     radius: Theme.shapeLargeIncreased
-                    color: Theme.high
+                    // The figures are drawn in Material's fixed accent, which
+                    // holds one tone in both themes: the summary of a period
+                    // reads the same however the rest of the window is lit.
+                    color: Theme.primaryFixed
                     ColumnLayout {
                         anchors.fill: parent
                         anchors.margins: 14
                         spacing: 2
-                        SungText { text: parent.parent.modelData.label; color: Theme.muted; font.pixelSize: Theme.labelMedium }
+                        SungText { text: parent.parent.modelData.label; color: Theme.primaryFixedVariantText; font.pixelSize: Theme.labelMedium }
                         SungText {
                             objectName: parent.parent.modelData.name+"Value"
                             text: parent.parent.modelData.value
+                            color: Theme.primaryFixedText
                             font.pixelSize: Theme.headlineSmall
                             emphasized: true
                             Layout.fillWidth: true

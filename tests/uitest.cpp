@@ -841,7 +841,7 @@ void runVisualPolishTests(Backend *b, QQuickWindow *w) {
   QWindowSystemInterface::handleFocusWindowChanged(w);QTest::qWait(50);
   b->setVolume(0);b->setAutoplay(false);b->setMotion(true);b->setTheme("dark");
   w->resize(1180,800);b->home();check(until([&]{return !b->busy();}),"fixture home loads");
-  QQmlComponent component(qmlEngine(w),QUrl("qrc:/qml/MBusyIndicator.qml"));
+  QQmlComponent component(qmlEngine(w),QUrl("qrc:/qml/MLoadingIndicator.qml"));
   QScopedPointer<QObject> object(component.create(qmlContext(w)));
   auto spinner=qobject_cast<QQuickItem*>(object.data());
   check(spinner,"Material loading component creates");

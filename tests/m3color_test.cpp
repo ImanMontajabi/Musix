@@ -166,6 +166,35 @@ private slots:
     }
   }
 
+  // The fixed accents are the one family that does not move with the theme.
+  void fixedAccentsHoldTheirTone() {
+    for (const auto &source : {QColor("#3f6ad8"), QColor("#c0392b"), QColor("#2f8f5b")}) {
+      const auto light = m3::scheme(source, false);
+      const auto dark = m3::scheme(source, true);
+      for (const auto &accent : {"primary", "secondary", "tertiary"}) {
+        const QString base(accent);
+        const QString capital = base.at(0).toUpper() + base.mid(1);
+        for (const auto &role : {base + "Fixed", base + "FixedDim", "on" + capital + "Fixed",
+                                 "on" + capital + "FixedVariant"}) {
+          QVERIFY2(light.contains(role), qPrintable(role + " is published"));
+          QCOMPARE(light.value(role).value<QColor>(), dark.value(role).value<QColor>());
+        }
+        const auto fixed = light.value(base + "Fixed").value<QColor>();
+        const auto dim = light.value(base + "FixedDim").value<QColor>();
+        const auto ink = light.value("on" + capital + "Fixed").value<QColor>();
+        const auto variant = light.value("on" + capital + "FixedVariant").value<QColor>();
+        // Material's tones: the container at 90, its dimmer twin at 80, and the
+        // two inks at 10 and 30.
+        QVERIFY(qAbs(m3::toneOf(fixed) - 90) < 1.5);
+        QVERIFY(qAbs(m3::toneOf(dim) - 80) < 1.5);
+        QVERIFY(qAbs(m3::toneOf(ink) - 10) < 1.5);
+        QVERIFY(qAbs(m3::toneOf(variant) - 30) < 1.5);
+        QVERIFY2(contrast(ink, fixed) >= 4.5, "the fixed accent carries its own text");
+        QVERIFY2(contrast(variant, fixed) >= 4.5, "and its secondary text too");
+      }
+    }
+  }
+
   // Solving is on the theme's hot path; it has to stay cheap.
   void solvingIsFast() {
     QElapsedTimer timer;

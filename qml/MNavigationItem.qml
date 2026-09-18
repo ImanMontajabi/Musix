@@ -8,6 +8,10 @@ AbstractButton {
     property string artUrl: ""
     property bool selected: false
     property bool expanded: false
+    // Pending work in this destination. A count draws Material's large badge,
+    // `badged` alone draws the dot.
+    property bool badged: false
+    property int badgeCount: -1
     implicitWidth: expanded ? 220 : 80
     implicitHeight: expanded ? 56 : 68
     hoverEnabled: true
@@ -48,7 +52,13 @@ AbstractButton {
             anchors.fill: parent
             visible: opacity>0; opacity: control.expanded ? 0 : 1
             Behavior on opacity { NumberAnimation { duration: Theme.fast } }
-            Icon { anchors.horizontalCenter: parent.horizontalCenter; y: 8; name: control.symbol; ink: control.selected ? Theme.primary : Theme.text; Accessible.ignored: true }
+            Icon { id: stackGlyph; anchors.horizontalCenter: parent.horizontalCenter; y: 8; name: control.symbol; fill: control.selected ? 1 : 0; ink: control.selected ? Theme.primary : Theme.text; Accessible.ignored: true }
+            MBadge {
+                objectName: "navigationBadge"
+                present: control.badged || control.badgeCount >= 0
+                count: control.badgeCount; subject: control.text
+                x: stackGlyph.x+stackGlyph.width-inset; y: stackGlyph.y-height+lift
+            }
             SungText {
                 objectName: "navigationLabel"
                 y: 42; width: parent.width; height: 20
@@ -67,8 +77,14 @@ AbstractButton {
             Behavior on opacity { NumberAnimation { duration: Theme.fast } }
             Item {
                 width: 24; height: 24; anchors.verticalCenter: parent.verticalCenter
-                Icon { anchors.centerIn: parent; visible: !control.artUrl; name: control.symbol; ink: control.selected ? Theme.primary : Theme.text; Accessible.ignored: true }
+                Icon { anchors.centerIn: parent; visible: !control.artUrl; name: control.symbol; fill: control.selected ? 1 : 0; ink: control.selected ? Theme.primary : Theme.text; Accessible.ignored: true }
                 Artwork { anchors.centerIn: parent; visible: !!control.artUrl; width: 24; height: 24; radius: Theme.shapeSmall; pixels: 96; url: control.artUrl }
+                MBadge {
+                    objectName: "navigationWideBadge"
+                    present: control.badged || control.badgeCount >= 0
+                    count: control.badgeCount; subject: control.text
+                    x: parent.width-inset; y: -height+lift
+                }
             }
             SungText {
                 objectName: "navigationWideLabel"

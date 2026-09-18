@@ -1,12 +1,11 @@
 import QtQuick
-import QtQuick.Shapes
 
 // Material 3 pull to refresh, drawn with the Expressive loading indicator.
 //
 // The loading indicator replaced the indeterminate circular progress spinner,
-// and pull-to-refresh is the interaction Material names for it. It uses shape
-// and motion to hold attention: here the shape morphs from a soft square into a
-// circle as the list is pulled, then spins while the refresh runs.
+// and pull-to-refresh is the interaction Material names for it. Pulling drives
+// the indicator's determinate morph from a circle towards the soft burst; once
+// the refresh is running it takes over its own shape sequence.
 Item {
     id: refresher
     objectName: "pullToRefresh"
@@ -25,7 +24,7 @@ Item {
 
     anchors.horizontalCenter: parent ? parent.horizontalCenter : undefined
     y: busy ? 16 : Math.min(refresher.threshold, refresher.pulled) - height
-    width: 40; height: 40
+    width: 48; height: 48
     visible: enabled && (pulled > 0 || busy)
     opacity: busy ? 1 : progress
     z: 20
@@ -41,36 +40,14 @@ Item {
         }
     }
 
-    Rectangle {
-        id: puck
+    MLoadingIndicator {
+        objectName: "refreshIndicator"
         anchors.fill: parent
-        color: Theme.primaryContainer
-        // Shape morph: a soft square becomes a circle as the pull completes.
-        radius: Theme.shapeSmall + (Theme.shapeFull(width)-Theme.shapeSmall)*refresher.progress
-        rotation: refresher.busy ? 0 : refresher.progress*90
-        Behavior on rotation { enabled: app.motion; NumberAnimation { duration: Theme.springFastEffectsMs } }
-
-        Shape {
-            anchors.centerIn: parent
-            width: 22; height: 22
-            preferredRendererType: Shape.CurveRenderer
-            ShapePath {
-                strokeColor: Theme.containerText
-                strokeWidth: 3
-                fillColor: "transparent"
-                capStyle: ShapePath.RoundCap
-                PathAngleArc {
-                    centerX: 11; centerY: 11; radiusX: 9; radiusY: 9
-                    startAngle: -90
-                    sweepAngle: refresher.busy ? 280 : 300*refresher.progress
-                }
-            }
-            RotationAnimation on rotation {
-                id: spin
-                running: refresher.busy && app.motion
-                loops: Animation.Infinite
-                from: 0; to: 360; duration: 900
-            }
-        }
+        running: true
+        // Material's contained variant: the shape sits on a filled container.
+        trackColor: Theme.primaryContainer
+        ink: Theme.containerText
+        progress: refresher.busy ? -1 : refresher.progress
+        label: refresher.busy ? "Refreshing" : "Pull to refresh"
     }
 }

@@ -70,6 +70,9 @@ struct Check {
   }
   // Capturing mid-transition cannot afford to settle first.
   void shotNow(const QString &name) {
+    // Stages that need no fixture folder have nothing else to create the
+    // output directory, and a capture into a missing one silently fails.
+    QDir().mkpath(directory);
     check(window->grabWindow().save(directory + '/' + name + ".png"), "capture " + name);
   }
   void click(const QString &name) {
@@ -1952,5 +1955,316 @@ void runMaterialComponentTests(Backend *b, QQuickWindow *w) {
 
   b->stop();
   b->clearQueue();
+  c.finish();
+}
+
+// Material's second layer over the components: the fill axis on navigation
+// icons, the two tab variants, badges, the search view, the loading indicator
+// that replaced the spinner, the fixed accents, and the proportions Material
+// gives a supporting pane and a feed.
+void runMaterialDetailTests(Backend *b, QQuickWindow *w) {
+  Check c{b, w, qEnvironmentVariable("SUNG_TEST_OUTPUT")};
+  QDir().mkpath(c.directory + "/music");
+  QWindowSystemInterface::handleFocusWindowChanged(w);
+  w->resize(1400, 900);
+  QTest::qWait(500);
+  b->setTheme("dark");
+  b->setMotion(true);
+  b->setVolume(0);
+  b->setAutoplay(false);
+  b->setPrepareNext(false);
+  b->setWatchMusicFolders(false);
+  b->setOnlineArtwork(false);
+
+  paintCover(c.directory + "/music/cover.png", QColor("#26405e"), QColor("#c96f2a"));
+  for (int i = 1; i <= 6; ++i)
+    if (!encodeTrack(c, QString("%1/music/%2.flac").arg(c.directory).arg(i),
+                     QString("Track %1").arg(i), "Detail", "Rill", i))
+      return c.finish();
+  b->importMusicFolder(QUrl::fromLocalFile(c.directory + "/music"));
+  c.check(c.until([&] { return !b->importingLocal(); }, 40000), "import the detail fixture");
+  // A second folder, kept back so the badges have a real import to report on.
+  QDir().mkpath(c.directory + "/more");
+  for (int i = 1; i <= 8; ++i)
+    if (!encodeTrack(c, QString("%1/more/%2.flac").arg(c.directory).arg(i),
+                     QString("Later %1").arg(i), "Detail two", "Marble Coast", i))
+      return c.finish();
+  QMetaObject::invokeMethod(w, "chooseLibrary", Q_ARG(QVariant, QVariant("files")));
+  c.check(c.until([&] { return b->results()->count() == 6; }), "the library is listed");
+  QTest::qWait(500);
+
+  // --- The fill axis: filled where you are, outlined where you are not ---
+  auto railHome = shownItem(w->contentItem(), "nav_home");
+  auto railLibrary = shownItem(w->contentItem(), "nav_library");
+  c.check(railHome && railLibrary, "the rail offers Home and Library");
+  if (railHome && railLibrary) {
+    auto glyphOf = [](QQuickItem *item) { return item ? shownItem(item, "materialIcon") : nullptr; };
+    auto homeGlyph = glyphOf(railHome), libraryGlyph = glyphOf(railLibrary);
+    c.check(homeGlyph && libraryGlyph, "each carries a symbol");
+    if (homeGlyph && libraryGlyph) {
+      c.check(libraryGlyph->property("fill").toReal() == 1,
+              "the destination you are in is filled");
+      c.check(homeGlyph->property("fill").toReal() == 0,
+              "and the one you are not is outlined");
+      auto outline = anyItem(homeGlyph, "iconOutline");
+      auto filled = anyItem(homeGlyph, "iconFill");
+      c.check(outline && outline->isVisible(), "the outlined form is the one on screen");
+      c.check(outline && filled &&
+                  outline->property("source").toUrl() != filled->property("source").toUrl(),
+              "and it is a different symbol, not the same one dimmed");
+      c.check(filled && filled->opacity() == 0, "with the filled form held clear of it");
+    }
+  }
+  c.shot("01-icon-fill-axis");
+
+  // --- Primary and secondary tabs ---
+  auto primaryTabs = shownItem(w->contentItem(), "libraryTabs");
+  auto secondaryTabs = shownItem(w->contentItem(), "localFacetTabs");
+  c.check(primaryTabs && secondaryTabs, "the library stacks a secondary set under its primary one");
+  if (primaryTabs && secondaryTabs) {
+    auto divider = anyItem(primaryTabs, "tabDivider");
+    c.check(divider && divider->isVisible(), "the primary container is closed by a divider");
+    c.check(!anyItem(secondaryTabs, "tabDivider")->isVisible(),
+            "which the secondary set does without");
+    auto primaryTab = shownItem(primaryTabs, "localFilesTab");
+    auto secondaryTab = shownItem(secondaryTabs, "localView_files");
+    c.check(primaryTab && secondaryTab, "both mark Local files as chosen");
+    if (primaryTab && secondaryTab) {
+      auto primaryMark = anyItem(primaryTab, "tabIndicator");
+      auto secondaryMark = anyItem(secondaryTab, "tabIndicator");
+      c.check(primaryMark && secondaryMark, "and both draw an indicator");
+      if (primaryMark && secondaryMark) {
+        c.check(primaryMark->height() == 3 && primaryMark->width() < primaryTab->width() - 8,
+                QString("the primary indicator is 3 tall and sits under the label alone (%1 of %2)")
+                    .arg(primaryMark->width(), 0, 'f', 0).arg(primaryTab->width(), 0, 'f', 0));
+        c.check(secondaryMark->height() == 2 &&
+                    qAbs(secondaryMark->width() - secondaryTab->width()) < 1,
+                "the secondary indicator is 2 tall and spans its whole tab");
+        // An indicator hanging below its own container would never be seen.
+        const auto mark = secondaryMark->mapRectToItem(secondaryTabs, secondaryMark->boundingRect());
+        c.check(mark.bottom() <= secondaryTabs->height() + 0.5,
+                QString("and stays inside it (%1 of %2)")
+                    .arg(mark.bottom(), 0, 'f', 0).arg(secondaryTabs->height(), 0, 'f', 0));
+      }
+    }
+  }
+  c.shot("02-tab-variants");
+
+  // --- Badges ---
+  auto queueBadge = anyItem(w->contentItem(), "queueBadge");
+  c.check(queueBadge, "the queue button can carry a badge");
+  if (queueBadge) {
+    c.check(!queueBadge->isVisible(), "which stays away while nothing is waiting");
+    QVariantList queued;
+    for (int i = 0; i < 4; ++i)
+      queued.append(b->results()->get(i));
+    b->enqueueItems(queued);
+    QTest::qWait(300);
+    c.check(queueBadge->isVisible(), "and arrives once songs are");
+    c.check(queueBadge->property("display").toString() == QString::number(b->queue()->count()),
+            QString("counting them exactly (%1 of %2 queued)")
+                .arg(queueBadge->property("display").toString())
+                .arg(b->queue()->count()));
+    // Material's large badge is 16dp tall and grows only as wide as it must.
+    c.check(queueBadge->height() == 16 && queueBadge->width() >= 16,
+            "drawn at Material's large size");
+    queueBadge->setProperty("count", 4212);
+    QTest::qWait(60);
+    c.check(queueBadge->property("display").toString() == "999+",
+            "and capped rather than allowed to sprawl");
+    queueBadge->setProperty("count", 0);
+    QTest::qWait(60);
+    c.check(!queueBadge->isVisible(), "a count of nothing says nothing");
+  }
+  c.shot("03-queue-badge");
+
+  // A dot instead, for work pending rather than counted.
+  auto navBadge = railLibrary ? anyItem(railLibrary, "navigationBadge") : nullptr;
+  auto tabBadge = primaryTabs ? anyItem(primaryTabs, "tabBadge_files") : nullptr;
+  c.check(navBadge && tabBadge, "the library destination and its tab can both carry a dot");
+  c.check(navBadge && !navBadge->isVisible() && tabBadge && !tabBadge->isVisible(),
+          "which stay away while nothing is pending");
+  b->importMusicFolder(QUrl::fromLocalFile(c.directory + "/more"));
+  c.check(c.until([&] { return b->importingLocal(); }, 5000), "a second folder starts importing");
+  if (navBadge && tabBadge) {
+    c.check(navBadge->isVisible() && tabBadge->isVisible(),
+            "and both the destination and its tab say so");
+    c.check(navBadge->width() == 6 && navBadge->height() == 6,
+            "the dot being Material's 6dp small badge");
+    c.shotNow("04-pending-dot");
+  }
+  c.check(c.until([&] { return !b->importingLocal(); }, 60000), "the import finishes");
+  c.check(navBadge && !navBadge->isVisible(), "and the dot goes away with it");
+
+  // --- The loading indicator that replaced the spinner ---
+  QQmlComponent component(qmlEngine(w), QUrl("qrc:/qml/MLoadingIndicator.qml"));
+  QScopedPointer<QObject> object(component.create(qmlContext(w)));
+  auto loader = qobject_cast<QQuickItem *>(object.data());
+  c.check(loader, "the loading indicator creates");
+  if (loader) {
+    loader->setParentItem(w->contentItem());
+    loader->setX(640);
+    loader->setY(400);
+    loader->setZ(95);
+    loader->setProperty("running", true);
+    QTest::qWait(120);
+    c.check(loader->width() == 48 && loader->height() == 48,
+            "at Material's 48dp container size");
+    auto shape = anyItem(loader, "loadingShape");
+    c.check(shape && qAbs(shape->width() - 38) < 0.5,
+            "with the 38dp active indicator inside it");
+    const int firstShape = loader->property("morphIndex").toInt();
+    const double firstSpin = loader->property("spin").toReal();
+    c.check(c.until([&] { return loader->property("morphIndex").toInt() != firstShape; }, 3000),
+            "it moves on to the next shape in the sequence");
+    c.check(loader->property("spin").toReal() > firstSpin, "while it keeps turning");
+    c.shot("05-loading-indicator");
+    c.check(loader->property("morphIndex").toInt() < 7 &&
+                loader->property("shapeCount").toInt() == 7,
+            "walking the seven shapes Material names");
+    b->setMotion(false);
+    QTest::qWait(150);
+    c.check(!loader->property("animating").toBool(), "and settles when motion is turned off");
+    b->setMotion(true);
+    loader->setProperty("running", false);
+    loader->setVisible(false);
+  }
+
+  // Pull to refresh uses the contained variant, driven by the pull itself.
+  auto puller = anyItem(w->contentItem(), "contentRefresh");
+  auto refreshShape = puller ? anyItem(puller, "refreshIndicator") : nullptr;
+  auto tracks = shownItem(w->contentItem(), "tracksView");
+  c.check(refreshShape && tracks, "pull to refresh draws the contained indicator");
+  if (refreshShape && tracks) {
+    c.check(refreshShape->property("trackColor").value<QColor>() == c.themeColor("primaryContainer"),
+            "on a primary container, as the contained variant asks");
+    const double origin = tracks->property("originY").toReal();
+    tracks->setProperty("contentY", origin - 40);
+    QTest::qWait(150);
+    const double part = refreshShape->property("progress").toReal();
+    c.check(part > 0.1 && part < 1, QString("the pull drives the morph (%1)").arg(part, 0, 'f', 2));
+    c.shot("06-pull-morph");
+    tracks->setProperty("contentY", origin);
+    QTest::qWait(250);
+  }
+
+  // --- The fixed accents ---
+  const QColor fixedDark = c.themeColor("primaryFixed");
+  const QColor onFixedDark = c.themeColor("primaryFixedText");
+  const QColor primaryDark = c.themeColor("primary");
+  b->setTheme("light");
+  QTest::qWait(200);
+  c.check(c.themeColor("primaryFixed") == fixedDark && c.themeColor("primaryFixedText") == onFixedDark,
+          "the fixed accents hold one tone through a theme change");
+  c.check(c.themeColor("primary") != primaryDark, "while the ordinary accent flips");
+  c.check(contrastOf(onFixedDark, fixedDark) >= 4.5,
+          QString("and carry their own text at %1:1")
+              .arg(contrastOf(onFixedDark, fixedDark), 0, 'f', 1));
+  b->setTheme("dark");
+  QTest::qWait(200);
+  auto stats = c.dialog("listeningStatsDialog");
+  auto figure = anyItem(w->contentItem(), "statsTime");
+  c.check(figure && figure->property("color").value<QColor>() == fixedDark,
+          "the listening figures are drawn in them");
+  c.shot("07-fixed-accents");
+  c.closeDialog(stats);
+
+  // --- The search view ---
+  b->rememberSearch("aurora");
+  b->rememberSearch("night ferry");
+  QTest::qWait(120);
+  QMetaObject::invokeMethod(w, "focusSearch");
+  QTest::qWait(400);
+  auto box = anyItem(w->contentItem(), "searchField");
+  auto view = w->findChild<QObject *>("searchSuggestions");
+  auto scrim = anyItem(w->contentItem(), "searchScrim");
+  c.check(box && view && scrim, "focusing search opens its view over the page");
+  if (box && view && scrim) {
+    c.check(view->property("visible").toBool(), "the view is up");
+    c.check(scrim->isVisible() && scrim->opacity() > 0.9, "and the page behind it is scrimmed");
+    auto group = anyItem(w->contentItem(), "suggestionGroup_0");
+    c.check(group && group->isVisible() && group->property("text").toString() == "Recent",
+            "what it offers is filed under a category");
+    auto leading = anyItem(w->contentItem(), "suggestionLeading_0");
+    c.check(leading && leading->isVisible(), "and every row leads with an icon");
+    c.shot("08-search-recent");
+    box->setProperty("text", "track");
+    QMetaObject::invokeMethod(box, "updateSuggestions");
+    QTest::qWait(300);
+    auto songs = anyItem(w->contentItem(), "suggestionGroup_0");
+    c.check(songs && songs->property("text").toString() == "Songs",
+            "typing files the matches under theirs");
+    c.shot("09-search-songs");
+  }
+  auto bar = anyItem(w->contentItem(), "searchField");
+  if (bar && bar->parentItem() && bar->parentItem()->parentItem())
+    c.check(bar->parentItem()->parentItem()->property("color").value<QColor>() ==
+                c.themeColor("high"),
+            "the bar itself sits on surfaceContainerHigh");
+
+  // Compact windows get the whole screen instead of a menu under the bar.
+  const double docked = view ? view->property("height").toReal() : 0;
+  w->resize(520, 820);
+  QTest::qWait(700);
+  QMetaObject::invokeMethod(w, "focusSearch");
+  QTest::qWait(400);
+  if (view) {
+    c.check(view->property("fullScreen").toBool(), "a compact window opens the view full screen");
+    c.check(view->property("height").toReal() > docked,
+            QString("taking the height it was not given docked (%1 over %2)")
+                .arg(view->property("height").toReal(), 0, 'f', 0).arg(docked, 0, 'f', 0));
+  }
+  c.shot("10-search-full-screen");
+  c.check(w->property("sizeClass").toString() == "compact" && w->property("paneMargin").toInt() == 16,
+          "and the compact class draws its panes in at 16dp");
+
+  // --- Supporting pane and feed proportions ---
+  w->resize(1400, 900);
+  QTest::qWait(700);
+  if (auto field = anyItem(w->contentItem(), "searchField"))
+    field->setProperty("text", QString());
+  c.evaluate("content.forceActiveFocus()");
+  w->setProperty("side", "");
+  QTest::qWait(400);
+  c.check(view && !view->property("visible").toBool(), "leaving the field closes the view again");
+  c.check(w->property("sizeClass").toString() == "large" && w->property("paneMargin").toInt() == 24,
+          "a wide window is in the large class at 24dp");
+  b->home();
+  c.check(c.until([&] { return !b->busy(); }), "Home loads its feed");
+  QTest::qWait(400);
+  const int largeCard = w->property("feedCardWidth").toInt();
+  c.shot("11-feed-large");
+  w->resize(1000, 900);
+  QTest::qWait(700);
+  c.check(w->property("sizeClass").toString() == "expanded", "a narrower one is expanded");
+  c.check(w->property("feedCardWidth").toInt() < largeCard,
+          QString("and gives the feed smaller cards (%1 against %2)")
+              .arg(w->property("feedCardWidth").toInt()).arg(largeCard));
+  c.shot("12-feed-expanded");
+
+  w->resize(1400, 900);
+  QTest::qWait(500);
+  w->setProperty("side", "queue");
+  QTest::qWait(700);
+  auto panel = shownItem(w->contentItem(), "sidePanel");
+  auto row = panel ? panel->parentItem() : nullptr;
+  c.check(panel && row, "the supporting pane opens beside the page");
+  if (panel && row) {
+    const double third = row->width() / 3;
+    c.check(qAbs(panel->width() - third) < 2 || panel->width() == 480 || panel->width() == 320,
+            QString("holding a third of the row (%1 of %2)")
+                .arg(panel->width(), 0, 'f', 0).arg(row->width(), 0, 'f', 0));
+    auto grip = shownItem(w->contentItem(), "panelResizeHandle");
+    c.check(grip, "with a grip for anyone who wants it elsewhere");
+    if (grip) {
+      const auto point = grip->mapToScene(QPointF(grip->width() / 2, grip->height() / 2)).toPoint();
+      QTest::mousePress(w, Qt::LeftButton, Qt::NoModifier, point);
+      QTest::mouseMove(w, point - QPoint(120, 0), 80);
+      QTest::mouseRelease(w, Qt::LeftButton, Qt::NoModifier, point - QPoint(120, 0));
+      QTest::qWait(450);
+      c.check(panel->width() > third + 60, "which then wins over the proportion");
+    }
+  }
+  c.shot("13-supporting-pane");
   c.finish();
 }

@@ -57,7 +57,7 @@ Item {
     onExpandedChanged: liveLyrics.centerCurrent()
     property int textSize: app.lyricTextSize
     onTextSizeChanged: liveLyrics.centerCurrent()
-    MBusyIndicator { objectName: "lyricsSpinner"; anchors.centerIn: parent; running: app.lyricsBusy; label: "Loading lyrics" }
+    MLoadingIndicator { objectName: "lyricsSpinner"; anchors.centerIn: parent; running: app.lyricsBusy; label: "Loading lyrics" }
     ListView {
         id: liveLyrics; objectName: "liveLyrics"
         anchors.fill: parent; anchors.topMargin: searchControls.height; anchors.bottomMargin:gapCue.visible?44:0; clip: true; spacing: 12

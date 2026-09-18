@@ -172,7 +172,7 @@ Item {
         }
     }
 
-    MBusyIndicator { anchors.centerIn: parent; running: app.lyricsBusy; label: "Loading lyrics" }
+    MLoadingIndicator { anchors.centerIn: parent; running: app.lyricsBusy; label: "Loading lyrics" }
     SungText {
         objectName: "singAlongUnavailable"
         anchors.centerIn: parent

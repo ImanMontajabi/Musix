@@ -16,7 +16,8 @@ Rectangle {
     id: bar
     objectName: "navigationBar"
 
-    // Each destination is {key, icon, label}.
+    // Each destination is {key, icon, label}, and may carry `badged` for a dot
+    // or `badge` for a count.
     property var destinations: []
     property string current: ""
     signal chosen(string key)
@@ -65,10 +66,21 @@ Rectangle {
                         border.width: destination.visualFocus ? 2 : 0
                         border.color: Theme.primary
                         Icon {
+                            id: glyph
                             anchors.centerIn: parent
                             name: destination.modelData.icon
                             size: 24
+                            // Filled for the active destination, outlined for
+                            // the rest, as Material specifies.
+                            fill: destination.active ? 1 : 0
                             ink: destination.active ? Theme.containerText : Theme.muted
+                        }
+                        MBadge {
+                            objectName: "navBarBadge_" + destination.modelData.key
+                            present: !!destination.modelData.badged || destination.modelData.badge !== undefined
+                            count: destination.modelData.badge === undefined ? -1 : destination.modelData.badge
+                            subject: destination.modelData.label
+                            x: glyph.x+glyph.width-inset; y: glyph.y-height+lift
                         }
                     }
                     // Labels are always shown, never dropped to save room.
