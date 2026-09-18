@@ -5,6 +5,9 @@ Item {
     property string url: ""
     property string motionUrl: ""
     property real radius: Theme.shapeLarge
+    // A shape from Material's library to mask with, instead of the corner
+    // radius. Material uses these for avatars and hero imagery.
+    property string shape: ""
     property int pixels: 360
     property bool crossfade: false
     readonly property bool transitioning: art.transitioning
@@ -21,11 +24,12 @@ Item {
         function onAccountChanged() { if(root.url.startsWith("sungcover:"))art.source="" }
         function onChanged() { if(root.url.startsWith("sungcover:") && app.server.connected && !art.source.toString())art.source=root.url }
     }
-    Rectangle { anchors.fill: parent; radius: root.radius; color: Theme.high }
+    Rectangle { anchors.fill: parent; visible: !root.shape; radius: root.radius; color: Theme.high }
+    MShape { anchors.fill: parent; visible: !!root.shape; shape: root.shape; color: Theme.high }
     Icon { anchors.centerIn: parent; name: "disc"; size: Math.min(48,parent.width*0.4); ink: Theme.muted; visible: !art.ready }
     RoundedArt {
         id: art; crossfade:root.crossfade && root.visible && app.motion && Window.window && Window.window.visible && Window.window.visibility!==Window.Minimized; animation: root.visible && root.motionUrl && root.motionUrl===motionArtwork.source.toString() ? motionArtwork : null
-        anchors.fill: parent; source: root.url; radius: root.radius; pixels: root.requestedPixels; fit: root.fit
+        anchors.fill: parent; source: root.url; radius: root.radius; shape: root.shape; pixels: root.requestedPixels; fit: root.fit
         opacity: ready ? 1 : 0
         Behavior on opacity { NumberAnimation { duration: Theme.normal; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.effectsCurve } }
     }

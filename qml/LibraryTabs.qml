@@ -106,7 +106,7 @@ Flickable {
                 contentItem: Item {
                     Row {
                         anchors.centerIn: parent; spacing: 8
-                        SungText { id: label; anchors.verticalCenter: parent.verticalCenter; text: tab.text; emphasized: tab.selected; font.pixelSize: Theme.labelLarge; color: !tab.selected ? Theme.muted : tabs.secondary ? Theme.text : Theme.primary }
+                        SungText { id: label; anchors.verticalCenter: parent.verticalCenter; text: tab.text; emphasized: tab.selected; labelRole: true; font.pixelSize: Theme.labelLarge; color: !tab.selected ? Theme.muted : tabs.secondary ? Theme.text : Theme.primary }
                         MBadge {
                             id: tabBadge
                             objectName: "tabBadge_"+tab.modelData.key

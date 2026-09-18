@@ -1,4 +1,5 @@
 #include "roundedart.h"
+#include "m3shape.h"
 #include <QBuffer>
 #include <QFileInfo>
 #include <QCache>
@@ -222,7 +223,10 @@ void RoundedArt::paint(QPainter *p) {
   const auto &image=m_animation && !m_animation->frame().isNull()?m_animation->frame():shown();
   const auto &previous=m_blur>0 && !m_softPrevious.isNull()?m_softPrevious:m_previous;
   if(image.isNull() && previous.isNull())return;
-  p->save();QPainterPath path;path.addRoundedRect(boundingRect(),m_radius,m_radius);p->setClipPath(path);p->setRenderHint(QPainter::SmoothPixmapTransform);
+  p->save();QPainterPath path;
+  if(m3::hasShape(m_shape))path=m3::shapePath(m_shape,boundingRect());
+  else path.addRoundedRect(boundingRect(),m_radius,m_radius);
+  p->setClipPath(path);p->setRenderHint(QPainter::SmoothPixmapTransform);
   const auto draw=[&](const QImage &art,bool fit,qreal opacity){if(art.isNull())return;const auto s=QSizeF(art.size()).scaled(boundingRect().size(),fit?Qt::KeepAspectRatio:Qt::KeepAspectRatioByExpanding);p->setOpacity(opacity);p->drawImage(QRectF((width()-s.width())/2,(height()-s.height())/2,s.width(),s.height()),art);};
   if(!previous.isNull()){
     draw(previous,m_previousFit,1);

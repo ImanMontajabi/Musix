@@ -215,6 +215,62 @@ private slots:
     }
   }
 
+  // Each variant spreads the same five palettes differently. The numbers are
+  // Material's own.
+  void variantsSpreadThePalettes() {
+    const QColor source("#3f6ad8");
+    const auto hue = m3::measure(source).hue;
+    const auto neutral = m3::palettesFor(source, m3::Variant::Neutral);
+    QCOMPARE(neutral.primary.chroma, 12.0);
+    QCOMPARE(neutral.neutral.chroma, 2.0);
+    const auto balanced = m3::palettesFor(source, m3::Variant::TonalSpot);
+    QCOMPARE(balanced.primary.chroma, 36.0);
+    QCOMPARE(balanced.neutral.chroma, 6.0);
+    const auto vibrant = m3::palettesFor(source, m3::Variant::Vibrant);
+    QCOMPARE(vibrant.primary.chroma, 200.0);
+    const auto expressive = m3::palettesFor(source, m3::Variant::Expressive);
+    QCOMPARE(expressive.primary.chroma, 40.0);
+    // Expressive turns the primary hue two thirds of the way round on purpose.
+    double turn = std::abs(expressive.primary.hue - hue);
+    if (turn > 180) turn = 360 - turn;
+    QVERIFY2(turn > 90, "expressive detaches from the source hue");
+    const auto content = m3::palettesFor(source, m3::Variant::Content);
+    QVERIFY2(qAbs(content.primary.chroma - m3::measure(source).chroma) < 0.01,
+             "content keeps the source's own chroma");
+    QCOMPARE(m3::variantFor("vibrant"), m3::Variant::Vibrant);
+    QCOMPARE(m3::variantFor("nonsense"), m3::Variant::TonalSpot);
+  }
+
+  // Every variant, at every contrast level, still has to be readable.
+  void everyVariantStaysReadable() {
+    for (const auto &source : {QColor("#3f6ad8"), QColor("#c0392b"), QColor("#2f8f5b")})
+      for (const auto &name : m3::variantNames())
+        for (bool dark : {false, true})
+          for (double level : {0.0, 0.5, 1.0}) {
+            const auto roles = m3::scheme(source, dark, m3::variantFor(name), level);
+            QVERIFY2(contrast(roles.value("onSurface").value<QColor>(),
+                              roles.value("surface").value<QColor>()) >= 4.5,
+                     qPrintable(name + " keeps body text readable"));
+          }
+  }
+
+  // Raising the level moves text and boundaries further from their surface.
+  void contrastLevelsClimb() {
+    const QColor source("#3f6ad8");
+    for (bool dark : {false, true}) {
+      double previous = 0;
+      for (double level : {0.0, 0.5, 1.0}) {
+        const auto roles = m3::scheme(source, dark, m3::Variant::TonalSpot, level);
+        const double ratio = contrast(roles.value("onSurface").value<QColor>(),
+                                      roles.value("surface").value<QColor>());
+        QVERIFY2(ratio >= previous - 0.01, "a higher level is never weaker");
+        previous = ratio;
+      }
+      // Material's high contrast target for body text.
+      QVERIFY(previous >= 10);
+    }
+  }
+
   // Solving is on the theme's hot path; it has to stay cheap.
   void solvingIsFast() {
     QElapsedTimer timer;

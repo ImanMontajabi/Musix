@@ -13,7 +13,7 @@ MDialog {
     objectName: "listeningStatsDialog"
     title: "Listening"
     modal: true
-    width: Math.min(640, parent ? parent.width-48 : 640)
+    width: fitWidth(640)
     height: Math.min(700, parent ? parent.height-48 : 700)
     standardButtons: Dialog.Close
 
@@ -63,9 +63,11 @@ MDialog {
                         {name:"statsPlays", label:"Plays", value:String(dialog.stats.plays || 0)},
                         {name:"statsSongs", label:"Songs", value:String(dialog.stats.songs || 0)},
                         {name:"statsArtists", label:"Artists", value:String(dialog.stats.artists || 0)}]
-                Rectangle {
+                MCard {
+                    id: figure
                     required property var modelData
                     objectName: modelData.name
+                    variant: "filled"
                     Layout.fillWidth: true
                     Layout.preferredHeight: 84
                     Layout.minimumHeight: 72
@@ -78,10 +80,10 @@ MDialog {
                         anchors.fill: parent
                         anchors.margins: 14
                         spacing: 2
-                        SungText { text: parent.parent.modelData.label; color: Theme.primaryFixedVariantText; font.pixelSize: Theme.labelMedium }
+                        SungText { text: figure.modelData.label; color: Theme.primaryFixedVariantText; font.pixelSize: Theme.labelMedium }
                         SungText {
-                            objectName: parent.parent.modelData.name+"Value"
-                            text: parent.parent.modelData.value
+                            objectName: figure.modelData.name+"Value"
+                            text: figure.modelData.value
                             color: Theme.primaryFixedText
                             font.pixelSize: Theme.headlineSmall
                             emphasized: true

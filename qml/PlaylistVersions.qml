@@ -11,7 +11,7 @@ MDialog {
     objectName: "playlistVersionsDialog"
     title: "Version history"
     modal: true
-    width: Math.min(520, parent ? parent.width-48 : 520)
+    width: fitWidth(520)
     height: Math.min(560, parent ? parent.height-48 : 560)
     standardButtons: Dialog.Close
 

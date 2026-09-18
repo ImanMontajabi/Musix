@@ -152,6 +152,13 @@ class Backend : public QObject {
   Q_PROPERTY(QStringList hiddenHomeSections READ hiddenHomeSections NOTIFY presentationChanged)
   Q_PROPERTY(bool artworkAccent READ artworkAccent WRITE setArtworkAccent NOTIFY settingsChanged)
   Q_PROPERTY(QString accentColor READ accentColor WRITE setAccentColor NOTIFY settingsChanged)
+  // How much of the source colour the interface takes, and how hard the text
+  // and boundaries are pushed away from what they sit on.
+  Q_PROPERTY(QString colorVariant READ colorVariant WRITE setColorVariant NOTIFY settingsChanged)
+  Q_PROPERTY(double colorContrast READ colorContrast WRITE setColorContrast NOTIFY settingsChanged)
+  // Material draws components tighter when a precision pointer is present,
+  // because the 48dp minimum exists to disambiguate touches.
+  Q_PROPERTY(bool precisePointer READ precisePointer WRITE setPrecisePointer NOTIFY settingsChanged)
   Q_PROPERTY(bool ambientBackdrop READ ambientBackdrop WRITE setAmbientBackdrop NOTIFY settingsChanged)
   Q_PROPERTY(bool backdropPulse READ backdropPulse WRITE setBackdropPulse NOTIFY settingsChanged)
   Q_PROPERTY(bool typeAheadJump READ typeAheadJump WRITE setTypeAheadJump NOTIFY settingsChanged)
@@ -363,9 +370,20 @@ public:
   // Material derives every color role from one source color. The result only
   // changes when that color or the theme does, so it is worth remembering.
   Q_INVOKABLE QVariantMap colorScheme(const QColor &source,bool dark) const;
+  // Material's shape library. `shapeOutline` hands back the radii the named
+  // shape carries at `steps` even angles, which is what the loading indicator
+  // morphs between and what masks artwork.
+  Q_INVOKABLE QStringList shapeNames() const;
+  Q_INVOKABLE QVariantList shapeOutline(const QString &name,int steps) const;
   bool artworkAccent() const {return m_settings.value("artworkAccent",false).toBool();}
   void setArtworkAccent(bool enabled) {if(artworkAccent()==enabled)return;m_settings.setValue("artworkAccent",enabled);emit settingsChanged();}
   // A hand-picked Material source color. Empty keeps the built-in palette.
+  bool precisePointer() const {return m_settings.value("precisePointer",false).toBool();}
+  void setPrecisePointer(bool precise) {if(precisePointer()==precise)return;m_settings.setValue("precisePointer",precise);emit settingsChanged();}
+  QString colorVariant() const {return m_settings.value("colorVariant","tonalSpot").toString();}
+  void setColorVariant(const QString &name) {if(colorVariant()==name)return;m_settings.setValue("colorVariant",name);emit settingsChanged();}
+  double colorContrast() const {return m_settings.value("colorContrast",0.0).toDouble();}
+  void setColorContrast(double level) {const double held=qBound(0.0,level,1.0);if(qFuzzyCompare(colorContrast()+1,held+1))return;m_settings.setValue("colorContrast",held);emit settingsChanged();}
   QString accentColor() const {return m_settings.value("accentColor").toString();}
   void setAccentColor(const QString &value);
   bool ambientBackdrop() const {return m_settings.value("ambientBackdrop",true).toBool();}
@@ -637,7 +655,8 @@ private:
   CollectionView m_collection;
   QMediaDevices m_devices;
   QVariantList m_lyricLines;
-  mutable QHash<QPair<QRgb,bool>,QVariantMap> m_schemes;
+  // Keyed by the source colour and by everything else that decides the scheme.
+  mutable QHash<QPair<QRgb,QString>,QVariantMap> m_schemes;
   QVariantList m_sections, m_favorites, m_history, m_playlists, m_back, m_pins;
   Entries m_recent;
   void refreshRecentlyPlayed();

@@ -4,9 +4,21 @@ AbstractButton {
     id: control
     property string symbol: ""
     property string tip: text
-    property real contentInset:18
+    // Material's button sizes. A size carries its own height, its own squarer
+    // corner for the pressed and selected states, its own icon size, its own
+    // side padding and its own label style, so asking for one is enough.
+    property string size: "small"
+    // Material's icon button widths. A uniform one is square; narrow and wide
+    // keep the height and change how much room the glyph is given.
+    property string iconWidth: "uniform"
+    readonly property real widthFactor: iconWidth === "narrow" ? 0.7 : iconWidth === "wide" ? 1.5 : 1
+    readonly property real sizedHeight: Theme.buttonHeights[size] || 40
+    readonly property real sizedIcon: Theme.buttonIcon[size] || 20
+    readonly property real sizedGap: Theme.buttonGap[size] || 8
+    readonly property real sizedSquare: Theme.buttonSquare[size] || Theme.shapeMedium
+    property real contentInset: Theme.buttonInset[size] || 16
     // M3 button labels are label-large; list rows built from a button use body-large.
-    property real labelSize: Theme.labelLarge
+    property real labelSize: Theme.buttonLabel[size] || Theme.labelLarge
     // M3: a trailing icon communicates an action, such as opening something.
     property string trailingSymbol: ""
     property bool leftAligned: false
@@ -24,9 +36,17 @@ AbstractButton {
     Timer { id: confirmation; interval: 1100; onTriggered: control.confirmed=false }
     onVisibleChanged: if(!visible){confirmation.stop();confirmed=false;}
     readonly property bool needsTooltip: tip.length > 0 && (!text.length || tip !== text || buttonLabel.truncated)
+    // The background's corners, which optical centering reads.
+    property real startRadius: 0
+    property real endRadius: 0
+    readonly property real opticalShift: Theme.opticalShift(startRadius, endRadius)
     property color ink: filled ? Theme.primaryText : toggle && selected ? Theme.containerText : selected ? Theme.primary : Theme.text
-    implicitWidth: text.length ? buttonLabel.implicitWidth + (symbol.length || busy ? 32 : 0) + 36 : 48
-    implicitHeight: 48
+    // Material draws the container at the size's own height and keeps a 48dp
+    // touch target around it, so a small button is a 40dp shape you can still
+    // hit comfortably. The target is the footprint the layout sees.
+    readonly property real touchTarget: Math.max(Theme.minimumTarget, sizedHeight)
+    implicitWidth: text.length ? buttonLabel.implicitWidth + (symbol.length || busy ? control.sizedIcon+control.sizedGap : 0) + control.contentInset*2 : Math.round(control.touchTarget*control.widthFactor)
+    implicitHeight: control.touchTarget
     hoverEnabled: true
     focusPolicy: Qt.StrongFocus
     opacity: enabled || busy ? 1 : 0.38
@@ -55,14 +75,19 @@ AbstractButton {
         }
     }
     background: Rectangle {
+        // The container sits inside the touch target rather than filling it.
+        width: control.text.length ? control.width : Math.min(control.width, Math.round(control.sizedHeight*control.widthFactor))
+        height: Math.min(control.height, control.sizedHeight)
+        x: (control.width-width)/2
+        y: (control.height-height)/2
         // Material maps buttons to the full shape style, which is half of the
         // shorter side rather than half the height: a narrow button is still a
         // stadium, not an over-rounded lozenge. Pressing morphs it towards a
         // squarer step, which is the shape morph the specification asks for on
         // interaction states.
-        radius: control.down ? (control.toggle ? Theme.shapeSmall : Theme.shapeMedium)
-                             : control.toggle && control.selected ? Theme.shapeMedium
-                             : Theme.shapeFull(Math.min(control.width, control.height))
+        radius: control.down ? (control.toggle ? Theme.shapeSmall : control.sizedSquare)
+                             : control.toggle && control.selected ? control.sizedSquare
+                             : Theme.shapeFull(Math.min(width, height))
         color: control.filled ? Theme.primary
              : control.toggle && control.selected ? Theme.primaryContainer
              : control.tonal || control.selected ? Theme.high : "transparent"
@@ -79,7 +104,7 @@ AbstractButton {
     }
     Rectangle {
         objectName: "buttonFocusRing"
-        anchors.fill: parent; anchors.margins: -3
+        anchors.fill: control.background; anchors.margins: -3
         // The ring sits outside the button, so optical roundness adds the gap
         // between them rather than repeating the button's own radius.
         radius: Theme.shapeInside(Theme.shapeFull(Math.min(width, height)), -3); color: "transparent"
@@ -88,18 +113,22 @@ AbstractButton {
     }
     contentItem: Item {
         Row {
-            id: contentRow; anchors.verticalCenter: parent.verticalCenter; x: control.leftAligned?control.contentInset:(parent.width-width)/2; spacing: 8
+            id: contentRow; anchors.verticalCenter: parent.verticalCenter
+            // Material nudges content inside an asymmetric shape so it looks
+            // centred; a symmetric one is left where it measures.
+            x: (control.leftAligned?control.contentInset:(parent.width-width)/2)+control.opticalShift
+            spacing: control.sizedGap
             Item {
-                width: 24; height: 24; visible: control.symbol.length > 0 || control.busy
+                width: control.sizedIcon; height: control.sizedIcon; visible: control.symbol.length > 0 || control.busy
                 anchors.verticalCenter: parent.verticalCenter
-                Icon { anchors.centerIn: parent; visible: !control.busy && !playbackGlyph.active; name: control.confirmed?"check":control.symbol; ink: control.ink }
+                Icon { anchors.centerIn: parent; size: control.sizedIcon; visible: !control.busy && !playbackGlyph.active; name: control.confirmed?"check":control.symbol; ink: control.ink }
                 Loader {id:playbackGlyph;anchors.centerIn:parent;active:control.morphPlayback && !control.busy && !control.confirmed && (control.symbol==="play" || control.symbol==="pause");sourceComponent:PlaybackGlyph {paused:control.symbol==="pause";ink:control.ink}}
                 Loader {
                     anchors.fill: parent; active: control.busy
                     sourceComponent: MLoadingIndicator { objectName: "buttonSpinner"; running: control.busy; ink: control.ink; trackColor: "transparent"; label: "Loading"; Accessible.ignored: true }
                 }
             }
-            SungText { id: buttonLabel; visible: control.text.length > 0; text: control.text; color: control.ink; font.pixelSize: control.labelSize; width: control.leftAligned ? Math.max(0,control.width-(control.symbol.length || control.busy?40:0)-control.contentInset-(control.trailingSymbol.length?36:18)) : implicitWidth; elide: Text.ElideRight; font.weight: Font.Medium; anchors.verticalCenter: parent.verticalCenter }
+            SungText { id: buttonLabel; visible: control.text.length > 0; text: control.text; color: control.ink; font.pixelSize: control.labelSize; labelRole: true; emphasized: control.size==="large"; width: control.leftAligned ? Math.max(0,control.width-(control.symbol.length || control.busy?control.sizedIcon+control.sizedGap+8:0)-control.contentInset-(control.trailingSymbol.length?36:18)) : implicitWidth; elide: Text.ElideRight; anchors.verticalCenter: parent.verticalCenter }
         }
         Icon {
             objectName: "buttonTrailingIcon"

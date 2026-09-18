@@ -784,7 +784,8 @@ void runSearchSelectionTests(Backend *b,QQuickWindow *w) {
   const auto musicDir=dir+"/Music #100%";QDir().mkpath(musicDir+"/Artist/Album");QFile::copy(audioPath,musicDir+"/Artist/Album/Folder song.wav");
   if(folderPath)folderPath->setProperty("text","relative/path");
   click("confirmMusicFolderButton");
-  auto pathError=findItem(w->contentItem(),"musicFolderPathError");check(pathError&&pathError->isVisible()&&!pathError->property("text").toString().isEmpty(),"invalid folder path stays open with inline error");shot("folder-path-error");
+  auto pathField=findItem(w->contentItem(),"musicFolderPath");auto pathError=findItem(w->contentItem(),"fieldSupport");
+  check(pathField&&pathField->property("errored").toBool()&&pathError&&pathError->isVisible()&&!pathError->property("text").toString().isEmpty(),"invalid folder path stays open with inline error");shot("folder-path-error");
   if(folderPath)folderPath->setProperty("text",musicDir);
   click("browseMusicFolderButton");
   auto dialogs=w->property("fileDialogs").value<QObject*>();auto folderPicker=dialogs?dialogs->property("folderPicker").value<QObject*>():nullptr;
@@ -874,7 +875,10 @@ void runVisualPolishTests(Backend *b, QQuickWindow *w) {
     QTest::mouseClick(w,Qt::LeftButton,Qt::NoModifier,play->mapToScene(QPointF(play->width()/2,play->height()/2)).toPoint());
     check(until([&]{return !b->resolving();})&&!b->playing(),"clicking loading playback cancels preparation");
     play->forceActiveFocus();QTest::keyClick(w,Qt::Key_Tab);QTest::keyClick(w,Qt::Key_Backtab);QTest::qWait(50);auto focus=findItem(play,"buttonFocusRing");
-    check(focus&&focus->isVisible()&&focus->width()>play->width(),"filled playback button exposes distinct keyboard focus ring");shot("04-keyboard-focus");
+    // Material rings the container, which sits inside the touch target, so the
+    // ring stands off the container rather than off the whole slot.
+    auto playContainer=play->property("background").value<QQuickItem*>();
+    check(focus&&focus->isVisible()&&playContainer&&focus->width()>playContainer->width(),"filled playback button exposes distinct keyboard focus ring");shot("04-keyboard-focus");
   }
   b->stop();b->dismissError();
   b->search("Test","songs");check(until([&]{return !b->busy();}),"fixture search loads");
@@ -1319,7 +1323,8 @@ void runFolderImportTests(Backend *b,QQuickWindow *w) {
   click("musicFoldersButton");click("addMusicFolderButton");auto path=findItem(w->contentItem(),"musicFolderPath");
   check(until([&]{return path&&path->hasActiveFocus();}),"folder field receives focus");
   if(path)path->setProperty("text","relative/path");
-  click("confirmMusicFolderButton");auto error=findItem(w->contentItem(),"musicFolderPathError");check(error&&error->isVisible(),"invalid path remains editable with inline error");shot("01-invalid-path");
+  click("confirmMusicFolderButton");auto errorField=findItem(w->contentItem(),"musicFolderPath");auto error=findItem(w->contentItem(),"fieldSupport");
+  check(errorField&&errorField->property("errored").toBool()&&error&&error->isVisible(),"invalid path remains editable with inline error");shot("01-invalid-path");
   if(path)path->setProperty("text",root);
   click("browseMusicFolderButton");auto dialogs=w->property("fileDialogs").value<QObject*>();auto picker=dialogs?dialogs->property("folderPicker").value<QObject*>():nullptr;
   check(picker&&picker->property("visible").toBool(),"optional picker opens");if(picker)QMetaObject::invokeMethod(picker,"reject");

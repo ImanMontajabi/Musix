@@ -14,6 +14,9 @@ class RoundedArt : public QQuickPaintedItem {
   Q_PROPERTY(MotionArtwork *animation READ animation WRITE setAnimation NOTIFY animationChanged)
   Q_PROPERTY(QUrl source READ source WRITE setSource NOTIFY sourceChanged)
   Q_PROPERTY(qreal radius READ radius WRITE setRadius NOTIFY radiusChanged)
+  // A named shape from Material's library to mask with, instead of the corner
+  // radius. Empty, or a name this build does not know, keeps the rounded rect.
+  Q_PROPERTY(QString shape READ shape WRITE setShape NOTIFY shapeChanged)
   Q_PROPERTY(int pixels READ pixels WRITE setPixels NOTIFY pixelsChanged)
   Q_PROPERTY(int blur READ blur WRITE setBlur NOTIFY blurChanged)
   Q_PROPERTY(bool crossfade READ crossfade WRITE setCrossfade NOTIFY crossfadeChanged)
@@ -31,6 +34,14 @@ public:
       return;
     m_radius = r;
     emit radiusChanged();
+    update();
+  }
+  QString shape() const { return m_shape; }
+  void setShape(const QString &s) {
+    if (m_shape == s)
+      return;
+    m_shape = s;
+    emit shapeChanged();
     update();
   }
   bool crossfade() const {return m_crossfade;}
@@ -62,6 +73,7 @@ signals:
   void animationChanged();
   void sourceChanged();
   void radiusChanged();
+  void shapeChanged();
   void pixelsChanged();
   void blurChanged();
   void readyChanged();
@@ -86,6 +98,7 @@ private:
   QImage m_image;
   QPointer<MotionArtwork> m_animation;
   QPointer<QNetworkReply> m_reply;
+  QString m_shape;
   qreal m_radius = 16;
   int m_pixels = 360;
 };

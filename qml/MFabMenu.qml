@@ -20,7 +20,11 @@ Item {
     property string label: ""
     property bool open: false
     readonly property int count: actions.length
-    readonly property real fabSize: 56
+    // Material's small FAB, which is the size it gives a secondary action:
+    // 40dp at the medium corner, still carrying a 24dp glyph. Adding to the
+    // library is not the screen's primary action, and at 56dp the FAB outweighed
+    // everything around it.
+    readonly property real fabSize: 40
 
     implicitWidth: fab.width
     implicitHeight: fab.height
@@ -78,7 +82,9 @@ Item {
                         id: entryLabel
                         anchors.verticalCenter: parent.verticalCenter
                         text: entry.modelData.label; color: Theme.containerText
-                        font.pixelSize: Theme.labelLarge; emphasized: true
+                        // Material's menu items carry a plain label-large, not
+                        // an emphasized one; the icon beside it is the weight.
+                        font.pixelSize: Theme.labelLarge; labelRole: true
                     }
                 }
                 // Items arrive from the FAB, nearest first.
@@ -110,9 +116,9 @@ Item {
         background: Rectangle {
             objectName: "fabShape"
             color: root.open ? Theme.high : Theme.primaryContainer
-            // A FAB rests at the large shape step and morphs to full when it
-            // becomes the menu's close button.
-            radius: root.open ? Theme.shapeFull(fab.height) : Theme.shapeLargeIncreased
+            // A small FAB rests at the medium shape step and morphs to full
+            // when it becomes the menu's close button.
+            radius: root.open ? Theme.shapeFull(fab.height) : Theme.shapeMedium
             Behavior on radius { enabled: app.motion; NumberAnimation { duration: Theme.springFastSpatialMs; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.springFastSpatial } }
             Behavior on color { ColorAnimation { duration: Theme.springFastEffectsMs; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.springFastEffects } }
             MElevation { anchors.fill: parent; radius: parent.radius; level: 3 }
@@ -123,14 +129,18 @@ Item {
                 Behavior on opacity { NumberAnimation { duration: Theme.springFastEffectsMs } }
             }
         }
-        contentItem: Icon {
-            objectName: "fabIcon"
-            anchors.centerIn: parent
-            name: root.open ? "close" : root.symbol
-            size: 24
-            ink: root.open ? Theme.text : Theme.containerText
-            rotation: root.open ? 90 : 0
-            Behavior on rotation { enabled: app.motion; NumberAnimation { duration: Theme.springFastSpatialMs; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.springFastSpatial } }
+        // A control stretches its content item to fill it, so the glyph needs a
+        // wrapper to keep the 24dp Material asks for inside a 56dp FAB.
+        contentItem: Item {
+            Icon {
+                objectName: "fabIcon"
+                anchors.centerIn: parent
+                name: root.open ? "close" : root.symbol
+                size: 24
+                ink: root.open ? Theme.text : Theme.containerText
+                rotation: root.open ? 90 : 0
+                Behavior on rotation { enabled: app.motion; NumberAnimation { duration: Theme.springFastSpatialMs; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.springFastSpatial } }
+            }
         }
     }
 }

@@ -67,7 +67,10 @@ Item {
             Row {
                 spacing: 8
                 anchors.verticalCenter: parent.verticalCenter
-                x: (parent.width-width)/2
+                // The leading half is full cornered on the outside and small on
+                // the inside, so Material nudges its content towards the flat
+                // edge to make it look centred.
+                x: (parent.width-width)/2 + Theme.opticalShift(control.outer, control.inner)
                 Item {
                     width: 24; height: 24
                     anchors.verticalCenter: parent.verticalCenter
@@ -79,7 +82,7 @@ Item {
                     anchors.verticalCenter: parent.verticalCenter
                     text: control.text
                     font.pixelSize: Theme.labelLarge
-                    emphasized: true
+                    emphasized: true; labelRole: true
                     color: action.ink
                 }
             }
@@ -124,7 +127,9 @@ Item {
             Icon {
                 objectName: "splitButtonChevron"
                 name: "chevron"
-                x: (parent.width-width)/2
+                // Small corner leading, full corner trailing: the nudge goes
+                // the other way from the action half.
+                x: (parent.width-width)/2 + Theme.opticalShift(control.inner, control.outer)
                 y: (parent.height-height)/2
                 ink: action.ink
                 // The chevron points the way the menu opens, and spins to point

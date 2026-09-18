@@ -1728,8 +1728,11 @@ void runMaterialFoundationTests(Backend *b, QQuickWindow *w) {
         QFont::Tag("wdth"));
     c.check(qAbs(axes - c.evaluate("Theme.emphasizedWidth").toDouble()) < 0.01,
             QString("and the width axis is really set (%1)").arg(axes));
-    c.check(title->property("font").value<QFont>().weight() >= QFont::DemiBold,
-            "at the emphasized weight");
+    // Material's emphasis is one weight step up from the role's own, which for
+    // a headline is medium rather than the bold a label would take.
+    c.check(title->property("font").value<QFont>().weight() == QFont::Medium,
+            QString("at the weight the role's emphasized style asks for (%1)")
+                .arg(title->property("font").value<QFont>().weight()));
   }
   c.shot("02-emphasized-type");
 
@@ -2333,11 +2336,16 @@ void runMaterialExpressiveTests(Backend *b, QQuickWindow *w) {
   c.check(shuffle, "the player offers shuffle as a toggle");
   if (shuffle) {
     const double off = radiusOf(shuffle);
-    const auto offColour = shuffle->property("background").value<QQuickItem *>()
-                               ->property("color").value<QColor>();
-    c.check(qAbs(off - shuffle->height()/2) < 1.5,
+    auto shuffleContainer = shuffle->property("background").value<QQuickItem *>();
+    const auto offColour = shuffleContainer->property("color").value<QColor>();
+    // Material draws the container at the size's own height inside a 48dp touch
+    // target, so the full corner is half the container, not half the target.
+    c.check(qAbs(shuffle->height() - 48) < 0.5 && qAbs(shuffleContainer->height() - 40) < 0.5,
+            QString("a small button is a 40dp container in a 48dp target (%1 in %2)")
+                .arg(shuffleContainer->height(), 0, 'f', 0).arg(shuffle->height(), 0, 'f', 0));
+    c.check(qAbs(off - shuffleContainer->height()/2) < 1.5,
             QString("off it is a full corner (%1 of %2)")
-                .arg(off, 0, 'f', 1).arg(shuffle->height()/2, 0, 'f', 1));
+                .arg(off, 0, 'f', 1).arg(shuffleContainer->height()/2, 0, 'f', 1));
     c.shot("01-toggle-off");
     b->setShuffle(true);
     QTest::qWait(600);
@@ -2674,5 +2682,483 @@ void runMaterialExpressiveTests(Backend *b, QQuickWindow *w) {
   c.check(c.until([&] { return !b->importingLocal(); }, 60000), "the import finishes");
   c.shot("15-import-finished");
   b->clearQueue();
+  c.finish();
+}
+
+// Material's sizing and shape layer: the button scale and its touch target,
+// optical centering inside asymmetric shapes, emphasis that depends on the
+// role, the shape library, a field that can explain itself and report an error,
+// and what a window too narrow for a rail or a side pane does instead.
+void runMaterialSizingTests(Backend *b, QQuickWindow *w) {
+  Check c{b, w, qEnvironmentVariable("SUNG_TEST_OUTPUT")};
+  QDir().mkpath(c.directory + "/music");
+  QWindowSystemInterface::handleFocusWindowChanged(w);
+  w->resize(1400, 900);
+  QTest::qWait(500);
+  b->setTheme("dark");
+  b->setMotion(true);
+  b->setVolume(0);
+  b->setAutoplay(false);
+  b->setPrepareNext(false);
+  b->setWatchMusicFolders(false);
+  b->setOnlineArtwork(false);
+
+  paintCover(c.directory + "/music/cover.png", QColor("#274a63"), QColor("#cf7b2b"));
+  for (int i = 1; i <= 4; ++i)
+    if (!encodeTrack(c, QString("%1/music/%2.flac").arg(c.directory).arg(i),
+                     QString("Track %1").arg(i), "Sizing", "Rill", i))
+      return c.finish();
+  b->importMusicFolder(QUrl::fromLocalFile(c.directory + "/music"));
+  c.check(c.until([&] { return !b->importingLocal(); }, 40000), "import the sizing fixture");
+  QMetaObject::invokeMethod(w, "chooseLibrary", Q_ARG(QVariant, QVariant("files")));
+  c.check(c.until([&] { return b->results()->count() == 4; }), "the library is listed");
+  QTest::qWait(500);
+
+  // --- The button size scale ---
+  QQmlComponent buttonSource(qmlEngine(w), QUrl("qrc:/qml/MButton.qml"));
+  QScopedPointer<QObject> buttonObject(buttonSource.create(qmlContext(w)));
+  auto sample = qobject_cast<QQuickItem *>(buttonObject.data());
+  c.check(sample, "a button can be made on its own to measure");
+  if (sample) {
+    sample->setParentItem(w->contentItem());
+    sample->setX(560); sample->setY(300); sample->setZ(95);
+    sample->setProperty("text", QString("Play"));
+    sample->setProperty("symbol", QString("play"));
+    struct Size { const char *name; double height; double square; double icon; double inset; };
+    const Size sizes[] = {{"xsmall", 32, 12, 20, 16}, {"small", 40, 12, 20, 16},
+                          {"medium", 56, 16, 24, 24}, {"large", 96, 28, 32, 48}};
+    for (const auto &size : sizes) {
+      sample->setProperty("size", QString(size.name));
+      QTest::qWait(120);
+      auto container = sample->property("background").value<QQuickItem *>();
+      c.check(container && qAbs(container->height() - size.height) < 0.5,
+              QString("a %1 button's container is %2dp (%3)").arg(size.name).arg(size.height, 0, 'f', 0)
+                  .arg(container ? container->height() : 0, 0, 'f', 0));
+      c.check(qAbs(sample->property("sizedIcon").toDouble() - size.icon) < 0.5 &&
+                  qAbs(sample->property("contentInset").toDouble() - size.inset) < 0.5,
+              QString("carrying a %1dp icon and %2dp of side padding").arg(size.icon, 0, 'f', 0).arg(size.inset, 0, 'f', 0));
+      c.check(qAbs(sample->property("sizedSquare").toDouble() - size.square) < 0.5,
+              QString("and squaring to %1dp when pressed").arg(size.square, 0, 'f', 0));
+      // Material keeps a 48dp target around anything smaller than one.
+      c.check(sample->height() >= 47.5,
+              QString("with a touch target of at least 48dp (%1)").arg(sample->height(), 0, 'f', 0));
+    }
+    sample->setProperty("size", QString("small"));
+    sample->setProperty("text", QString());
+    sample->setProperty("iconWidth", QString("narrow"));
+    QTest::qWait(120);
+    c.check(sample->width() < sample->height(), "a narrow icon button is narrower than it is tall");
+    sample->setProperty("iconWidth", QString("wide"));
+    QTest::qWait(120);
+    c.check(sample->width() > sample->height(), "and a wide one is wider");
+    c.shotNow("01-button-sizes");
+    sample->setVisible(false);
+    sample->setParentItem(nullptr);
+  }
+
+  // --- Optical centering ---
+  auto split = shownItem(w->contentItem(), "collectionPlay");
+  auto action = split ? shownItem(split, "splitButtonAction") : nullptr;
+  c.check(action, "the collection action is a split button");
+  if (action) {
+    auto row = action->property("contentItem").value<QQuickItem *>();
+    auto inner = row ? row->childItems().value(0) : nullptr;
+    // Full corner leading, extra small trailing: 0.11 of the 20dp between them.
+    const double expected = 0.11*(24-4);
+    const double measured = inner ? inner->x() - (row->width()-inner->width())/2 : 0;
+    c.check(inner && qAbs(measured - expected) < 0.6,
+            QString("its content is nudged %1dp towards the flat edge (%2 wanted)")
+                .arg(measured, 0, 'f', 2).arg(expected, 0, 'f', 2));
+    auto chevron = shownItem(split, "splitButtonChevron");
+    c.check(chevron, "and the chevron half is nudged the other way");
+    c.shot("02-optical-centering");
+  }
+
+  // --- Emphasis follows the role ---
+  c.check(c.evaluate("Theme.weightFor(true,true)").toInt() == QFont::Bold,
+          "an emphasized label is bold");
+  c.check(c.evaluate("Theme.weightFor(false,true)").toInt() == QFont::Medium,
+          "a plain one is medium");
+  c.check(c.evaluate("Theme.weightFor(true,false)").toInt() == QFont::Medium,
+          "an emphasized title is medium");
+  c.check(c.evaluate("Theme.weightFor(false,false)").toInt() == QFont::Normal,
+          "and a plain one regular");
+
+  // --- The shape library ---
+  const auto names = c.evaluate("app.shapeNames()").toStringList();
+  c.check(names.contains("circle") && names.contains("cookie9Sided") &&
+              names.contains("softBurst") && names.contains("pill"),
+          QString("the shape library publishes Material's shapes (%1)").arg(names.size()));
+  const auto cookie = c.evaluate("app.shapeOutline('cookie9Sided',256)").toList();
+  double low = 2, high = 0;
+  for (const auto &value : cookie) {
+    low = std::min(low, value.toDouble());
+    high = std::max(high, value.toDouble());
+  }
+  // Material's nine sided cookie is a star with an inner radius of 0.8.
+  c.check(qAbs(high - 1) < 0.001 && qAbs(low - 0.8) < 0.01,
+          QString("a cookie cuts to Material's inner radius (%1 of %2)")
+              .arg(low, 0, 'f', 3).arg(high, 0, 'f', 3));
+  const auto circle = c.evaluate("app.shapeOutline('circle',64)").toList();
+  bool round = true;
+  for (const auto &value : circle)
+    round = round && qAbs(value.toDouble() - 1) < 0.001;
+  c.check(round, "and a circle does not cut at all");
+
+  // A shaped mask really clips: the corner of a masked cover is cut away.
+  QQmlComponent artSource(qmlEngine(w), QUrl("qrc:/qml/MShape.qml"));
+  QScopedPointer<QObject> artObject(artSource.create(qmlContext(w)));
+  auto masked = qobject_cast<QQuickItem *>(artObject.data());
+  c.check(masked, "a shape can be drawn on its own");
+  if (masked) {
+    masked->setParentItem(w->contentItem());
+    masked->setX(600); masked->setY(320); masked->setZ(95);
+    masked->setWidth(160); masked->setHeight(160);
+    masked->setProperty("shape", QString("cookie4Sided"));
+    QTest::qWait(200);
+    const auto frame = w->grabWindow();
+    const auto box = masked->mapRectToScene(masked->boundingRect()).toRect();
+    const auto middle = frame.pixelColor(box.center());
+    const auto corner = frame.pixelColor(box.left()+3, box.top()+3);
+    c.check(middle != corner,
+            "and what it masks is cut away at the corner but not the middle");
+    c.shotNow("03-shape-mask");
+    masked->setVisible(false);
+    masked->setParentItem(nullptr);
+  }
+
+  // --- A field that explains itself, and says when it is wrong ---
+  auto folders = c.dialog("musicFoldersDialog");
+  QTest::qWait(200);
+  c.click("addMusicFolderButton");
+  auto path = shownItem(w->contentItem(), "musicFolderPath");
+  auto support = shownItem(w->contentItem(), "fieldSupport");
+  c.check(path && support && support->isVisible(),
+          "the folder field carries supporting text under it");
+  if (path && support) {
+    const auto calm = support->property("color").value<QColor>();
+    c.check(!path->property("errored").toBool() && calm == c.themeColor("muted"),
+            "which is quiet while nothing is wrong");
+    c.shot("04-field-supporting");
+    path->setProperty("text", QString("/definitely/not/here"));
+    QTest::qWait(150);
+    c.click("confirmMusicFolderButton");
+    c.check(path->property("errored").toBool(), "a path that does not exist puts it in error");
+    c.check(support->property("color").value<QColor>() == c.themeColor("error") &&
+                support->property("text").toString() != QString(),
+            "and the same line carries the reason in the error role");
+    auto outline = path->property("background").value<QQuickItem *>();
+    c.check(outline && outline->property("border").value<QObject *>() != nullptr,
+            "with the field itself outlined to match");
+    c.shot("05-field-error");
+  }
+  QTest::keyClick(w, Qt::Key_Escape);
+  QTest::qWait(300);
+  c.closeDialog(folders);
+
+  // --- A window too narrow for a side pane ---
+  auto panel = anyItem(w->contentItem(), "sidePanel");
+  auto sheet = anyItem(w->contentItem(), "panelSheet");
+  w->setProperty("side", "queue");
+  QTest::qWait(700);
+  c.check(panel && panel->isVisible() && !w->property("sheetMode").toBool(),
+          "a wide window sets the queue beside the page");
+  w->resize(880, 860);
+  QTest::qWait(900);
+  c.check(w->property("sheetMode").toBool(), "a narrower one has no room for that");
+  c.check(sheet && sheet->isVisible(), "so the pane arrives as a bottom sheet");
+  c.check(panel && !panel->isVisible(), "and the side pane stands down");
+  if (sheet) {
+    auto surface = anyItem(sheet, "bottomSheetSurface");
+    c.check(surface && surface->property("topLeftRadius").toDouble() == 28 &&
+                surface->property("bottomLeftRadius").toDouble() == 0,
+            "rounded on the top corners only, as Material draws a sheet");
+    c.check(surface && surface->property("color").value<QColor>() == c.themeColor("surface"),
+            "on the surface a sheet belongs on");
+    auto handle = anyItem(sheet, "bottomSheetHandle");
+    c.check(handle && handle->isVisible(), "with a drag handle to take hold of");
+    // The queue still works from in there.
+    c.check(shownItem(sheet, "queueView") != nullptr, "and the queue itself came with it");
+    c.shot("06-bottom-sheet");
+    // Pushing the handle down past a third of the sheet puts it away.
+    const auto grip = handle->mapToScene(handle->boundingRect().center()).toPoint();
+    QTest::mousePress(w, Qt::LeftButton, Qt::NoModifier, grip);
+    for (int step = 1; step <= 6; ++step) {
+      QTest::mouseMove(w, grip + QPoint(0, int(sheet->height()/2)*step/6), 20);
+      QTest::qWait(30);
+    }
+    QTest::mouseRelease(w, Qt::LeftButton, Qt::NoModifier, grip + QPoint(0, int(sheet->height()/2)));
+    QTest::qWait(700);
+    c.check(w->property("side").toString().isEmpty(), "and pushing it down closes the pane");
+  }
+
+  // --- A window too narrow for a rail ---
+  w->resize(520, 860);
+  QTest::qWait(900);
+  c.check(w->property("compactWindow").toBool(), "a compact window stands the rail down");
+  c.check(!shownItem(w->contentItem(), "navigationRail"), "which takes its settings with it");
+  auto drawerButton = shownItem(w->contentItem(), "drawerButton");
+  c.check(drawerButton && drawerButton->isVisible(),
+          "so a menu button appears to open the drawer instead");
+  if (drawerButton) {
+    c.click("drawerButton");
+    auto drawer = w->findChild<QObject *>("navigationDrawer");
+    c.check(drawer && drawer->property("visible").toBool(), "the drawer opens over the page");
+    c.check(anyItem(w->contentItem(), "drawerSettings") != nullptr &&
+                anyItem(w->contentItem(), "drawerMiniPlayer") != nullptr,
+            "carrying what the rail was carrying");
+    c.check(anyItem(w->contentItem(), "drawerNav_library") != nullptr,
+            "and the destinations with it");
+    c.shot("07-navigation-drawer");
+    QTest::keyClick(w, Qt::Key_Escape);
+    QTest::qWait(400);
+    c.check(drawer && !drawer->property("visible").toBool(), "and Escape puts it away");
+  }
+
+  // --- A dialog on a window with nowhere to float ---
+  auto compactDialog = c.dialog("settingsDialog");
+  QTest::qWait(300);
+  if (compactDialog) {
+    c.check(compactDialog->property("fullScreen").toBool(),
+            "a dialog on a compact window takes the window");
+    c.check(qAbs(compactDialog->property("width").toReal() - w->width()) < 1.5,
+            QString("filling it rather than floating in it (%1 of %2)")
+                .arg(compactDialog->property("width").toReal(), 0, 'f', 0).arg(w->width()));
+    auto surface = compactDialog->property("background").value<QQuickItem *>();
+    c.check(surface && surface->property("radius").toDouble() == 0,
+            QString("and squaring its corners against the window edge (%1)")
+                .arg(surface ? surface->property("radius").toDouble() : -1, 0, 'f', 1));
+    c.shot("08-full-screen-dialog");
+  }
+  c.closeDialog(compactDialog);
+  w->resize(1400, 900);
+  QTest::qWait(700);
+  c.check(!w->property("compactWindow").toBool() && !w->property("sheetMode").toBool(),
+          "and the rail and the side pane come back with the room");
+  c.shot("09-restored");
+  c.finish();
+}
+
+// Material's colour engine beyond one scheme: the variants that decide how much
+// of a cover the interface takes, the contrast levels that push text away from
+// what it sits on, and the density Material allows once a precision pointer is
+// driving the controls.
+void runMaterialSchemeTests(Backend *b, QQuickWindow *w) {
+  Check c{b, w, qEnvironmentVariable("SUNG_TEST_OUTPUT")};
+  QDir().mkpath(c.directory + "/music");
+  QWindowSystemInterface::handleFocusWindowChanged(w);
+  w->resize(1400, 900);
+  QTest::qWait(500);
+  b->setTheme("dark");
+  b->setMotion(false);
+  b->setVolume(0);
+  b->setAutoplay(false);
+  b->setWatchMusicFolders(false);
+  b->setOnlineArtwork(false);
+  b->setColorVariant("tonalSpot");
+  b->setColorContrast(0);
+  b->setPrecisePointer(false);
+  b->setArtworkAccent(false);
+  b->setAccentColor("#3f6ad8");
+  QTest::qWait(400);
+
+  // --- The variants really spread the palettes differently ---
+  const QColor source("#3f6ad8");
+  struct Expectation { const char *name; double primaryChroma; };
+  // Material's own numbers for the primary palette of each variant.
+  const Expectation wanted[] = {{"neutral", 12}, {"tonalSpot", 36}, {"vibrant", 200},
+                                {"expressive", 40}};
+  QList<QColor> primaries;
+  for (const auto &entry : wanted) {
+    const auto roles = m3::scheme(source, true, m3::variantFor(entry.name), 0);
+    const auto primary = roles.value("primary").value<QColor>();
+    primaries.append(primary);
+    c.check(primary.isValid(), QString("the %1 scheme resolves").arg(entry.name));
+  }
+  // Neutral barely tints, vibrant maxes out: their accents cannot be the same.
+  c.check(m3::measure(primaries[0]).chroma < m3::measure(primaries[1]).chroma,
+          QString("neutral is less colourful than balanced (%1 against %2)")
+              .arg(m3::measure(primaries[0]).chroma, 0, 'f', 1)
+              .arg(m3::measure(primaries[1]).chroma, 0, 'f', 1));
+  // Vibrant asks for a chroma sRGB cannot hold at every tone, so the two meet
+  // at the gamut edge for a light accent. Where the gamut is widest they part.
+  const double vibrantMid = m3::measure(m3::palettesFor(source, m3::Variant::Vibrant).primary.tone(50)).chroma;
+  const double balancedMid = m3::measure(m3::palettesFor(source, m3::Variant::TonalSpot).primary.tone(50)).chroma;
+  c.check(vibrantMid > balancedMid,
+          QString("and vibrant takes all the colour sRGB will give (%1 against %2)")
+              .arg(vibrantMid, 0, 'f', 1).arg(balancedMid, 0, 'f', 1));
+  // Expressive turns the hue right around on purpose.
+  const double sourceHue = m3::measure(source).hue;
+  const double expressiveHue = m3::measure(primaries[3]).hue;
+  double turn = std::abs(expressiveHue - sourceHue);
+  if (turn > 180) turn = 360 - turn;
+  c.check(turn > 90, QString("expressive detaches from the source hue (%1 degrees)").arg(turn, 0, 'f', 0));
+  // Every variant still has to be readable.
+  for (const auto &entry : wanted)
+    for (bool dark : {false, true}) {
+      const auto roles = m3::scheme(source, dark, m3::variantFor(entry.name), 0);
+      const double ratio = contrastOf(roles.value("onSurface").value<QColor>(),
+                                      roles.value("surface").value<QColor>());
+      c.check(ratio >= 4.5, QString("%1 keeps its text readable %2 (%3:1)")
+                                .arg(entry.name).arg(dark ? "dark" : "light").arg(ratio, 0, 'f', 1));
+    }
+
+  // --- Contrast levels push text further from its surface ---
+  double previous = 0;
+  for (double level : {0.0, 0.5, 1.0}) {
+    const auto roles = m3::scheme(source, true, m3::Variant::TonalSpot, level);
+    const double ratio = contrastOf(roles.value("onSurface").value<QColor>(),
+                                    roles.value("surface").value<QColor>());
+    c.check(ratio >= previous - 0.01,
+            QString("contrast %1 is at least as strong as the level below (%2:1)")
+                .arg(level).arg(ratio, 0, 'f', 1));
+    previous = ratio;
+  }
+  const auto high = m3::scheme(source, true, m3::Variant::TonalSpot, 1);
+  c.check(contrastOf(high.value("onSurface").value<QColor>(), high.value("surface").value<QColor>()) >= 10,
+          "high contrast clears Material's own target for body text");
+  const auto standard = m3::scheme(source, true, m3::Variant::TonalSpot, 0);
+  c.check(contrastOf(high.value("outlineVariant").value<QColor>(), high.value("surface").value<QColor>()) >
+              contrastOf(standard.value("outlineVariant").value<QColor>(), standard.value("surface").value<QColor>()),
+          "and the quietest boundary moves with it");
+
+  // --- What that looks like in the window ---
+  for (const char *variant : {"neutral", "tonalSpot", "vibrant", "expressive", "content"}) {
+    b->setColorVariant(variant);
+    QTest::qWait(350);
+    c.check(c.evaluate("Theme.primary").value<QColor>().isValid(),
+            QString("the window takes the %1 scheme").arg(variant));
+    c.shot(QString("01-scheme-") + variant);
+  }
+  b->setColorVariant("tonalSpot");
+  for (double level : {0.0, 1.0}) {
+    b->setColorContrast(level);
+    QTest::qWait(350);
+    c.shot(QString("02-contrast-") + (level > 0 ? "high" : "standard"));
+  }
+  const auto highText = c.evaluate("Theme.text").value<QColor>();
+  b->setColorContrast(0);
+  QTest::qWait(350);
+  c.check(highText != c.evaluate("Theme.text").value<QColor>(),
+          "and the interface really repaints when the level changes");
+
+  // --- Density once a precision pointer is driving ---
+  auto play = shownItem(w->contentItem(), "playButton");
+  auto anyButton = shownItem(w->contentItem(), "playerShuffle");
+  c.check(anyButton, "the player offers a small button to measure");
+  if (anyButton) {
+    const double comfortable = anyButton->height();
+    c.check(qAbs(comfortable - 48) < 0.5,
+            QString("which reserves a 48dp touch target by default (%1)").arg(comfortable, 0, 'f', 0));
+    c.shot("03-pointer-comfortable");
+    b->setPrecisePointer(true);
+    QTest::qWait(400);
+    c.check(anyButton->height() < comfortable,
+            QString("a precision pointer draws it tighter (%1 against %2)")
+                .arg(anyButton->height(), 0, 'f', 0).arg(comfortable, 0, 'f', 0));
+    auto container = anyButton->property("background").value<QQuickItem *>();
+    // Material's small button drops from 40dp to 36dp for a precision pointer.
+    c.check(container && qAbs(container->height() - 36) < 0.5,
+            QString("at Material's 36dp small container (%1)")
+                .arg(container ? container->height() : 0, 0, 'f', 0));
+    c.check(play && play->property("background").value<QQuickItem *>()->height() == 56,
+            "while the medium button keeps its own height");
+    c.shot("04-pointer-precise");
+    b->setPrecisePointer(false);
+    QTest::qWait(400);
+    c.check(qAbs(anyButton->height() - comfortable) < 0.5, "and it comes back");
+  }
+
+  // --- A short window takes the short navigation bar ---
+  w->resize(520, 640);
+  QTest::qWait(800);
+  auto bar = shownItem(w->contentItem(), "navigationBar");
+  c.check(bar && bar->property("short").toBool(),
+          "a window with little height takes Material's short bar");
+  c.check(bar && qAbs(bar->height() - 64) < 0.5,
+          QString("which is 64dp rather than 80 (%1)").arg(bar ? bar->height() : 0, 0, 'f', 0));
+  c.shot("05-short-navigation-bar");
+  w->resize(520, 900);
+  QTest::qWait(800);
+  c.check(bar && !bar->property("short").toBool(), "and the full bar comes back with the room");
+  c.shot("06-navigation-bar");
+
+  // --- The expanded rail takes the width Material allows it ---
+  w->resize(1600, 900);
+  QTest::qWait(700);
+  c.evaluate("railSettings.expanded=true");
+  QTest::qWait(700);
+  auto rail = shownItem(w->contentItem(), "navigationRail");
+  c.check(rail && rail->width() >= 220 && rail->width() <= 360,
+          QString("the expanded rail stays inside Material's 220 to 360 range (%1)")
+              .arg(rail ? rail->width() : 0, 0, 'f', 0));
+  c.check(rail && rail->width() > 220, "taking more of it on a window with room");
+  c.shot("07-wide-rail");
+  c.evaluate("railSettings.expanded=false");
+  QTest::qWait(500);
+
+  // --- A slider says what it is worth while it is moved ---
+  QQmlComponent sliderSource(qmlEngine(w), QUrl("qrc:/qml/SettingSlider.qml"));
+  QScopedPointer<QObject> sliderObject(sliderSource.create(qmlContext(w)));
+  auto slider = qobject_cast<QQuickItem *>(sliderObject.data());
+  c.check(slider, "a slider can be made on its own to work");
+  if (slider) {
+    slider->setParentItem(w->contentItem());
+    slider->setX(520); slider->setY(300); slider->setZ(95);
+    slider->setWidth(280);
+    slider->setProperty("from", 0);
+    slider->setProperty("to", 12);
+    slider->setProperty("value", 6);
+    slider->setProperty("valueLabel", QString("6 s"));
+    QTest::qWait(200);
+    // Scoped to this slider: the settings dialog owns one of these too.
+    auto label = slider->findChild<QObject *>("sliderValueLabel");
+    c.check(label && !label->property("visible").toBool(),
+            "whose value label stays away while nobody is touching it");
+    const auto grip = slider->mapToScene(slider->boundingRect().center()).toPoint();
+    QTest::mousePress(w, Qt::LeftButton, Qt::NoModifier, grip);
+    QTest::qWait(300);
+    c.check(slider->property("pressed").toBool(), "taking hold of it presses it");
+    c.check(label && label->property("visible").toBool(),
+            "and the value label comes up over the handle");
+    c.check(anyItem(w->contentItem(), "sliderValueText") != nullptr,
+            "carrying what the slider is currently worth");
+    c.shotNow("08-slider-label");
+    QTest::mouseRelease(w, Qt::LeftButton, Qt::NoModifier, grip);
+    QTest::qWait(300);
+    c.check(label && !label->property("visible").toBool(), "and goes away on release");
+    slider->setVisible(false);
+    slider->setParentItem(nullptr);
+  }
+
+  // --- Cards say how much they want to be noticed ---
+  QQmlComponent cardSource(qmlEngine(w), QUrl("qrc:/qml/MCard.qml"));
+  QScopedPointer<QObject> cardObject(cardSource.create(qmlContext(w)));
+  auto card = qobject_cast<QQuickItem *>(cardObject.data());
+  c.check(card, "a card can be made on its own");
+  if (card) {
+    card->setParentItem(w->contentItem());
+    card->setX(600); card->setY(320); card->setZ(95);
+    card->setWidth(200); card->setHeight(120);
+    card->setProperty("variant", QString("filled"));
+    QTest::qWait(150);
+    const auto filled = card->property("color").value<QColor>();
+    c.check(filled == c.themeColor("high"), "a filled card takes the highest container");
+    card->setProperty("variant", QString("outlined"));
+    QTest::qWait(150);
+    c.check(card->property("color").value<QColor>() != filled &&
+                card->property("border").value<QObject *>()->property("width").toInt() == 1,
+            "an outlined one draws a boundary instead");
+    card->setProperty("variant", QString("elevated"));
+    QTest::qWait(150);
+    auto shade = anyItem(card, "elevation");
+    c.check(shade && shade->property("level").toInt() == 1, "and an elevated one casts a shadow");
+    c.shotNow("09-cards");
+    card->setVisible(false);
+    card->setParentItem(nullptr);
+  }
+  w->resize(1400, 900);
+  QTest::qWait(500);
+  c.shot("10-restored");
   c.finish();
 }

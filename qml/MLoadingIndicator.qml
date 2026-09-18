@@ -10,11 +10,11 @@ import QtQuick.Shapes
 // morph on top of a continuous rotation that takes 4666ms. The determinate form
 // morphs a circle into the soft burst as progress runs from nought to one.
 //
-// Material builds the shapes from RoundedPolygon and morphs them by matching
-// their cubic curves. Qt Quick has neither, so each shape here is written as
-// the radius it carries at a given angle and a morph interpolates those radii.
-// The silhouettes, the sequence and the timings are Material's; the curve
-// matching underneath them is not.
+// The shapes come from the shared library, which writes each one as the radius
+// it carries at a given angle; the morph interpolates those radii. Material
+// builds them from RoundedPolygon and morphs by matching cubic curves, which Qt
+// Quick has no equivalent of. The silhouettes, the sequence and the timings are
+// Material's; the curve matching underneath them is not.
 Item {
     id: indicator
 
@@ -41,43 +41,20 @@ Item {
     Accessible.name: label
     Accessible.ignored: !visible
 
-    readonly property int shapeCount: 7
-    readonly property int circleShape: 7
+    // Material's sequence for the indeterminate form, and the circle the
+    // determinate one grows out of. The outlines come from the shared shape
+    // library rather than being worked out here.
+    readonly property var sequence: ["softBurst","cookie9Sided","pentagon","pill","sunny","cookie4Sided","oval"]
+    readonly property int shapeCount: sequence.length
     readonly property int sampleCount: 96
     property int morphIndex: 0
     property real morphProgress: 0
     property real turn: 0
     property real spin: 0
 
-    // A lobed shape: `count` bumps cut `depth` out of the radius, with
-    // `point` deciding how sharply each one comes to a tip.
-    function lobed(angle,count,depth,point) { return 1-depth*Math.pow((1-Math.cos(count*angle))/2,point) }
-    // A regular polygon eased towards its circumcircle, which is what corner
-    // rounding does to a silhouette.
-    function polygonal(angle,sides,rounding) {
-        const step=2*Math.PI/sides
-        const edge=Math.cos(Math.PI/sides)/Math.cos(((angle%step)+step)%step-Math.PI/sides)
-        return edge*(1-rounding)+rounding
-    }
-    function superellipse(angle,wide,tall,power) {
-        return Math.pow(Math.pow(Math.abs(Math.cos(angle)/wide),power)+Math.pow(Math.abs(Math.sin(angle)/tall),power),-1/power)
-    }
-    function elliptical(angle,ratio,tilt) {
-        const a=angle-tilt
-        return ratio/Math.sqrt(Math.pow(ratio*Math.cos(a),2)+Math.pow(Math.sin(a),2))
-    }
-    function shapeRadius(shape,angle) {
-        switch(shape) {
-        case 0: return lobed(angle,10,0.15,1.1)   // soft burst
-        case 1: return lobed(angle,9,0.20,1.0)    // nine sided cookie
-        case 2: return polygonal(angle,5,0.30)    // pentagon
-        case 3: return superellipse(angle,1,0.55,4.5) // pill
-        case 4: return lobed(angle,8,0.20,0.6)    // sunny
-        case 5: return lobed(angle,4,0.30,1.0)    // four sided cookie
-        case 6: return elliptical(angle,0.64,-Math.PI/4) // oval
-        }
-        return 1
-    }
+    // Fetched when the morph moves on, not per frame.
+    readonly property var fromRadii: app.shapeOutline(determinate ? "circle" : sequence[morphIndex], sampleCount)
+    readonly property var toRadii: app.shapeOutline(determinate ? sequence[0] : sequence[(morphIndex+1)%shapeCount], sampleCount)
 
     Rectangle {
         anchors.fill: parent
@@ -100,15 +77,13 @@ Item {
             strokeColor: "transparent"
             PathPolyline {
                 path: {
-                    const from=indicator.determinate ? indicator.circleShape : indicator.morphIndex
-                    const to=indicator.determinate ? 0 : (indicator.morphIndex+1)%indicator.shapeCount
+                    const from=indicator.fromRadii, to=indicator.toRadii
                     const held=indicator.determinate ? Math.min(1,indicator.progress) : indicator.morphProgress
-                    const steps=indicator.sampleCount
                     const extent=outline.width/2
                     const points=[]
-                    for(let i=0;i<=steps;++i) {
-                        const angle=i*2*Math.PI/steps
-                        const radius=(indicator.shapeRadius(from,angle)*(1-held)+indicator.shapeRadius(to,angle)*held)*extent
+                    for(let i=0;i<from.length;++i) {
+                        const angle=i*2*Math.PI/(from.length-1)
+                        const radius=(from[i]*(1-held)+to[i]*held)*extent
                         points.push(Qt.point(extent+radius*Math.cos(angle),extent+radius*Math.sin(angle)))
                     }
                     return points

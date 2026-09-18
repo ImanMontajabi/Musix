@@ -4,7 +4,7 @@ import QtQuick.Layouts
 MDialog {
     id: dialog; objectName: "trackDetailsDialog"
     title: "Track details"; modal: true; standardButtons: Dialog.Close
-    width: Math.min(520,parent.width-48); height: Math.min(560,parent.height-48)
+    width: fitWidth(520); height: fitHeight(560)
     property var details: []
     property var inspectedTrack: ({})
     function inspect(track) { inspectedTrack=track;details=app.trackDetails(track);open(); }

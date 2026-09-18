@@ -690,7 +690,10 @@ void runHomeRailTests(Backend *b, QQuickWindow *w) {
 
   c.click("navigationMenuButton");
   c.check(c.until([&] { return rail->property("expanded").toBool(); }), "the menu button expands the rail");
-  c.check(c.until([&] { return qAbs(rail->width() - 220) < 1; }), "the expanded rail reaches its M3 width");
+  // Material's expanded rail runs from 220dp to 360dp rather than sitting at
+  // one width, so it takes more of that range on a window with room.
+  c.check(c.until([&] { return rail->width() >= 219 && rail->width() <= 361; }),
+          QString("the expanded rail lands inside Material's width range (%1)").arg(rail->width(), 0, 'f', 0));
   c.check(c.until([&] { return wide && wide->opacity() > 0.9; }), "expanded items lay icon beside label");
   c.check(stacked && stacked->opacity() < 0.1, "the stacked layout is hidden while expanded");
   auto menu = itemNamed(w->contentItem(), "navigationMenuButton");

@@ -8,7 +8,7 @@ MDialog {
     property string sourceFilter: "any"
     property int daysFilter: 0
     title: playlistId ? "Edit rules" : "New smart playlist"
-    width: Math.min(480,parent.width-48); height: Math.min(720,parent.height-48)
+    width: fitWidth(480); height: fitHeight(720)
     modal: true; standardButtons: Dialog.Cancel | Dialog.Ok; acceptText: "Save"
     initialFocus: nameField; acceptEnabled: nameField.text.trim().length>0
     scrollSource: scroll.contentItem

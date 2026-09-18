@@ -19,10 +19,13 @@ Rectangle {
     // Each destination is {key, icon, label}, and may carry `badged` for a dot
     // or `badge` for a count.
     property var destinations: []
+    // Material's short bar sets the label beside the icon in a 64dp container
+    // rather than under it, for a window with height to spare but not much.
+    property bool short: false
     property string current: ""
     signal chosen(string key)
 
-    implicitHeight: 80
+    implicitHeight: short ? 64 : 80
     color: Theme.container
     Accessible.role: Accessible.PageTabList
     Accessible.name: "Navigation"
@@ -40,7 +43,7 @@ Rectangle {
                 objectName: "navBar_" + modelData.key
                 readonly property bool active: bar.current === modelData.key
                 Layout.fillWidth: true
-                Layout.preferredHeight: 64
+                Layout.preferredHeight: bar.short ? 56 : 64
                 Layout.alignment: Qt.AlignVCenter
                 hoverEnabled: true
                 focusPolicy: Qt.StrongFocus
@@ -49,14 +52,16 @@ Rectangle {
                 Accessible.selected: active
                 onClicked: bar.chosen(modelData.key)
 
-                ColumnLayout {
+                GridLayout {
                     anchors.centerIn: parent
-                    spacing: 4
+                    // The short bar lays the same two pieces out side by side.
+                    flow: bar.short ? GridLayout.LeftToRight : GridLayout.TopToBottom
+                    columnSpacing: 8; rowSpacing: 4
                     // The active indicator marks one destination, and only one.
                     Rectangle {
                         objectName: "navBarIndicator_" + destination.modelData.key
                         Layout.alignment: Qt.AlignHCenter
-                        implicitWidth: 64; implicitHeight: 32
+                        implicitWidth: bar.short ? 56 : 64; implicitHeight: 32
                         radius: Theme.shapeFull(implicitHeight)
                         color: destination.active ? Theme.primaryContainer
                              : destination.down || destination.visualFocus ? Qt.rgba(Theme.primary.r,Theme.primary.g,Theme.primary.b,Theme.pressedOpacity)
@@ -89,7 +94,7 @@ Rectangle {
                         Layout.alignment: Qt.AlignHCenter
                         text: destination.modelData.label
                         font.pixelSize: Theme.labelMedium
-                        emphasized: destination.active
+                        emphasized: destination.active; labelRole: true
                         color: destination.active ? Theme.text : Theme.muted
                     }
                 }

@@ -13,7 +13,10 @@ QtObject {
     // Material spreads five tonal palettes around one source color and reads
     // every role off them at fixed tones. Surfaces included: that trace of the
     // cover's hue in the neutrals is what ties the window to the music.
-    readonly property var roles: useSource ? app.colorScheme(sourceColor,dark) : ({})
+    // The scheme depends on the variant and the contrast level as much as on
+    // the source colour, so the binding has to read them or a change to either
+    // would never reach the window.
+    readonly property var roles: useSource ? (app.colorVariant, app.colorContrast, app.colorScheme(sourceColor,dark)) : ({})
     function role(name,fallback) {const c=roles[name];return c===undefined?fallback:c;}
     function blend(a,b,t) {return Qt.rgba(a.r+(b.r-a.r)*t,a.g+(b.g-a.g)*t,a.b+(b.b-a.b)*t,1);}
     function luminance(c) {
@@ -55,6 +58,28 @@ QtObject {
     readonly property real elevationKeyOpacity: 0.30
     readonly property real elevationAmbientOpacity: 0.15
 
+    // --- Buttons -------------------------------------------------------------
+    // Material's five button sizes. A size is not just a height: it carries its
+    // own corner for the squarer pressed and selected states, its own icon size,
+    // its own padding and its own gap between icon and label.
+    // Material drops the small button to 36dp when a precision pointer is
+    // driving it, and stops reserving the 48dp target that exists to
+    // disambiguate touches.
+    readonly property bool precisePointer: app.precisePointer
+    readonly property int minimumTarget: precisePointer ? 0 : 48
+    readonly property var buttonHeights: precisePointer ? ({xsmall:32, small:36, medium:56, large:96})
+                                                        : ({xsmall:32, small:40, medium:56, large:96})
+    readonly property var buttonSquare: ({xsmall:shapeMedium, small:shapeMedium, medium:shapeLarge, large:shapeExtraLarge})
+    readonly property var buttonIcon: ({xsmall:20, small:20, medium:24, large:32})
+    readonly property var buttonInset: ({xsmall:16, small:16, medium:24, large:48})
+    readonly property var buttonGap: ({xsmall:8, small:8, medium:8, large:12})
+    readonly property var buttonLabel: ({xsmall:labelLarge, small:labelLarge, medium:titleMedium, large:headlineSmall})
+    // Material's optical centering: content inside an asymmetric shape is
+    // nudged by this much of the difference between its two corner radii, so it
+    // looks centred rather than measuring centred.
+    readonly property real opticalCentering: 0.11
+    function opticalShift(startRadius,endRadius) { return opticalCentering*(startRadius-endRadius) }
+
     // --- Motion --------------------------------------------------------------
     // Material replaced easing and duration with springs. Qt Quick animates on
     // curves, and the specification publishes the curve each spring converts to
@@ -84,13 +109,20 @@ QtObject {
     // Material's emphasized styles lean on a variable font's weight and width
     // to carry hierarchy, rather than only its size. Google Sans Flex is
     // variable, so the emphasis is real rather than a synthesised bold.
-    readonly property int emphasizedWeight: Font.DemiBold
+    // Material's emphasized styles are one weight step up from the regular
+    // ones, and the step is not the same for every role: labels go from medium
+    // to bold, everything else from regular to medium.
     readonly property int emphasizedWidth: 110
     readonly property int regularWidth: 100
+    function weightFor(emphasized,label) {
+        if (label) return emphasized ? Font.Bold : Font.Medium
+        return emphasized ? Font.Medium : Font.Normal
+    }
     readonly property int displaySmall: 36
     readonly property int headlineMedium: 28
     readonly property int headlineSmall: 24
     readonly property int titleLarge: 22
+    readonly property int titleMedium: 16
     readonly property int rowHeight: app.viewCompactDensity ? 56 : 72
     readonly property int rowArtwork: app.viewCompactDensity ? 36 : 48
     readonly property int gridCell: app.viewCompactDensity ? 148 : 180

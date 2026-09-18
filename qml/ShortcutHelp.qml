@@ -5,7 +5,7 @@ import QtQuick.Layouts
 MDialog {
     id: dialog
     objectName: "shortcutHelp"
-    width: Math.min(540,parent.width-48); height: Math.min(660,parent.height-48)
+    width: fitWidth(540); height: fitHeight(660)
     initialFocus: shortcuts
     title: "Keyboard shortcuts"; modal: true; standardButtons: Dialog.Close
     scrollSource: shortcuts

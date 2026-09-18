@@ -190,15 +190,69 @@ QColor solve(double hue, double chroma, double tone) {
   return QColor::fromRgbF(grey, grey, grey);
 }
 
-Palettes palettesFor(const QColor &source) {
-  // Material's default scheme. The neutral palettes carry a trace of the source
-  // hue, which is what tints the surfaces without colouring them.
+namespace {
+// Material turns the secondary and tertiary hues by an amount that depends on
+// where the source sits on the wheel, so a scheme stays balanced whatever it is
+// given. The breaks and the rotations are Material's own tables.
+double rotatedHue(double hue, const QList<double> &breaks, const QList<double> &rotations) {
+  for (int i = 0; i < breaks.size() - 1; ++i)
+    if (breaks[i] <= hue && hue < breaks[i + 1])
+      return sanitizeDegrees(hue + rotations[i]);
+  return hue;
+}
+const QList<double> kVibrantBreaks{0, 41, 61, 101, 131, 181, 251, 301, 360};
+const QList<double> kExpressiveBreaks{0, 21, 51, 121, 151, 191, 271, 321, 360};
+} // namespace
+
+Variant variantFor(const QString &name) {
+  if (name == "neutral") return Variant::Neutral;
+  if (name == "vibrant") return Variant::Vibrant;
+  if (name == "expressive") return Variant::Expressive;
+  if (name == "content") return Variant::Content;
+  return Variant::TonalSpot;
+}
+
+QStringList variantNames() { return {"neutral", "tonalSpot", "vibrant", "expressive", "content"}; }
+
+Palettes palettesFor(const QColor &source, Variant variant) {
+  // Every variant is the same five palettes spread differently. The neutral
+  // ones carry a trace of the source hue, which is what tints the surfaces
+  // without colouring them.
   const auto hct = measure(source);
-  return {TonalPalette{hct.hue, 36.0},
-          TonalPalette{hct.hue, 16.0},
-          TonalPalette{sanitizeDegrees(hct.hue + 60.0), 24.0},
-          TonalPalette{hct.hue, 6.0},
-          TonalPalette{hct.hue, 8.0}};
+  const double hue = hct.hue, chroma = hct.chroma;
+  switch (variant) {
+  case Variant::Neutral:
+    return {TonalPalette{hue, 12.0}, TonalPalette{hue, 8.0}, TonalPalette{hue, 16.0},
+            TonalPalette{hue, 2.0}, TonalPalette{hue, 2.0}};
+  case Variant::Vibrant:
+    return {TonalPalette{hue, 200.0},
+            TonalPalette{rotatedHue(hue, kVibrantBreaks, {18, 15, 10, 12, 15, 18, 15, 12, 12}), 24.0},
+            TonalPalette{rotatedHue(hue, kVibrantBreaks, {35, 30, 20, 25, 30, 35, 30, 25, 25}), 32.0},
+            TonalPalette{hue, 10.0}, TonalPalette{hue, 12.0}};
+  case Variant::Expressive:
+    return {TonalPalette{sanitizeDegrees(hue + 240.0), 40.0},
+            TonalPalette{rotatedHue(hue, kExpressiveBreaks, {45, 95, 45, 20, 45, 90, 45, 45, 45}), 24.0},
+            TonalPalette{rotatedHue(hue, kExpressiveBreaks, {120, 120, 20, 45, 20, 15, 20, 120, 120}), 32.0},
+            TonalPalette{sanitizeDegrees(hue + 15.0), 8.0},
+            TonalPalette{sanitizeDegrees(hue + 15.0), 12.0}};
+  case Variant::Content:
+    // Material picks Content's tertiary by walking the colour wheel for an
+    // analogous hue and correcting it if it lands somewhere disliked. Without
+    // that machinery this takes the same step round the wheel the default
+    // scheme takes, at the source's own chroma.
+    return {TonalPalette{hue, chroma},
+            TonalPalette{hue, std::max(chroma - 32.0, chroma * 0.5)},
+            TonalPalette{sanitizeDegrees(hue + 60.0), chroma},
+            TonalPalette{hue, chroma / 8.0},
+            TonalPalette{hue, chroma / 8.0 + 4.0}};
+  case Variant::TonalSpot:
+    break;
+  }
+  return {TonalPalette{hue, 36.0},
+          TonalPalette{hue, 16.0},
+          TonalPalette{sanitizeDegrees(hue + 60.0), 24.0},
+          TonalPalette{hue, 6.0},
+          TonalPalette{hue, 8.0}};
 }
 
 namespace {
@@ -229,8 +283,29 @@ double toneMeeting(const TonalPalette &palette, double start, bool lighten,
 }
 } // namespace
 
-QVariantMap scheme(const QColor &source, bool dark) {
-  const auto p = palettesFor(source);
+namespace {
+// Material gives every role that carries text or a boundary four target
+// contrast ratios, one for each contrast level, and interpolates between them.
+struct ContrastCurve {
+  double low, normal, medium, high;
+  double at(double level) const {
+    if (level <= -1) return low;
+    if (level < 0) return low + (normal - low) * (level + 1);
+    if (level < 0.5) return normal + (medium - normal) * (level / 0.5);
+    if (level < 1) return medium + (high - medium) * ((level - 0.5) / 0.5);
+    return high;
+  }
+};
+// The curves Material publishes for the roles this scheme hands out.
+constexpr ContrastCurve kOnSurface{4.5, 7, 11, 21};
+constexpr ContrastCurve kOnSurfaceVariant{3, 4.5, 7, 11};
+constexpr ContrastCurve kPrimary{3, 4.5, 7, 7};
+constexpr ContrastCurve kOutline{1.5, 3, 4.5, 7};
+constexpr ContrastCurve kOutlineVariant{1, 1, 3, 4.5};
+} // namespace
+
+QVariantMap scheme(const QColor &source, bool dark, Variant variant, double contrast) {
+  const auto p = palettesFor(source, variant);
   QVariantMap roles;
   const auto put = [&roles](const char *name, const QColor &color) { roles.insert(name, color); };
   // The surfaces primary can be drawn on, so its tone can be checked against
@@ -240,7 +315,19 @@ QVariantMap scheme(const QColor &source, bool dark) {
                            p.neutral.tone(17), p.neutral.tone(22)}
            : QList<QColor>{p.neutral.tone(98), p.neutral.tone(96), p.neutral.tone(94),
                            p.neutral.tone(92), p.neutral.tone(90)};
-  const double primaryTone = toneMeeting(p.primary, dark ? 80 : 40, dark, surfaces, 4.5);
+  contrast = qBound(0.0, contrast, 1.0);
+  // Text and boundaries move to meet the ratio their curve asks for at this
+  // level; the containers they sit on stay where Material puts them.
+  const auto surfaceTone = dark ? p.neutral.tone(6) : p.neutral.tone(98);
+  const double primaryTone = toneMeeting(p.primary, dark ? 80 : 40, dark, surfaces, kPrimary.at(contrast));
+  const double onSurfaceTone =
+      toneMeeting(p.neutral, dark ? 90 : 10, dark, {surfaceTone}, kOnSurface.at(contrast));
+  const double onSurfaceVariantTone =
+      toneMeeting(p.neutralVariant, dark ? 80 : 30, dark, {surfaceTone}, kOnSurfaceVariant.at(contrast));
+  const double outlineTone =
+      toneMeeting(p.neutralVariant, dark ? 60 : 50, dark, {surfaceTone}, kOutline.at(contrast));
+  const double outlineVariantTone =
+      toneMeeting(p.neutralVariant, dark ? 30 : 80, dark, {surfaceTone}, kOutlineVariant.at(contrast));
   if (dark) {
     put("primary", p.primary.tone(primaryTone));
     put("onPrimary", p.primary.tone(20));
@@ -261,10 +348,10 @@ QVariantMap scheme(const QColor &source, bool dark) {
     put("surfaceContainer", p.neutral.tone(12));
     put("surfaceContainerHigh", p.neutral.tone(17));
     put("surfaceContainerHighest", p.neutral.tone(22));
-    put("onSurface", p.neutral.tone(90));
-    put("onSurfaceVariant", p.neutralVariant.tone(80));
-    put("outline", p.neutralVariant.tone(60));
-    put("outlineVariant", p.neutralVariant.tone(30));
+    put("onSurface", p.neutral.tone(onSurfaceTone));
+    put("onSurfaceVariant", p.neutralVariant.tone(onSurfaceVariantTone));
+    put("outline", p.neutralVariant.tone(outlineTone));
+    put("outlineVariant", p.neutralVariant.tone(outlineVariantTone));
     put("inverseSurface", p.neutral.tone(90));
     put("inverseOnSurface", p.neutral.tone(20));
     put("inversePrimary", p.primary.tone(40));
@@ -288,10 +375,10 @@ QVariantMap scheme(const QColor &source, bool dark) {
     put("surfaceContainer", p.neutral.tone(94));
     put("surfaceContainerHigh", p.neutral.tone(92));
     put("surfaceContainerHighest", p.neutral.tone(90));
-    put("onSurface", p.neutral.tone(10));
-    put("onSurfaceVariant", p.neutralVariant.tone(30));
-    put("outline", p.neutralVariant.tone(50));
-    put("outlineVariant", p.neutralVariant.tone(80));
+    put("onSurface", p.neutral.tone(onSurfaceTone));
+    put("onSurfaceVariant", p.neutralVariant.tone(onSurfaceVariantTone));
+    put("outline", p.neutralVariant.tone(outlineTone));
+    put("outlineVariant", p.neutralVariant.tone(outlineVariantTone));
     put("inverseSurface", p.neutral.tone(20));
     put("inverseOnSurface", p.neutral.tone(95));
     put("inversePrimary", p.primary.tone(80));

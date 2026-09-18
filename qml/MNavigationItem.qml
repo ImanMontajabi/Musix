@@ -13,7 +13,8 @@ AbstractButton {
     property bool badged: false
     property int badgeCount: -1
     implicitWidth: expanded ? 220 : 80
-    implicitHeight: expanded ? 56 : 68
+    // Material's rail item container is 64dp tall.
+    implicitHeight: expanded ? 56 : 64
     hoverEnabled: true
     focusPolicy: Qt.StrongFocus
     Accessible.role: Accessible.PageTab
@@ -61,7 +62,7 @@ AbstractButton {
             }
             SungText {
                 objectName: "navigationLabel"
-                y: 42; width: parent.width; height: 20
+                y: 38; width: parent.width; height: 20
                 text: control.text; horizontalAlignment: Text.AlignHCenter
                 font.pixelSize: Theme.labelMedium
                 font.weight: control.selected ? Font.DemiBold : Font.Medium

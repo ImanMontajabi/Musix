@@ -17,8 +17,12 @@ Item {
         id: art; width: parent.width; height: width
         transform: Translate { x: card.parallax*7 }
         property real radius: (card.track.kind === "artist" || card.track.kind === "local-artist") ? Theme.shapeFull(width) : Theme.shapeLargeIncreased
+        // Artwork can be masked with a shape from Material's library; covers
+        // keep their circle and their rounded square because a lobed edge only
+        // reads as a portrait over photography, not over flat generated art.
+        readonly property string shape: ""
         readonly property bool mosaic: !!card.track.artworks && card.track.artworks.length>0
-        Artwork { anchors.fill: parent; url: card.track.art || ""; radius: art.radius; pixels: 400; visible: !art.mosaic }
+        Artwork { anchors.fill: parent; url: card.track.art || ""; radius: art.radius; shape: art.shape; pixels: 400; visible: !art.mosaic }
         Loader { anchors.fill: parent; active: art.mosaic; sourceComponent: PlaylistCover { artworks: card.track.artworks; radius: art.radius } }
     }
     HoverHandler { id: hover }

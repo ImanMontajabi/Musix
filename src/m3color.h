@@ -15,6 +15,7 @@
 // no contrast check can separate.
 #include <QColor>
 #include <QHash>
+#include <QStringList>
 #include <QVariantMap>
 
 namespace m3 {
@@ -38,14 +39,28 @@ struct TonalPalette {
   QColor tone(double value) const { return solve(hue, chroma, value); }
 };
 
-// The five palettes Material's default scheme spreads around a source color.
+// The five palettes a scheme spreads around a source color.
 struct Palettes {
   TonalPalette primary, secondary, tertiary, neutral, neutralVariant;
 };
-Palettes palettesFor(const QColor &source);
+
+// Material's scheme variants. Each one is a different answer to how much of the
+// source color the interface should take: Neutral barely tints, Tonal spot is
+// the default, Vibrant maxes the chroma out, Expressive turns the hue right
+// around on purpose, and Content keeps the source's own chroma.
+enum class Variant { Neutral, TonalSpot, Vibrant, Expressive, Content };
+Variant variantFor(const QString &name);
+QStringList variantNames();
+
+Palettes palettesFor(const QColor &source, Variant variant = Variant::TonalSpot);
 
 // Every color role the interface uses, keyed by its Material name.
-QVariantMap scheme(const QColor &source, bool dark);
+//
+// `contrast` runs from 0 for Material's standard tones to 1 for its high
+// contrast ones, passing through 0.5 for medium. It moves the roles that carry
+// text and boundaries; the containers they sit on stay where they are.
+QVariantMap scheme(const QColor &source, bool dark, Variant variant = Variant::TonalSpot,
+                   double contrast = 0);
 
 // L* of a color, on the same 0-100 scale as tone.
 double toneOf(const QColor &color);

@@ -2,6 +2,24 @@ import QtQuick
 import QtQuick.Controls
 Dialog {
     id: dialog
+    // A compact window has no room to float a dialog inside it, so Material
+    // gives the dialog the window: square corners, no inset, and the actions
+    // pinned to the bottom edge rather than centred in the middle of nowhere.
+    // A popup's parent is the overlay, which is the size of the window; the
+    // Window attached property is not available from here.
+    readonly property bool fullScreen: parent ? parent.width < 600 : false
+    // What a dialog should measure at this window size. A compact window gives
+    // it everything; otherwise it floats inside a 24dp inset up to what it asks
+    // for. Dialogs that size themselves go through these rather than repeating
+    // the arithmetic.
+    function fitWidth(preferred) {
+        if (!parent) return preferred
+        return fullScreen ? parent.width : Math.min(parent.width-48, preferred)
+    }
+    function fitHeight(preferred) {
+        if (!parent) return preferred
+        return fullScreen ? parent.height : Math.min(parent.height-48, preferred)
+    }
     property bool acceptEnabled: true
     property string acceptText: ""
     property Item initialFocus: null
@@ -13,9 +31,10 @@ Dialog {
     focus: true
     onOpened: if (initialFocus) initialFocus.forceActiveFocus(Qt.TabFocusReason)
     padding: 24
+    anchors.centerIn: parent
     background: Rectangle {
-        color: Theme.container; radius: Theme.shapeExtraLarge
-        MElevation { anchors.fill: parent; radius: parent.radius; level: 3 }
+        color: Theme.container; radius: dialog.fullScreen ? 0 : Theme.shapeExtraLarge
+        MElevation { anchors.fill: parent; radius: parent.radius; level: dialog.fullScreen ? 0 : 3 }
     }
     header: Item {
         implicitHeight: Math.max(72, titleLabel.implicitHeight + 48)
