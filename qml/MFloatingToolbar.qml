@@ -21,6 +21,9 @@ Rectangle {
     property alias content: row.data
     readonly property color ink: vibrant ? Theme.containerText : Theme.text
 
+    // A floating toolbar rests above the content it acts on.
+    MElevation { anchors.fill: parent; radius: parent.radius; level: 3 }
+
     implicitWidth: row.implicitWidth + 24
     implicitHeight: 64
     radius: Theme.shapeFull(implicitHeight)

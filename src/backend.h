@@ -83,6 +83,9 @@ class Backend : public QObject {
   Q_PROPERTY(QVariantMap serverRequest READ serverRequest NOTIFY catalogChanged)
   Q_PROPERTY(bool importingLocal READ importingLocal NOTIFY localImportChanged)
   Q_PROPERTY(QString localImportStatus READ localImportStatus NOTIFY localImportChanged)
+  // Nought to one once the files to import are known, and below nought while
+  // the folders are still being walked and the total is not.
+  Q_PROPERTY(double localImportProgress READ localImportProgress NOTIFY localImportChanged)
   Q_PROPERTY(QStringList recentSearches READ recentSearches NOTIFY recentSearchesChanged)
   Q_PROPERTY(Entries *results READ results CONSTANT)
   Q_PROPERTY(Entries *queue READ queue CONSTANT)
@@ -240,6 +243,7 @@ public:
   explicit Backend(QObject *parent = nullptr);
   bool importingLocal() const {return m_scanningFolders || m_importTotal>0;}
   QString localImportStatus() const;
+  double localImportProgress() const {return m_importTotal>0 ? double(m_importDone)/m_importTotal : -1.0;}
   Q_INVOKABLE void importLocalFiles(const QVariantList &urls);
   Q_INVOKABLE void cancelLocalImport();
   Q_INVOKABLE void locateLocalFile(const QUrl &url,const QString &id);

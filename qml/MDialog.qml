@@ -13,7 +13,10 @@ Dialog {
     focus: true
     onOpened: if (initialFocus) initialFocus.forceActiveFocus(Qt.TabFocusReason)
     padding: 24
-    background: Rectangle { color: Theme.container; radius: Theme.shapeExtraLarge }
+    background: Rectangle {
+        color: Theme.container; radius: Theme.shapeExtraLarge
+        MElevation { anchors.fill: parent; radius: parent.radius; level: 3 }
+    }
     header: Item {
         implicitHeight: Math.max(72, titleLabel.implicitHeight + 48)
         SungText { id: titleLabel; objectName: "dialogTitle"; anchors.verticalCenter: parent.verticalCenter; x: 24; width: parent.width-48; text: dialog.title; font.pixelSize: Theme.headlineSmall; emphasized: true; wrapMode: Text.Wrap; maximumLineCount: 2 }

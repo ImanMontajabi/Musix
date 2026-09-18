@@ -13,6 +13,10 @@ AbstractButton {
     property bool filled: false
     property bool tonal: false
     property bool selected: false
+    // A toggle button reports a state rather than firing an action, so Material
+    // has it morph as well as recolour: a round icon button is full cornered
+    // while it is off, medium once it is on, and small under the finger.
+    property bool toggle: false
     property bool morphPlayback:false
     property bool busy: false
     property bool confirmed: false
@@ -20,7 +24,7 @@ AbstractButton {
     Timer { id: confirmation; interval: 1100; onTriggered: control.confirmed=false }
     onVisibleChanged: if(!visible){confirmation.stop();confirmed=false;}
     readonly property bool needsTooltip: tip.length > 0 && (!text.length || tip !== text || buttonLabel.truncated)
-    property color ink: filled ? Theme.primaryText : selected ? Theme.primary : Theme.text
+    property color ink: filled ? Theme.primaryText : toggle && selected ? Theme.containerText : selected ? Theme.primary : Theme.text
     implicitWidth: text.length ? buttonLabel.implicitWidth + (symbol.length || busy ? 32 : 0) + 36 : 48
     implicitHeight: 48
     hoverEnabled: true
@@ -44,7 +48,10 @@ AbstractButton {
             delay: 650; text: control.tip
             padding: 10
             contentItem: SungText { text: control.tip; font.pixelSize: 12; color: Theme.background }
-            background: Rectangle { color: Theme.text; radius: Theme.shapeSmall }
+            background: Rectangle {
+                color: Theme.text; radius: Theme.shapeSmall
+                MElevation { anchors.fill: parent; radius: parent.radius; level: 2 }
+            }
         }
     }
     background: Rectangle {
@@ -53,9 +60,12 @@ AbstractButton {
         // stadium, not an over-rounded lozenge. Pressing morphs it towards a
         // squarer step, which is the shape morph the specification asks for on
         // interaction states.
-        radius: control.down ? Theme.shapeMedium
+        radius: control.down ? (control.toggle ? Theme.shapeSmall : Theme.shapeMedium)
+                             : control.toggle && control.selected ? Theme.shapeMedium
                              : Theme.shapeFull(Math.min(control.width, control.height))
-        color: control.filled ? Theme.primary : control.tonal || control.selected ? Theme.high : "transparent"
+        color: control.filled ? Theme.primary
+             : control.toggle && control.selected ? Theme.primaryContainer
+             : control.tonal || control.selected ? Theme.high : "transparent"
         border.color: "transparent"
         border.width: 2
         Behavior on color { ColorAnimation { duration: Theme.fast; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.fastEffectsCurve } }

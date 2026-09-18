@@ -614,7 +614,10 @@ ApplicationWindow {
                         enter: Transition { NumberAnimation { property: "opacity"; from: 0; to: 1; duration: app.motion?Theme.fast:0; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.fastEffectsCurve } }
                         exit: Transition { NumberAnimation { property: "opacity"; to: 0; duration: app.motion?Theme.fast:0; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.fastEffectsCurve } }
                         onClosed: searchField.dismissed=true
-                        background: Rectangle { radius: Theme.shapeLargeIncreased; color: Theme.high; border.width: 1; border.color: Theme.outline }
+                        background: Rectangle {
+                            radius: Theme.shapeLargeIncreased; color: Theme.high; border.width: 1; border.color: Theme.outline
+                            MElevation { anchors.fill: parent; radius: parent.radius; level: 3 }
+                        }
                         contentItem: ListView {
                             id: suggestionList; objectName: "suggestionList"; clip: true; model: searchField.suggestions; currentIndex: searchField.highlighted
                             ScrollBar.vertical: ScrollBar {}
@@ -737,13 +740,39 @@ ApplicationWindow {
                                 SungText { objectName: "albumArtist"; visible: !!app.albumInfo.artist;opacity:1-content.headerCollapse;Layout.maximumHeight:implicitHeight*(1-content.headerCollapse);clip:true; Layout.fillWidth: true; text: app.albumInfo.artist || ""; font.pixelSize: 16; color: Theme.muted; maximumLineCount: 2; wrapMode: Text.Wrap }
                                 SungText { objectName: "albumSummary"; visible: !!app.albumInfo.summary;opacity:1-content.headerCollapse;Layout.maximumHeight:implicitHeight*(1-content.headerCollapse);clip:true; Layout.fillWidth: true; text: app.albumInfo.summary || ""; font.pixelSize: 13; color: Theme.muted; wrapMode: Text.Wrap }
                             }
-                            MButton {objectName:"editHomeButton";symbol:"settings";tip:"Customize Home";visible:app.page==="home";onClicked:homeEditor.open()}
-                            MButton { objectName: "pinCollectionButton"; symbol: "pin"; visible: !!app.collectionItem.id; selected: {app.pins;return app.isPinned(app.collectionItem);} tip: selected?"Unpin from Home":"Pin to Home"; onClicked: app.togglePin(app.collectionItem) }
-                            MButton { symbol: "refresh"; busy: app.busy && (app.results.count>0 || window.homeSections.length>0); tip: "Refresh"; visible: app.page!=="library"&&app.page!=="local"; enabled: !app.busy; onClicked: app.refresh() }
-                            MButton { objectName: "musicFoldersButton"; text: "Folders"; tip: "Manage music folders"; visible: window.destination==="library" && window.libraryTab==="files"; onClicked: musicFoldersDialog.open() }
-                            MButton { objectName: "rescanFoldersButton"; symbol: "refresh"; tip: "Rescan music folders"; visible: window.destination==="library" && window.libraryTab==="files" && app.musicFolders.length>0; enabled: !app.importingLocal; onClicked: app.rescanMusicFolders() }
-                            MButton { objectName: "playlistCleanupButton"; text: "Clean up"; visible: window.editableLocal; onClicked: window.openCleanup(window.localPlaylist) }
-                            MButton { objectName: "editSmartPlaylistButton"; text: "Edit rules"; visible: !!window.localPlaylist && !window.editableLocal; onClicked: smartDialog.edit(window.localPlaylist) }
+                            // The app bar's own actions. Material measures them
+                            // against the room the title leaves and folds the
+                            // rest into a menu rather than dropping any.
+                            MAppBarRow {
+                                objectName: "collectionActions"
+                                // The actions take the width they need and the
+                                // title gives way, which is the order Material
+                                // puts them in. Folding is what happens when
+                                // even that cannot be met.
+                                Layout.preferredWidth: implicitWidth
+                                Layout.preferredHeight: 48
+                                Layout.alignment: Qt.AlignVCenter
+                                actions: [
+                                    {key:"editHome", name:"editHomeButton", symbol:"settings", label:"Customize Home", visible:app.page==="home",
+                                     trigger:function(){homeEditor.open()}},
+                                    {key:"pin", name:"pinCollectionButton", symbol:"pin", toggle:true, checked:(app.pins, app.isPinned(app.collectionItem)),
+                                     label:app.isPinned(app.collectionItem)?"Unpin from Home":"Pin to Home",
+                                     visible:!!app.collectionItem.id, trigger:function(){app.togglePin(app.collectionItem)}},
+                                    {key:"refresh", symbol:"refresh", label:"Refresh", enabled:!app.busy,
+                                     visible:app.page!=="library"&&app.page!=="local", trigger:function(){app.refresh()}},
+                                    {key:"folders", name:"musicFoldersButton", symbol:"folder", text:"Folders", label:"Manage music folders",
+                                     visible:window.destination==="library" && window.libraryTab==="files",
+                                     trigger:function(){musicFoldersDialog.open()}},
+                                    {key:"rescan", name:"rescanFoldersButton", symbol:"refresh", label:"Rescan music folders", enabled:!app.importingLocal,
+                                     visible:window.destination==="library" && window.libraryTab==="files" && app.musicFolders.length>0,
+                                     trigger:function(){app.rescanMusicFolders()}},
+                                    {key:"cleanup", name:"playlistCleanupButton", text:"Clean up", label:"Clean up", visible:window.editableLocal,
+                                     trigger:function(){window.openCleanup(window.localPlaylist)}},
+                                    {key:"editRules", name:"editSmartPlaylistButton", text:"Edit rules", label:"Edit rules",
+                                     visible:!!window.localPlaylist && !window.editableLocal,
+                                     trigger:function(){smartDialog.edit(window.localPlaylist)}}
+                                ]
+                            }
                         }
                         Flow {
                             objectName: "searchFilters"
@@ -755,8 +784,15 @@ ApplicationWindow {
                         }
                         RowLayout {
                             visible: app.importingLocal; Layout.fillWidth: true
-                            MLoadingIndicator { Layout.preferredWidth: 24; Layout.preferredHeight: 24; running: app.importingLocal; label: "Importing music" }
-                            SungText { text: app.localImportStatus; color: Theme.muted; Layout.fillWidth: true }
+                            MLoadingIndicator { Layout.preferredWidth: 24; Layout.preferredHeight: 24; running: app.importingLocal && app.localImportProgress < 0; label: "Importing music" }
+                            SungText { text: app.localImportStatus; color: Theme.muted }
+                            MWavyProgress {
+                                objectName: "importProgress"
+                                Layout.fillWidth: true; Layout.maximumWidth: 320
+                                progress: app.localImportProgress
+                                label: "Importing music"
+                            }
+                            Item { Layout.fillWidth: true }
                             MButton { text: "Cancel import"; onClicked: app.cancelLocalImport() }
                         }
                         LibraryTabs {
@@ -808,9 +844,9 @@ ApplicationWindow {
                                 enabled: app.collection.count>0
                                 onClicked: app.playCollection(0)
                                 menu: MMenu {
-                                    MMenuItem { objectName: "collectionShuffle"; text: "Shuffle"; enabled: app.collection.count>1; onTriggered: {app.shuffle=true;app.playCollection(Math.floor(Math.random()*app.collection.count));} }
-                                    MMenuItem { objectName: "collectionQueue"; text: "Add to queue"; enabled: app.collection.count>0; onTriggered: {const before=app.queue.count;app.enqueueCollection();if(app.queue.count>before)window.confirmQueued();} }
-                                    MMenuItem { objectName: "collectionPlayNext"; text: "Play next"; enabled: app.collection.count>0; onTriggered: app.enqueueItems(app.collection.rows(),true) }
+                                    MMenuItem { objectName: "collectionShuffle"; symbol: "shuffle"; text: "Shuffle"; enabled: app.collection.count>1; onTriggered: {app.shuffle=true;app.playCollection(Math.floor(Math.random()*app.collection.count));} }
+                                    MMenuItem { objectName: "collectionQueue"; symbol: "queue"; text: "Add to queue"; enabled: app.collection.count>0; onTriggered: {const before=app.queue.count;app.enqueueCollection();if(app.queue.count>before)window.confirmQueued();} }
+                                    MMenuItem { objectName: "collectionPlayNext"; symbol: "next"; text: "Play next"; enabled: app.collection.count>0; onTriggered: app.enqueueItems(app.collection.rows(),true) }
                                 }
                             }
                             Item { Layout.fillWidth: true }
@@ -997,11 +1033,16 @@ ApplicationWindow {
                 Item {
                     id: panelGrip; objectName: "panelResizeHandle"
                     visible: !!window.side && window.width>=1000
-                    Layout.preferredWidth: 8; Layout.fillHeight: true
+                    Layout.preferredWidth: 24; Layout.fillHeight: true
                     activeFocusOnTab: true; Accessible.role: Accessible.Grip; Accessible.name: "Resize side panel"
                     Keys.onLeftPressed: geometry.panelWidth=Math.min(window.width-560,sidePanel.chosenWidth+24)
                     Keys.onRightPressed: geometry.panelWidth=Math.max(320,sidePanel.chosenWidth-24)
-                    Rectangle { anchors.centerIn: parent; width: 3; height: 40; radius: Theme.shapeFull(3); color: Theme.primary; opacity: gripMouse.containsMouse || gripMouse.pressed || panelGrip.activeFocus ? 1 : 0.25 }
+                    MDragHandle {
+                        objectName: "panelDragHandle"
+                        anchors.centerIn: parent
+                        pressed: panelGrip.activeFocus
+                        dragging: gripMouse.pressed || gripMouse.containsMouse
+                    }
                     MouseArea {
                         id: gripMouse; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.SplitHCursor
                         property real startX; property real startWidth
@@ -1067,16 +1108,16 @@ ApplicationWindow {
                         AbstractButton { Layout.fillWidth: true; implicitHeight: 24; focusPolicy: Qt.StrongFocus; enabled: app.currentIndex>=0; Accessible.name: "Now playing: " + (app.current.title || "Nothing playing"); onClicked: window.activateSide("now"); contentItem: MatchText { revealFocused: parent.activeFocus; sourceText: nowPresentation.shown.title || "Nothing playing"; font.pixelSize: 15; font.weight: Font.DemiBold } background: Rectangle { color: "transparent"; radius: Theme.shapeExtraSmall; border.width: parent.activeFocus?1:0; border.color: Theme.primary } }
                         AbstractButton { Layout.fillWidth: true; implicitHeight: 24; focusPolicy: Qt.StrongFocus; enabled: !!app.current.artistId; Accessible.name: "Go to " + (app.current.artist || "artist"); onClicked: app.open(window.relatedItem(app.current,"artist")); contentItem: MatchText { revealFocused: parent.activeFocus; sourceText: nowPresentation.shown.artist || ""; color: Theme.muted; font.pixelSize: 13 } background: Rectangle { color: "transparent"; radius: Theme.shapeExtraSmall; border.width: parent.activeFocus?1:0; border.color: Theme.primary } }
                     }
-                    MButton { symbol: "heart"; tip: app.liked?"Unlike":"Like"; selected: app.liked; enabled: app.currentIndex>=0; visible: window.width>=1050; onClicked: app.toggleLike(app.current) }
+                    MButton { symbol: "heart"; tip: app.liked?"Unlike":"Like"; toggle: true; selected: app.liked; enabled: app.currentIndex>=0; visible: window.width>=1050; onClicked: app.toggleLike(app.current) }
                     ColumnLayout {
                         Layout.fillWidth: true; Layout.maximumWidth: 520; spacing: 0
                         RowLayout {
                             Layout.alignment: Qt.AlignHCenter; spacing: 6
-                            MButton { symbol: "shuffle"; tip: "Shuffle"; selected: app.shuffle; onClicked: app.shuffle=!app.shuffle; visible: window.width>=980 }
+                            MButton { objectName: "playerShuffle"; symbol: "shuffle"; tip: "Shuffle"; toggle: true; selected: app.shuffle; onClicked: app.shuffle=!app.shuffle; visible: window.width>=980 }
                             MButton { symbol: "previous"; tip: "Previous · Ctrl+←"; enabled: app.queue.count>0; onClicked: app.previous() }
                             MButton { objectName: "playButton"; morphPlayback:true; symbol: app.playing||app.resolving?"pause":"play"; tip: app.playing||app.resolving?"Pause · Space":"Play · Space"; filled: true; implicitWidth: 64; implicitHeight: 48; enabled: app.queue.count>0; onClicked: app.toggle(); busy: app.buffering }
                             MButton { symbol: "next"; tip: "Next · Ctrl+→"; enabled: app.queue.count>0; onClicked: app.next() }
-                            MButton { symbol: app.repeat===2?"repeat_one":"repeat"; tip: app.repeat===0?"Repeat off":app.repeat===1?"Repeat queue":"Repeat song"; selected: app.repeat>0; onClicked: app.repeat=(app.repeat+1)%3; visible: window.width>=980 }
+                            MButton { symbol: app.repeat===2?"repeat_one":"repeat"; tip: app.repeat===0?"Repeat off":app.repeat===1?"Repeat queue":"Repeat song"; toggle: true; selected: app.repeat>0; onClicked: app.repeat=(app.repeat+1)%3; visible: window.width>=980 }
                         }
                         RowLayout {
                             Layout.fillWidth: true; spacing: 10
@@ -1086,10 +1127,10 @@ ApplicationWindow {
                         }
                     }
                     Item { Layout.fillWidth: true; visible: window.width>=1320 }
-                    MButton { symbol: "lyrics"; tip: "Lyrics · Ctrl+Y"; selected: window.side==="lyrics"; enabled: app.currentIndex>=0; onClicked: window.activateSide("lyrics") }
+                    MButton { symbol: "lyrics"; tip: "Lyrics · Ctrl+Y"; toggle: true; selected: window.side==="lyrics"; enabled: app.currentIndex>=0; onClicked: window.activateSide("lyrics") }
                     MButton {
                         objectName: "queueButton"; symbol: "queue"; tip: "Queue · Ctrl+L"
-                        selected: window.side==="queue"; onClicked: window.activateSide("queue")
+                        toggle: true; selected: window.side==="queue"; onClicked: window.activateSide("queue")
                         MBadge {
                             objectName: "queueBadge"
                             // Redundant once the queue itself is on screen.
@@ -1098,6 +1139,27 @@ ApplicationWindow {
                             subject: "songs waiting"
                             x: parent.width/2+12-inset; y: (parent.height-24)/2-height+lift
                         }
+                    }
+                    // Material moves an action that will not fit into an
+                    // overflow menu rather than dropping it, so the controls the
+                    // bar has no room for are still one click away.
+                    MAppBarRow {
+                        objectName: "playerOverflow"
+                        // The bar keeps room for two of these before it folds
+                        // the rest into the menu.
+                        Layout.preferredWidth: Math.min(implicitWidth, itemWidth*2 + spacing)
+                        Layout.preferredHeight: 48
+                        visible: live.length > 0
+                        actions: [
+                            {key:"like", symbol:"heart", label:app.liked?"Unlike":"Like", toggle:true, checked:app.liked,
+                             enabled:app.currentIndex>=0, visible:window.width<1050, trigger:function(){app.toggleLike(app.current)}},
+                            {key:"shuffle", symbol:"shuffle", label:"Shuffle", toggle:true, checked:app.shuffle,
+                             visible:window.width<980, trigger:function(){app.shuffle=!app.shuffle}},
+                            {key:"repeat", symbol:app.repeat===2?"repeat_one":"repeat",
+                             label:app.repeat===0?"Repeat off":app.repeat===1?"Repeat queue":"Repeat song",
+                             toggle:true, checked:app.repeat>0, visible:window.width<980,
+                             trigger:function(){app.repeat=(app.repeat+1)%3}}
+                        ]
                     }
                     MButton {id:outputButton;objectName:"playerOutputButton";symbol:"chevron";implicitWidth:32;tip:"Audio output · "+app.audioDeviceName;selected:outputPicker.visible;onClicked:outputPicker.showAt(outputButton)}
                     VolumeControl {id:volumeControl;showSlider:window.width>=1160}
@@ -1218,7 +1280,7 @@ ApplicationWindow {
                 SungText { text: app.current.artist || ""; Layout.fillWidth: true; font.pixelSize: 16; color: Theme.muted }
                 RowLayout {
                     Layout.fillWidth: true
-                    MButton { symbol: "heart"; tip: app.liked?"Unlike":"Like"; selected: app.liked; onClicked: app.toggleLike(app.current) }
+                    MButton { symbol: "heart"; tip: app.liked?"Unlike":"Like"; toggle: true; selected: app.liked; onClicked: app.toggleLike(app.current) }
                     MButton { symbol: "radio"; tip: "Start radio"; enabled: !!app.current.videoId; onClicked: app.radio(app.current) }
                     MButton { symbol: "more"; tip: "Track actions"; enabled: app.currentIndex>=0; onClicked: window.trackMenu(app.current,app.currentIndex,this,true) }
                 }
@@ -1229,42 +1291,42 @@ ApplicationWindow {
 
     MMenu {
         id: bulkActions; objectName: "bulkActions"
-        MMenuItem { text: "Play selected next"; onTriggered: app.enqueueItems(window.bulkView.selection.items(),true) }
-        MMenuItem { text: "Add selected to queue"; onTriggered: app.enqueueItems(window.bulkView.selection.items()) }
-        MMenuItem { text: "Add selected to playlist"; onTriggered: window.addBatch(window.bulkView) }
-        MMenuItem { text: "Remove selected"; visible: window.bulkView && (window.bulkView.queueMode || window.editableLocal || app.serverPlaylistEditable); height: visible?44:0; onTriggered: window.bulkView.removeSelected() }
-        MMenuItem { text: "Select all"; onTriggered: window.bulkView.selection.selectAll() }
-        MMenuItem { text: "Clear selection"; onTriggered: window.bulkView.selection.clear() }
+        MMenuItem { symbol: "next"; text: "Play selected next"; onTriggered: app.enqueueItems(window.bulkView.selection.items(),true) }
+        MMenuItem { symbol: "queue"; text: "Add selected to queue"; onTriggered: app.enqueueItems(window.bulkView.selection.items()) }
+        MMenuItem { symbol: "plus"; text: "Add selected to playlist"; onTriggered: window.addBatch(window.bulkView) }
+        MMenuItem { symbol: "remove"; text: "Remove selected"; visible: window.bulkView && (window.bulkView.queueMode || window.editableLocal || app.serverPlaylistEditable); height: visible?44:0; onTriggered: window.bulkView.removeSelected() }
+        MMenuItem { symbol: "check"; text: "Select all"; shortcut: "Ctrl+A"; onTriggered: window.bulkView.selection.selectAll() }
+        MMenuItem { symbol: "close"; text: "Clear selection"; shortcut: "Esc"; onTriggered: window.bulkView.selection.clear() }
     }
     MMenu {
         id: actions; objectName: "trackActions"
         width: 230; padding: 8
         background: Rectangle { color: Theme.high; radius: Theme.shapeLargeIncreased; border.color: Theme.outline }
         MMenuItem { text: "Open"; visible: !(window.menuItem.videoId || window.menuItem.localPath || window.menuItem.serverSong); onTriggered: app.open(window.menuItem) }
-        MMenuItem { objectName: "playKeepQueueAction"; text: "Play now, keep queue"; visible: !!(window.menuItem.videoId || window.menuItem.localPath || window.menuItem.serverSong); onTriggered: app.playKeepingQueue(window.menuItem) }
-        MMenuItem { text: "Play next"; visible: !!(window.menuItem.videoId || window.menuItem.localPath || window.menuItem.serverSong); onTriggered: app.enqueue(window.menuItem,true) }
-        MMenuItem { text: "Add to queue"; visible: !!(window.menuItem.videoId || window.menuItem.localPath || window.menuItem.serverSong); onTriggered: app.enqueue(window.menuItem) }
-        MMenuItem { text: "Start radio"; visible: !!window.menuItem.videoId; onTriggered: app.radio(window.menuItem) }
-        MMenuItem { objectName: "trimAction"; text: "Adjust volume\u2026"; visible: !!(window.menuItem.videoId || window.menuItem.localPath || window.menuItem.serverSong); onTriggered: trimDialog.adjust(window.menuItem) }
+        MMenuItem { objectName: "playKeepQueueAction"; symbol: "play"; text: "Play now, keep queue"; visible: !!(window.menuItem.videoId || window.menuItem.localPath || window.menuItem.serverSong); onTriggered: app.playKeepingQueue(window.menuItem) }
+        MMenuItem { symbol: "next"; text: "Play next"; visible: !!(window.menuItem.videoId || window.menuItem.localPath || window.menuItem.serverSong); onTriggered: app.enqueue(window.menuItem,true) }
+        MMenuItem { symbol: "queue"; text: "Add to queue"; visible: !!(window.menuItem.videoId || window.menuItem.localPath || window.menuItem.serverSong); onTriggered: app.enqueue(window.menuItem) }
+        MMenuItem { symbol: "radio"; text: "Start radio"; visible: !!window.menuItem.videoId; onTriggered: app.radio(window.menuItem) }
+        MMenuItem { objectName: "trimAction"; symbol: "volume"; text: "Adjust volume\u2026"; visible: !!(window.menuItem.videoId || window.menuItem.localPath || window.menuItem.serverSong); onTriggered: trimDialog.adjust(window.menuItem) }
         MDivider { visible: !!(window.menuItem.videoId || window.menuItem.localPath || window.menuItem.serverSong); height: visible ? implicitHeight : 0 }
-        MMenuItem { text: app.isLiked(window.menuItem.id || "")?"Remove from liked songs":"Like song"; visible: !!(window.menuItem.videoId || window.menuItem.localPath || window.menuItem.serverSong); onTriggered: app.toggleLike(window.menuItem) }
-        MMenuItem { objectName: "trackDetailsAction"; text: "Track details"; visible: !!(window.menuItem.videoId || window.menuItem.localPath || window.menuItem.serverSong); onTriggered: trackDetails.inspect(window.menuItem) }
-        MMenuItem { text: "Add to playlist"; visible: !!(window.menuItem.videoId || window.menuItem.localPath || window.menuItem.serverSong); onTriggered: addPlaylistDialog.open() }
-        MMenuItem { text: "Go to artist"; visible: !!window.menuItem.artistId; onTriggered: app.open(window.relatedItem(window.menuItem,"artist")) }
+        MMenuItem { symbol: "heart"; text: app.isLiked(window.menuItem.id || "")?"Remove from liked songs":"Like song"; visible: !!(window.menuItem.videoId || window.menuItem.localPath || window.menuItem.serverSong); onTriggered: app.toggleLike(window.menuItem) }
+        MMenuItem { objectName: "trackDetailsAction"; symbol: "more"; text: "Track details"; visible: !!(window.menuItem.videoId || window.menuItem.localPath || window.menuItem.serverSong); onTriggered: trackDetails.inspect(window.menuItem) }
+        MMenuItem { symbol: "plus"; text: "Add to playlist"; visible: !!(window.menuItem.videoId || window.menuItem.localPath || window.menuItem.serverSong); onTriggered: addPlaylistDialog.open() }
+        MMenuItem { symbol: "chevron"; text: "Go to artist"; visible: !!window.menuItem.artistId; onTriggered: app.open(window.relatedItem(window.menuItem,"artist")) }
         MMenuItem { text: "Artwork…"; visible: window.menuItem.id===app.current.id && !!app.current.id; onTriggered: artworkControls.open() }
-        MMenuItem { text: "Go to album"; visible: !!window.menuItem.albumId; onTriggered: app.open(window.relatedItem(window.menuItem,"album")) }
+        MMenuItem { symbol: "disc"; text: "Go to album"; visible: !!window.menuItem.albumId; onTriggered: app.open(window.relatedItem(window.menuItem,"album")) }
         MMenuItem { text: ["subsonic","jellyfin"].indexOf(window.menuItem.source)>=0?"Copy song details":window.menuItem.localPath?"Copy file path":"Copy link"; onTriggered: app.copyLink(window.menuItem) }
         MMenuItem { text: "Add to server playlist"; visible: !!window.menuItem.serverSong; enabled: app.server.connected; onTriggered: {window.batchItems=[];serverAddDialog.open()} }
         MMenuItem { text: "Rate song"; visible: !!window.menuItem.serverSong && app.server.supportsRating; enabled: app.server.connected; onTriggered: serverRatingDialog.open() }
         MMenuItem { text: "Remove from server playlist"; visible: app.serverPlaylistEditable && !window.menuQueue; onTriggered: app.removeServerRows([window.menuIndex]) }
         MMenuItem { text: "Rename server playlist"; visible: ["subsonic","jellyfin"].indexOf(window.menuItem.source)>=0 && window.menuItem.kind==="playlist" && !!window.menuItem.editable; onTriggered: {serverName.text=window.menuItem.title;serverRenameDialog.open()} }
         MMenuItem { text: "Delete server playlist"; visible: ["subsonic","jellyfin"].indexOf(window.menuItem.source)>=0 && window.menuItem.kind==="playlist" && !!window.menuItem.editable && (window.menuItem.source!=="jellyfin" || !!window.menuItem.deletable); onTriggered: serverDeleteDialog.open() }
-        MMenuItem { text: "Locate file…"; visible: !!window.menuItem.localPath; onTriggered: window.openFileDialog("locate") }
+        MMenuItem { symbol: "folder"; text: "Locate file…"; visible: !!window.menuItem.localPath; onTriggered: window.openFileDialog("locate") }
         MMenuItem { text: "Remove from local files"; visible: app.libraryId==="files" && !!window.menuItem.localPath && !window.menuQueue; onTriggered: app.removeLocalFile(window.menuItem.id) }
         MDivider { visible: window.menuQueue || window.editableLocal; height: visible?implicitHeight:0 }
         MMenuItem { text: "Move up"; visible: window.menuQueue; height: visible?44:0; enabled: window.menuIndex>0; onTriggered: app.moveQueue(window.menuIndex,window.menuIndex-1) }
         MMenuItem { text: "Move down"; visible: window.menuQueue; height: visible?44:0; enabled: window.menuIndex<app.queue.count-1; onTriggered: app.moveQueue(window.menuIndex,window.menuIndex+1) }
-        MMenuItem { text: "Remove from queue"; visible: window.menuQueue; height: visible?44:0; onTriggered: app.removeQueue(window.menuIndex) }
+        MMenuItem { symbol: "remove"; text: "Remove from queue"; visible: window.menuQueue; height: visible?44:0; onTriggered: app.removeQueue(window.menuIndex) }
         MMenuItem { text: "Move up in playlist"; visible: !window.menuQueue && window.editableLocal; height: visible?44:0; enabled: window.menuIndex>0 && app.collection.sortKey==="original" && !app.collection.query; onTriggered: app.movePlaylistTrack(window.localPlaylist,window.menuIndex,window.menuIndex-1) }
         MMenuItem { text: "Move down in playlist"; visible: !window.menuQueue && window.editableLocal; height: visible?44:0; enabled: window.menuIndex<app.results.count-1 && app.collection.sortKey==="original" && !app.collection.query; onTriggered: app.movePlaylistTrack(window.localPlaylist,window.menuIndex,window.menuIndex+1) }
         MMenuItem { text: "Remove from playlist"; visible: !window.menuQueue && window.editableLocal; height: visible?44:0; onTriggered: app.removeFromPlaylist(window.localPlaylist,window.menuIndex) }
@@ -1544,12 +1606,12 @@ ApplicationWindow {
                 RowLayout { visible: settingsDialog.matches("Volume step"); Layout.fillWidth: true;Layout.minimumWidth:0; SungText { text: "Volume step"; font.pixelSize: Theme.bodyLarge; Layout.fillWidth: true } MButton { objectName: "volumeStepButton"; text: app.volumeStep+"%"; tonal: true; onClicked: volumeStepMenu.popup(this,width-volumeStepMenu.width,height+4) } }
                 RowLayout { visible: settingsDialog.matches("Playback speed rate"); Layout.fillWidth: true;Layout.minimumWidth:0; SungText { text: "Playback speed"; font.pixelSize: Theme.bodyLarge; Layout.fillWidth: true } MButton { objectName: "playbackSpeedButton"; text: Number(app.playbackRate.toFixed(2))+"×"; tonal: true; onClicked: rateDialog.open() } }
                 RowLayout { visible: settingsDialog.matches("Audio output device speakers headphones"); Layout.fillWidth: true;Layout.minimumWidth:0; SungText { text: "Audio output"; font.pixelSize: Theme.bodyLarge; Layout.fillWidth: true } MButton { objectName: "audioDeviceButton"; text: app.audioDeviceName; tip: "Audio output"; tonal: true; onClicked: audioDeviceDialog.open() } }
-                MSwitch { Layout.fillWidth:true;Layout.minimumWidth:0;objectName:"disconnectSwitch";text:"Pause when audio output disconnects";checked:app.pauseOnDisconnect;onToggled:app.pauseOnDisconnect=checked;visible:settingsDialog.matches("Pause headphones audio output disconnects")}
+                MSwitch { Layout.fillWidth:true;Layout.minimumWidth:0;objectName:"disconnectSwitch";text:"Pause when audio output disconnects";hint:"Unplugging headphones or losing a Bluetooth device stops playback instead of switching it to the speakers.";checked:app.pauseOnDisconnect;onToggled:app.pauseOnDisconnect=checked;visible:settingsDialog.matches("Pause headphones audio output disconnects")}
                 RowLayout { visible: settingsDialog.matches("Sleep timer"); Layout.fillWidth: true;Layout.minimumWidth:0; SungText { text: "Sleep timer"; font.pixelSize: Theme.bodyLarge; Layout.fillWidth: true } MButton { objectName: "sleepTimerButton"; text: app.sleepStatus; tonal: true; onClicked: sleepMenu.popup(this,width-sleepMenu.width,height+4) } }
-                MSwitch {objectName:"sleepFadeSwitch";Layout.fillWidth:true;Layout.minimumWidth:0;text:"Fade out before sleep";checked:app.sleepFade;onToggled:app.sleepFade=checked;visible:settingsDialog.matches("Sleep timer fade out volume")}
-                MSwitch { Layout.fillWidth:true;Layout.minimumWidth:0; objectName:"volumeNormalizationSwitch"; visible: settingsDialog.matches("Volume normalization loudness level ReplayGain"); text: "Volume normalization"; checked: app.volumeNormalization; onToggled: app.volumeNormalization=checked }
-                MSwitch { Layout.fillWidth:true;Layout.minimumWidth:0; objectName:"resumeLongTracksSwitch"; visible: settingsDialog.matches("Resume recordings over 20 minutes mixes sets position"); text: "Resume recordings over 20 minutes"; checked: app.resumeLongTracks; onToggled: app.resumeLongTracks=checked }
-                MSwitch { Layout.fillWidth:true;Layout.minimumWidth:0; objectName:"gaplessSwitch"; visible: settingsDialog.matches("Gapless playback join pause between songs"); text: "Gapless playback"; checked: app.gapless; onToggled: app.gapless=checked }
+                MSwitch {objectName:"sleepFadeSwitch";Layout.fillWidth:true;Layout.minimumWidth:0;text:"Fade out before sleep";hint:"The last minute before the sleep timer ends fades the volume down rather than cutting it.";checked:app.sleepFade;onToggled:app.sleepFade=checked;visible:settingsDialog.matches("Sleep timer fade out volume")}
+                MSwitch { Layout.fillWidth:true;Layout.minimumWidth:0; objectName:"volumeNormalizationSwitch"; visible: settingsDialog.matches("Volume normalization loudness level ReplayGain"); text: "Volume normalization"; hint: "Uses the ReplayGain loudness written into a file, where there is one, so songs from different albums play at a similar level."; checked: app.volumeNormalization; onToggled: app.volumeNormalization=checked }
+                MSwitch { Layout.fillWidth:true;Layout.minimumWidth:0; objectName:"resumeLongTracksSwitch"; visible: settingsDialog.matches("Resume recordings over 20 minutes mixes sets position"); text: "Resume recordings over 20 minutes"; hint: "Mixes, sets and long recordings start again where you left them instead of from the beginning."; checked: app.resumeLongTracks; onToggled: app.resumeLongTracks=checked }
+                MSwitch { Layout.fillWidth:true;Layout.minimumWidth:0; objectName:"gaplessSwitch"; visible: settingsDialog.matches("Gapless playback join pause between songs"); text: "Gapless playback"; hint: "Hands the next song straight to the output as the current one ends, so albums recorded without breaks keep none."; checked: app.gapless; onToggled: app.gapless=checked }
                 ColumnLayout {
                     objectName: "crossfadeSetting"
                     visible: settingsDialog.matches("Crossfade overlap songs fade"); Layout.fillWidth: true; Layout.minimumWidth: 0; spacing: 2
@@ -1566,8 +1628,8 @@ ApplicationWindow {
                     }
                     SungText { text: "Songs overlap as one ends and the next begins."; color: Theme.muted; font.pixelSize: Theme.bodyMedium; Layout.fillWidth: true; wrapMode: Text.Wrap; visible: app.crossfadeSeconds>0 }
                 }
-                MSwitch { Layout.fillWidth:true;Layout.minimumWidth:0; visible: settingsDialog.matches("Prepare next track"); text: "Prepare next track"; checked: app.prepareNext; onToggled: app.prepareNext=checked }
-                MSwitch { Layout.fillWidth:true;Layout.minimumWidth:0; visible: settingsDialog.matches("Find missing lyrics on LRCLIB"); text: "Find missing lyrics on LRCLIB"; checked: app.lyricsFallback; onToggled: app.lyricsFallback=checked }
+                MSwitch { Layout.fillWidth:true;Layout.minimumWidth:0; visible: settingsDialog.matches("Prepare next track"); text: "Prepare next track"; hint: "Resolves and buffers the next song while the current one plays, which is what makes the join between them immediate."; checked: app.prepareNext; onToggled: app.prepareNext=checked }
+                MSwitch { Layout.fillWidth:true;Layout.minimumWidth:0; visible: settingsDialog.matches("Find missing lyrics on LRCLIB"); text: "Find missing lyrics on LRCLIB"; hint: "Songs with no lyrics of their own are looked up on LRCLIB, which sends the title and artist to that service."; checked: app.lyricsFallback; onToggled: app.lyricsFallback=checked }
                     }
                 }
                 ColumnLayout {
@@ -1669,17 +1731,38 @@ ApplicationWindow {
         MButton { anchors.right: parent.right; anchors.rightMargin: 48; anchors.verticalCenter: parent.verticalCenter; text: "Retry"; visible: app.canRetry; ink: Theme.primaryContainer; onClicked: app.retry() }
         MButton { anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter; symbol: "close"; ink: Theme.primaryContainer; tip: "Dismiss error"; onClicked: app.dismissError() }
     }
+    // Material's snackbar. It sits against the theme rather than in it, so the
+    // container and everything on it come from the inverse roles, and it takes
+    // the smallest corner on the scale rather than a panel's rounding. A
+    // snackbar can also be pushed aside, which is what the drag below is for.
     Rectangle {
         anchors.bottom: parent.bottom; anchors.bottomMargin: 140; anchors.horizontalCenter: parent.horizontalCenter; z: 40
-        id: toastBar; objectName: "toastBar"; width: Math.min(window.width-48,720,toastLabel.implicitWidth+(window.toastHasUndo?168:40)); height: Math.max(48,toastLabel.implicitHeight+24); radius: Theme.shapeLarge; color: Theme.text
-        opacity: window.toastPending && !app.error && !window.modalOpen ? 1 : 0
-        visible: opacity>0 && !app.error && !window.modalOpen
+        id: toastBar; objectName: "toastBar"
+        width: Math.min(window.width-48,720,toastLabel.implicitWidth+(window.toastHasUndo?168:40))
+        height: toastLabel.lineCount>1 ? 68 : 48
+        radius: Theme.shapeExtraSmall; color: Theme.inverseSurface
+        readonly property real shoveFade: 1-Math.min(0.95, Math.abs(toastShove.x)/(width/2))
+        opacity: (window.toastPending && !app.error && !window.modalOpen ? 1 : 0)*shoveFade
+        visible: window.toastPending && !app.error && !window.modalOpen
         Accessible.role: Accessible.AlertMessage; Accessible.name: window.toastText
+        transform: Translate { id: toastShove }
+        MElevation { anchors.fill: parent; radius: parent.radius; level: 3 }
         HoverHandler { id: toastHover }
+        DragHandler {
+            objectName: "toastSwipe"
+            target: null; yAxis.enabled: false
+            onActiveChanged: if(!active) {
+                if(Math.abs(toastShove.x) > toastBar.width/3) window.toastPending=false
+                toastReturn.restart()
+            }
+            onActiveTranslationChanged: if(active) toastShove.x = activeTranslation.x
+        }
+        NumberAnimation { id: toastReturn; target: toastShove; property: "x"; to: 0; duration: Theme.springFastEffectsMs }
+        onVisibleChanged: if(!visible) toastShove.x = 0
         Behavior on opacity { NumberAnimation { duration: Theme.fast; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.fastEffectsCurve } }
-        MButton { id: toastUndo; objectName: "toastUndo"; anchors.right: toastDismiss.left; anchors.verticalCenter: parent.verticalCenter; text: "Undo"; ink: Theme.dark ? Theme.primaryText : Theme.primaryContainer; visible: window.toastHasUndo; onClicked: app.undo() }
-        MButton { id: toastDismiss; objectName: "toastDismiss"; anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter; symbol: "close"; tip: "Dismiss notification"; ink: Theme.background; visible: window.toastHasUndo; onClicked: window.toastPending=false }
-        SungText { id: toastLabel; anchors.verticalCenter: parent.verticalCenter; anchors.left: parent.left; anchors.leftMargin: 20; anchors.right: parent.right; anchors.rightMargin: window.toastHasUndo?148:20; wrapMode: Text.Wrap; maximumLineCount: 2; text: window.toastText; color: Theme.background }
+        MButton { id: toastUndo; objectName: "toastUndo"; anchors.right: toastDismiss.left; anchors.verticalCenter: parent.verticalCenter; text: "Undo"; ink: Theme.inversePrimary; visible: window.toastHasUndo; onClicked: app.undo() }
+        MButton { id: toastDismiss; objectName: "toastDismiss"; anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter; symbol: "close"; tip: "Dismiss notification"; ink: Theme.inverseSurfaceText; visible: window.toastHasUndo; onClicked: window.toastPending=false }
+        SungText { id: toastLabel; anchors.verticalCenter: parent.verticalCenter; anchors.left: parent.left; anchors.leftMargin: 16; anchors.right: parent.right; anchors.rightMargin: window.toastHasUndo?148:16; wrapMode: Text.Wrap; maximumLineCount: 2; text: window.toastText; font.pixelSize: Theme.bodyMedium; color: Theme.inverseSurfaceText }
     }
     Timer { id: toastTimer; interval: 5000; running: window.toastPending && !window.toastHasUndo && !app.error && !window.modalOpen && !toastHover.hovered && !toastUndo.activeFocus && !toastDismiss.activeFocus; onTriggered: window.toastPending=false }
     Connections { target: app; function onToast(message){window.toastPending=false;window.toastText=message;window.toastPending=true;} function onTrackChanged(){if(window.coverFlying)window.cancelCoverFlight();if(window.side==="lyrics" || window.compactMode || window.immersive)app.fetchLyrics();}

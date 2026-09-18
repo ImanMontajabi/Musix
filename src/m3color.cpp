@@ -267,6 +267,7 @@ QVariantMap scheme(const QColor &source, bool dark) {
     put("outlineVariant", p.neutralVariant.tone(30));
     put("inverseSurface", p.neutral.tone(90));
     put("inverseOnSurface", p.neutral.tone(20));
+    put("inversePrimary", p.primary.tone(40));
   } else {
     put("primary", p.primary.tone(primaryTone));
     put("onPrimary", p.primary.tone(100));
@@ -293,6 +294,7 @@ QVariantMap scheme(const QColor &source, bool dark) {
     put("outlineVariant", p.neutralVariant.tone(80));
     put("inverseSurface", p.neutral.tone(20));
     put("inverseOnSurface", p.neutral.tone(95));
+    put("inversePrimary", p.primary.tone(80));
   }
   // The fixed accents. Every other role flips its tone between light and dark;
   // these hold the same tone in both, so anything painted with them keeps its

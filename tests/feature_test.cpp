@@ -1586,6 +1586,10 @@ bool onShapeScale(double radius, double width, double height) {
 }
 struct Rounded { QString name; double radius, width, height; };
 void collectRadii(QQuickItem *root, QList<Rounded> &out) {
+  // A shadow ring's corner is the surface's corner plus however far that ring
+  // reaches, so it is not a shape choice and has no place on the scale.
+  if (root->objectName() == "elevationRing")
+    return;
   if (root->isVisible()) {
     const auto radius = root->property("radius");
     if (radius.isValid() && radius.canConvert<double>() && radius.toDouble() > 0)
@@ -2266,5 +2270,409 @@ void runMaterialDetailTests(Backend *b, QQuickWindow *w) {
     }
   }
   c.shot("13-supporting-pane");
+  c.finish();
+}
+
+// Material's expressive layer: the shape morph a toggle carries, the connected
+// button group, the overflow an app bar owes its actions, the wavy progress
+// indicator, the snackbar's inverse roles, elevation, the drag handle, menu
+// anatomy, rich tooltips and swipe to dismiss.
+void runMaterialExpressiveTests(Backend *b, QQuickWindow *w) {
+  Check c{b, w, qEnvironmentVariable("SUNG_TEST_OUTPUT")};
+  QDir().mkpath(c.directory + "/music");
+  QWindowSystemInterface::handleFocusWindowChanged(w);
+  w->resize(1400, 900);
+  QTest::qWait(500);
+  b->setTheme("dark");
+  b->setMotion(true);
+  b->setVolume(0);
+  b->setAutoplay(false);
+  b->setPrepareNext(false);
+  b->setWatchMusicFolders(false);
+  b->setOnlineArtwork(false);
+
+  paintCover(c.directory + "/music/cover.png", QColor("#1d3f5c"), QColor("#d07a2e"));
+  for (int i = 1; i <= 6; ++i)
+    if (!encodeTrack(c, QString("%1/music/%2.flac").arg(c.directory).arg(i),
+                     QString("Track %1").arg(i), "Expressive", "Rill", i))
+      return c.finish();
+  b->importMusicFolder(QUrl::fromLocalFile(c.directory + "/music"));
+  c.check(c.until([&] { return !b->importingLocal(); }, 40000), "import the expressive fixture");
+  // Held back so the progress indicator has a real import to report.
+  QDir().mkpath(c.directory + "/more");
+  for (int i = 1; i <= 10; ++i)
+    if (!encodeTrack(c, QString("%1/more/%2.flac").arg(c.directory).arg(i),
+                     QString("Later %1").arg(i), "Expressive two", "Marble Coast", i))
+      return c.finish();
+  QMetaObject::invokeMethod(w, "chooseLibrary", Q_ARG(QVariant, QVariant("files")));
+  c.check(c.until([&] { return b->results()->count() == 6; }), "the library is listed");
+  QTest::qWait(500);
+
+  // Walks what is on screen for a shadow cast at a given level.
+  std::function<QQuickItem *(QQuickItem *, int)> shadeAt = [&](QQuickItem *root, int level) -> QQuickItem * {
+    if (root->objectName() == "elevation" && root->property("level").toInt() == level)
+      return root;
+    for (auto child : root->childItems())
+      if (auto found = shadeAt(child, level))
+        return found;
+    return nullptr;
+  };
+  auto radiusOf = [](QQuickItem *button) {
+    auto background = button ? button->property("background").value<QQuickItem *>() : nullptr;
+    return background ? background->property("radius").toDouble() : -1.0;
+  };
+
+  // --- A toggle morphs as well as recolours ---
+  QVariantList queued;
+  for (int i = 0; i < 5; ++i)
+    queued.append(b->results()->get(i));
+  b->enqueueItems(queued);
+  b->setShuffle(false);
+  QTest::qWait(300);
+  auto shuffle = shownItem(w->contentItem(), "playerShuffle");
+  c.check(shuffle, "the player offers shuffle as a toggle");
+  if (shuffle) {
+    const double off = radiusOf(shuffle);
+    const auto offColour = shuffle->property("background").value<QQuickItem *>()
+                               ->property("color").value<QColor>();
+    c.check(qAbs(off - shuffle->height()/2) < 1.5,
+            QString("off it is a full corner (%1 of %2)")
+                .arg(off, 0, 'f', 1).arg(shuffle->height()/2, 0, 'f', 1));
+    c.shot("01-toggle-off");
+    b->setShuffle(true);
+    QTest::qWait(600);
+    const double on = radiusOf(shuffle);
+    c.check(qAbs(on - 12) < 1.5, QString("on it settles at the medium step (%1)").arg(on, 0, 'f', 1));
+    c.check(shuffle->property("background").value<QQuickItem *>()->property("color").value<QColor>()
+                != offColour, "and takes the container colour with it");
+    c.shot("02-toggle-on");
+    b->setShuffle(false);
+    QTest::qWait(400);
+  }
+
+  // --- The connected button group ---
+  auto stats = c.dialog("listeningStatsDialog");
+  auto period = shownItem(w->contentItem(), "statsPeriod");
+  c.check(period, "the listening period is chosen from a connected group");
+  if (period) {
+    auto week = shownItem(period, "statsPeriod_7"), month = shownItem(period, "statsPeriod_30"),
+         allTime = shownItem(period, "statsPeriod_0");
+    auto shapeOf = [](QQuickItem *item, const char *corner) {
+      auto background = item ? anyItem(item, "segmentBackground") : nullptr;
+      return background ? background->property(corner).toDouble() : -1.0;
+    };
+    c.check(week && month && allTime, "with a leading, middle and trailing button");
+    if (week && month && allTime) {
+      c.check(qAbs(shapeOf(week, "topLeftRadius") - 20) < 1.5,
+              "the chosen leading button is full cornered on the outside");
+      c.check(qAbs(shapeOf(month, "topLeftRadius") - 8) < 1.5 &&
+                  qAbs(shapeOf(month, "topRightRadius") - 8) < 1.5,
+              QString("a middle button keeps small corners on both sides (%1, %2)")
+                  .arg(shapeOf(month, "topLeftRadius"), 0, 'f', 1)
+                  .arg(shapeOf(month, "topRightRadius"), 0, 'f', 1));
+      c.check(qAbs(shapeOf(allTime, "topRightRadius") - 20) < 1.5 &&
+                  qAbs(shapeOf(allTime, "topLeftRadius") - 8) < 1.5,
+              "and the trailing one is asymmetric the other way");
+      // Pressing widens the button under the pointer and narrows its neighbours.
+      const double restWidth = month->width(), neighbourRest = allTime->width();
+      const auto point = month->mapToScene(month->boundingRect().center()).toPoint();
+      QTest::mousePress(w, Qt::LeftButton, Qt::NoModifier, point);
+      QTest::qWait(450);
+      c.check(month->width() > restWidth + 2,
+              QString("pressing expands it (%1 over %2)")
+                  .arg(month->width(), 0, 'f', 0).arg(restWidth, 0, 'f', 0));
+      c.check(allTime->width() < neighbourRest - 1, "and its neighbours give up the room");
+      c.shotNow("03-button-group-pressed");
+      QTest::mouseRelease(w, Qt::LeftButton, Qt::NoModifier, point);
+      QTest::qWait(400);
+    }
+    c.shot("04-button-group");
+  }
+  c.closeDialog(stats);
+
+  // --- Rich tooltips explain a setting rather than naming it ---
+  auto settings = c.dialog("settingsDialog");
+  c.evaluate("settingsDialog.category=1");
+  QTest::qWait(400);
+  auto gapless = shownItem(w->contentItem(), "gaplessSwitch");
+  c.check(gapless && !gapless->property("hint").toString().isEmpty(),
+          "gapless playback carries an explanation");
+  if (gapless) {
+    gapless->forceActiveFocus(Qt::TabFocusReason);
+    QTest::mouseMove(w, gapless->mapToScene(QPointF(40, gapless->height()/2)).toPoint());
+    c.check(c.until([&] { return anyItem(w->contentItem(), "richTooltipBody") != nullptr; }, 3000),
+            "reaching it opens a rich tooltip");
+    auto body = anyItem(w->contentItem(), "richTooltipBody");
+    auto subhead = anyItem(w->contentItem(), "richTooltipSubhead");
+    c.check(subhead && subhead->property("text").toString() == "Gapless playback",
+            "with the setting as its subhead");
+    c.check(body && body->property("text").toString().length() > 40,
+            "and the explanation under it");
+    c.shotNow("05-rich-tooltip");
+    // Material holds a rich tooltip open rather than timing it out.
+    QTest::qWait(1600);
+    c.check(anyItem(w->contentItem(), "richTooltipBody") != nullptr,
+            "which stays up long enough to read");
+    if (auto body2 = anyItem(w->contentItem(), "richTooltipBody"))
+      c.check(body2->window() != nullptr, "on a surface of its own");
+    QTest::mouseMove(w, QPoint(w->width()/2, 40));
+    QTest::qWait(400);
+  }
+  c.closeDialog(settings);
+
+  // --- Menu anatomy: a leading icon and the keyboard route ---
+  auto list = shownItem(w->contentItem(), "tracksView");
+  c.check(list, "the song list is up");
+  if (list) {
+    list->forceActiveFocus();
+    QTest::keyClick(w, Qt::Key_A, Qt::ControlModifier);
+    QTest::qWait(300);
+    c.evaluate("window.bulkView=tracks; bulkActions.popup()");
+    QTest::qWait(500);
+    auto shortcut = shownItem(w->contentItem(), "menuItemShortcut");
+    c.check(shortcut && !shortcut->property("text").toString().isEmpty(),
+            QString("a menu item that has a shortcut prints it on the trailing edge (%1)")
+                .arg(shortcut ? shortcut->property("text").toString() : QString("none")));
+    auto leading = anyItem(w->contentItem(), "menuItemLeading");
+    c.check(leading && leading->isVisible(), "and leads with its icon");
+    c.check(shadeAt(w->contentItem(), 2) != nullptr, "and the menu itself rests two levels off it");
+    c.shotNow("06-menu-anatomy");
+    c.evaluate("bulkActions.close()");
+    QTest::qWait(300);
+    if (auto selection = list->property("selection").value<QObject *>())
+      QMetaObject::invokeMethod(selection, "clear");
+    QTest::qWait(200);
+  }
+
+  // --- Elevation ---
+  // A shadow is the one thing a screenshot can confirm and a property cannot,
+  // so the page behind the dialog is sampled with it open and again without.
+  auto cornerOf = [&](const QImage &frame, QQuickItem *item) {
+    const auto rect = item->mapRectToScene(item->boundingRect()).toRect();
+    return frame.pixelColor(qBound(0, rect.center().x(), frame.width()-1),
+                            qBound(0, rect.center().y(), frame.height()-1));
+  };
+  QQmlComponent elevationSource(qmlEngine(w), QUrl("qrc:/qml/MElevation.qml"));
+  QScopedPointer<QObject> elevationObject(elevationSource.create(qmlContext(w)));
+  auto shade = qobject_cast<QQuickItem *>(elevationObject.data());
+  c.check(shade, "elevation is a component of its own");
+  if (shade) {
+    shade->setParentItem(w->contentItem());
+    shade->setX(620); shade->setY(380); shade->setZ(94);
+    shade->setWidth(160); shade->setHeight(90);
+    shade->setProperty("radius", 16);
+    shade->setProperty("level", 3);
+    QTest::qWait(200);
+    const auto rings = shade->property("rings").toList();
+    c.check(rings.size() == 10, "cast as two shadows of five rings each");
+    double reach = 0;
+    for (const auto &ring : rings)
+      reach = std::max(reach, ring.toMap().value("reach").toDouble());
+    // Level 3's ambient shadow spreads 3dp and blurs a further 8dp.
+    c.check(qAbs(reach - 11) < 0.01,
+            QString("reaching Material's 11dp at level three (%1)").arg(reach, 0, 'f', 1));
+    const auto lit = cornerOf(w->grabWindow(), shade);
+    c.shotNow("07-elevation");
+    shade->setProperty("level", 0);
+    QTest::qWait(200);
+    const auto bare = cornerOf(w->grabWindow(), shade);
+    c.check(lit.lightnessF() < bare.lightnessF() - 0.01,
+            QString("and the page under it is darker for the shadow (%1 against %2)")
+                .arg(lit.lightnessF(), 0, 'f', 3).arg(bare.lightnessF(), 0, 'f', 3));
+    shade->setVisible(false);
+    shade->setParentItem(nullptr);
+  }
+  // The floating surfaces that should carry one.
+  auto dialog = c.dialog("settingsDialog");
+  auto panel = dialog ? dialog->property("background").value<QQuickItem *>() : nullptr;
+  auto dialogShade = shadeAt(w->contentItem(), 3);
+  c.check(panel && dialogShade, "a dialog rests three levels off the page");
+  c.shot("08-elevation-dialog");
+  c.closeDialog(dialog);
+
+  // --- The drag handle ---
+  w->setProperty("side", "queue");
+  QTest::qWait(700);
+  auto grip = shownItem(w->contentItem(), "panelResizeHandle");
+  auto handle = grip ? anyItem(grip, "dragHandleGrip") : nullptr;
+  c.check(handle, "the pane split is changed by a drag handle");
+  if (handle && grip) {
+    c.check(qAbs(handle->width() - 4) < 0.5 && qAbs(handle->height() - 48) < 0.5,
+            QString("at rest it is Material's 4 by 48 capsule (%1 by %2)")
+                .arg(handle->width(), 0, 'f', 0).arg(handle->height(), 0, 'f', 0));
+    const auto point = grip->mapToScene(grip->boundingRect().center()).toPoint();
+    QTest::mouseMove(w, point);
+    QTest::mousePress(w, Qt::LeftButton, Qt::NoModifier, point);
+    QTest::qWait(500);
+    c.check(qAbs(handle->width() - 12) < 0.5 && qAbs(handle->height() - 52) < 0.5,
+            QString("held it thickens to 12 by 52 (%1 by %2)")
+                .arg(handle->width(), 0, 'f', 0).arg(handle->height(), 0, 'f', 0));
+    c.check(qAbs(handle->property("radius").toDouble() - 12) < 0.5,
+            "and squares off to a medium corner");
+    c.shotNow("08-drag-handle");
+    QTest::mouseRelease(w, Qt::LeftButton, Qt::NoModifier, point);
+    QTest::qWait(400);
+  }
+
+  // --- Swipe a queue row away ---
+  auto queue = shownItem(w->contentItem(), "queueView");
+  c.check(queue, "the queue is on screen");
+  if (queue) {
+    auto row = shownItem(queue, "queueRow_1");
+    c.check(row, "with a row to push aside");
+    if (row) {
+      const int before = b->queue()->count();
+      const auto from = row->mapToScene(QPointF(row->width()/2, row->height()/2)).toPoint();
+      QTest::mousePress(w, Qt::LeftButton, Qt::NoModifier, from);
+      QTest::mouseMove(w, from + QPoint(60, 0), 40);
+      QTest::qWait(120);
+      auto reveal = anyItem(row, "swipeReveal");
+      c.check(reveal && reveal->isVisible(), "the action behind it is revealed as it moves");
+      c.shotNow("09-swipe-reveal");
+      QTest::mouseMove(w, from + QPoint(row->width()/2 + 20, 0), 40);
+      QTest::qWait(120);
+      QTest::mouseRelease(w, Qt::LeftButton, Qt::NoModifier,
+                          from + QPoint(row->width()/2 + 20, 0));
+      QTest::qWait(500);
+      c.check(b->queue()->count() == before-1,
+              QString("and releasing past a third of the row drops it (%1 from %2)")
+                  .arg(b->queue()->count()).arg(before));
+    }
+  }
+
+  // --- The snackbar ---
+  auto snack = anyItem(w->contentItem(), "toastBar");
+  c.check(snack, "removing a song says so in a snackbar");
+  if (snack) {
+    c.check(c.until([&] { return snack->isVisible(); }, 3000), "which is up");
+    c.check(snack->property("color").value<QColor>() == c.themeColor("inverseSurface"),
+            "on the inverse surface");
+    c.check(qAbs(snack->property("radius").toDouble() - 4) < 0.5,
+            QString("at the smallest corner on the scale (%1)")
+                .arg(snack->property("radius").toDouble(), 0, 'f', 1));
+    c.check(qAbs(snack->height() - 48) < 0.5, "and one line tall");
+    auto undo = anyItem(snack, "toastUndo");
+    c.check(undo && undo->property("ink").value<QColor>() == c.themeColor("inversePrimary"),
+            "with its action in the inverse accent");
+    c.shotNow("10-snackbar");
+    const auto centre = snack->mapToScene(snack->boundingRect().center()).toPoint();
+    const int reach = int(snack->width()/2) + 30;
+    QTest::mousePress(w, Qt::LeftButton, Qt::NoModifier, centre);
+    for (int step = 1; step <= 6; ++step) {
+      QTest::mouseMove(w, centre + QPoint(reach*step/6, 0), 20);
+      QTest::qWait(30);
+    }
+    c.check(qAbs(c.evaluate("toastShove.x").toReal()) > 20,
+            QString("dragging it moves it (%1)").arg(c.evaluate("toastShove.x").toReal(), 0, 'f', 0));
+    c.shotNow("11-snackbar-swipe");
+    QTest::mouseRelease(w, Qt::LeftButton, Qt::NoModifier, centre + QPoint(reach, 0));
+    QTest::qWait(600);
+    c.check(!w->property("toastPending").toBool(), "and it can be pushed aside");
+  }
+  w->setProperty("side", "");
+  QTest::qWait(400);
+
+  // --- The app bar keeps its actions reachable ---
+  QMetaObject::invokeMethod(w, "chooseLibrary", Q_ARG(QVariant, QVariant("files")));
+  QTest::qWait(500);
+  auto appBar = shownItem(w->contentItem(), "collectionActions");
+  c.check(appBar, "the collection header is an app bar row");
+  if (appBar) {
+    const int live = appBar->property("live").toList().size();
+    c.check(!appBar->property("overflowing").toBool(),
+            QString("which shows all %1 of its actions when there is room").arg(live));
+    c.shot("11-app-bar-wide");
+    const int shown = appBar->property("shownCount").toInt();
+    const int hidden = appBar->property("hidden").toList().size();
+    c.check(shown + hidden == appBar->property("live").toList().size(),
+            QString("and nothing is dropped on the way (%1 shown, %2 in the menu)")
+                .arg(shown).arg(hidden));
+  }
+  // What the row does when it is given less than it asks for.
+  QQmlComponent rowSource(qmlEngine(w), QUrl("qrc:/qml/MAppBarRow.qml"));
+  QScopedPointer<QObject> rowObject(rowSource.create(qmlContext(w)));
+  auto crowded = qobject_cast<QQuickItem *>(rowObject.data());
+  c.check(crowded, "the app bar row is a component of its own");
+  if (crowded) {
+    crowded->setParentItem(w->contentItem());
+    crowded->setX(520); crowded->setY(320); crowded->setZ(94);
+    crowded->setHeight(48);
+    QVariantList six;
+    for (const char *name : {"one", "two", "three", "four", "five", "six"})
+      six.append(QVariantMap{{"key", name}, {"symbol", "play"}, {"label", QString(name)}});
+    crowded->setProperty("actions", six);
+    crowded->setWidth(6*48 + 5*4);
+    QTest::qWait(200);
+    c.check(!crowded->property("overflowing").toBool() &&
+                crowded->property("shownCount").toInt() == 6,
+            "given the room it needs, every action is a button");
+    crowded->setWidth(160);
+    QTest::qWait(200);
+    c.check(crowded->property("overflowing").toBool(), "given less, it overflows");
+    const int held = crowded->property("shownCount").toInt();
+    const int folded = crowded->property("hidden").toList().size();
+    c.check(held + folded == 6 && held == 2,
+            QString("keeping a slot for the overflow button (%1 shown, %2 folded)")
+                .arg(held).arg(folded));
+    auto overflow = shownItem(crowded, "appBarOverflow");
+    c.check(overflow && overflow->isVisible(), "which is the last thing in the row");
+    if (overflow) {
+      const auto point = overflow->mapToScene(overflow->boundingRect().center()).toPoint();
+      QTest::mouseClick(w, Qt::LeftButton, Qt::NoModifier, point);
+      QTest::qWait(500);
+      c.check(anyItem(w->contentItem(), "appBarMenuAction_six") != nullptr,
+              "and the actions it folded away are in the menu behind it");
+      c.shotNow("12-app-bar-overflow");
+      QTest::keyClick(w, Qt::Key_Escape);
+      QTest::qWait(300);
+    }
+    crowded->setVisible(false);
+  }
+  // The player bar's own overflow, for the controls a narrow bar cannot hold.
+  auto playerOverflow = anyItem(w->contentItem(), "playerOverflow");
+  c.check(playerOverflow && !playerOverflow->isVisible(),
+          "a wide player bar has nothing to hand its overflow");
+  w->resize(900, 860);
+  QTest::qWait(800);
+  c.check(playerOverflow && playerOverflow->isVisible(),
+          "a narrow one keeps the controls it cannot show in an overflow instead");
+  c.check(playerOverflow && playerOverflow->property("live").toList().size() == 3,
+          "holding shuffle, repeat and like");
+  c.shot("13-player-overflow");
+  w->resize(1400, 900);
+  QTest::qWait(700);
+
+  // --- The wavy progress indicator ---
+  b->importMusicFolder(QUrl::fromLocalFile(c.directory + "/more"));
+  c.check(c.until([&] { return b->localImportProgress() >= 0; }, 20000),
+          "a second import reports how far it has got");
+  auto wavy = anyItem(w->contentItem(), "importProgress");
+  c.check(wavy, "which is drawn as a wavy progress indicator");
+  if (wavy) {
+    c.check(wavy->isVisible() && wavy->property("determinate").toBool(),
+            "in its determinate form");
+    c.check(qAbs(wavy->property("stroke").toDouble() - 4) < 0.01 &&
+                qAbs(wavy->property("amplitude").toDouble() - 3) < 0.01 &&
+                qAbs(wavy->property("wavelength").toDouble() - 40) < 0.01,
+            "at Material's 4dp stroke, 3dp amplitude and 40dp wavelength");
+    c.check(qAbs(wavy->height() - 10) < 0.5, "in a 10dp container");
+    auto stop = anyItem(wavy, "wavyStop");
+    c.check(stop && stop->isVisible() && qAbs(stop->width() - 4) < 0.5,
+            "with the stop indicator at the end of the track");
+    auto shape = anyItem(wavy, "wavyShape");
+    auto run = anyItem(wavy, "wavyRun");
+    c.check(shape && run, "and a wave filling the part that is done");
+    c.check(c.until([&] { return b->localImportProgress() > 0.15 || !b->importingLocal(); }, 40000),
+            "which fills as the import advances");
+    const double filled = run ? run->width() : 0;
+    c.check(filled > 0, QString("the wave covering the part that is done (%1px)")
+                            .arg(filled, 0, 'f', 0));
+    c.shotNow("14-wavy-progress");
+    c.check(shape && shape->width() > wavy->width(),
+            "drawn wider than the run so the wave travels through it");
+  }
+  c.check(c.until([&] { return !b->importingLocal(); }, 60000), "the import finishes");
+  c.shot("15-import-finished");
+  b->clearQueue();
   c.finish();
 }

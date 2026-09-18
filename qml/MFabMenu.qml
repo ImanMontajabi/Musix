@@ -115,6 +115,7 @@ Item {
             radius: root.open ? Theme.shapeFull(fab.height) : Theme.shapeLargeIncreased
             Behavior on radius { enabled: app.motion; NumberAnimation { duration: Theme.springFastSpatialMs; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.springFastSpatial } }
             Behavior on color { ColorAnimation { duration: Theme.springFastEffectsMs; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.springFastEffects } }
+            MElevation { anchors.fill: parent; radius: parent.radius; level: 3 }
             Rectangle {
                 anchors.fill: parent; radius: parent.radius
                 color: Theme.containerText

@@ -75,6 +75,7 @@ MDialog {
             }
             SungText { objectName: "onboardingFolderError"; Layout.fillWidth: true; Layout.minimumWidth: 0; visible: !!root.folderError; text: root.folderError; color: Theme.error; wrapMode: Text.Wrap }
             SungText { objectName: "onboardingImporting"; Layout.fillWidth: true; Layout.minimumWidth: 0; visible: app.importingLocal; text: app.localImportStatus; color: Theme.muted; font.pixelSize: Theme.bodyMedium; wrapMode: Text.Wrap }
+            MWavyProgress { objectName: "onboardingImportProgress"; Layout.fillWidth: true; Layout.minimumWidth: 0; visible: app.importingLocal; progress: app.localImportProgress; label: "Importing music" }
             SungText { objectName: "onboardingFolderDone"; Layout.fillWidth: true; Layout.minimumWidth: 0; visible: root.folderAdded && !app.importingLocal; text: "Folder added. Sung keeps it up to date while it is running."; color: Theme.muted; font.pixelSize: Theme.bodyMedium; wrapMode: Text.Wrap }
             RowLayout {
                 spacing: 8

@@ -44,6 +44,17 @@ QtObject {
     // padding between them instead.
     function shapeInside(outer,padding) { return Math.max(0,outer-padding) }
 
+    // --- Elevation -----------------------------------------------------------
+    // Material's six levels, and the two shadows it casts at each one: a tight
+    // key light at 30% and a wider ambient at 15%. Levels are dp of elevation;
+    // the shadows are the published values for that level.
+    readonly property var elevationDp: [0,1,3,6,8,12]
+    // [vertical offset, blur, spread] for the key shadow and then the ambient.
+    readonly property var elevationKey: [[0,0,0],[1,2,0],[1,2,0],[1,3,0],[2,3,0],[4,4,0]]
+    readonly property var elevationAmbient: [[0,0,0],[1,3,1],[2,6,2],[4,8,3],[6,10,4],[8,12,6]]
+    readonly property real elevationKeyOpacity: 0.30
+    readonly property real elevationAmbientOpacity: 0.15
+
     // --- Motion --------------------------------------------------------------
     // Material replaced easing and duration with springs. Qt Quick animates on
     // curves, and the specification publishes the curve each spring converts to
@@ -105,9 +116,17 @@ QtObject {
     readonly property color primaryText: useSource ? role("onPrimary",luminance(primary)>0.179?"#000000":"#ffffff") : followDesktop ? desktopTheme.colors.primaryText : (dark ? "#572008" : "#ffffff")
     readonly property color primaryContainer: useSource ? role("primaryContainer",blend(container,primary,0.16)) : followDesktop ? desktopTheme.colors.primaryContainer : (dark ? "#75351b" : "#ffdbcb")
     readonly property color containerText: useSource ? role("onPrimaryContainer",readable(primary,[primaryContainer])) : followDesktop ? desktopTheme.colors.containerText : (dark ? "#ffdbcb" : "#743419")
+    readonly property color secondaryContainer: role("secondaryContainer", dark ? "#54432a" : "#f5e0bb")
     readonly property color secondary: followDesktop ? desktopTheme.colors.secondary : role("secondary", dark ? "#d8c4a0" : "#6c5b3b")
+    // The inverse roles. A snackbar sits against the theme rather than in it,
+    // so it takes the surface and the accent the other theme would have used.
+    readonly property color inverseSurface: role("inverseSurface", dark ? "#f5ded5" : "#3c2c25")
+    readonly property color inverseSurfaceText: role("inverseOnSurface", dark ? "#392e2a" : "#ffede6")
+    readonly property color inversePrimary: role("inversePrimary", dark ? "#964829" : "#ffb596")
     readonly property color error: dark ? "#ffb4ab" : "#ba1a1a"
     readonly property color errorText: dark ? "#690005" : "#ffffff"
+    readonly property color errorContainer: dark ? "#93000a" : "#ffdad6"
+    readonly property color errorContainerText: dark ? "#ffdad6" : "#410002"
     // Material's fixed accents keep one tone in both themes, so anything drawn
     // with them holds its identity when the rest of the window flips.
     readonly property color primaryFixed: role("primaryFixed","#ffdbcb")

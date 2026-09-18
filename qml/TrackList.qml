@@ -173,6 +173,7 @@ ListView {
         track: entry; rowIndex: list.queueMode?index:app.collection.sourceIndex(index); queueMode: list.queueMode
         selection: list.selection; selectionIndex: index; listOwner: list; dragHub: list.dragHub
         onClicked: list.activate(index,entry)
+        onDismissRequested: if(list.queueMode)app.removeQueue(rowIndex)
         onMenuRequested: (item,row,anchor)=>list.menuRequested(item,row,anchor)
     }
     DropArea {

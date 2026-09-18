@@ -195,6 +195,26 @@ private slots:
     }
   }
 
+  // The inverse accent is the tone the other theme would have used, which is
+  // what lets a snackbar sit against the theme rather than in it.
+  void inverseRolesCrossTheThemes() {
+    for (const auto &source : {QColor("#3f6ad8"), QColor("#c0392b"), QColor("#2f8f5b")}) {
+      const auto light = m3::scheme(source, false);
+      const auto dark = m3::scheme(source, true);
+      QVERIFY(light.contains("inversePrimary") && dark.contains("inversePrimary"));
+      // Light schemes take the dark theme's tone 80, and dark ones tone 40.
+      QVERIFY(qAbs(m3::toneOf(light.value("inversePrimary").value<QColor>()) - 80) < 1.5);
+      QVERIFY(qAbs(m3::toneOf(dark.value("inversePrimary").value<QColor>()) - 40) < 1.5);
+      for (const auto &roles : {light, dark}) {
+        const auto surface = roles.value("inverseSurface").value<QColor>();
+        QVERIFY2(contrast(roles.value("inverseOnSurface").value<QColor>(), surface) >= 4.5,
+                 "the inverse surface carries its own text");
+        QVERIFY2(contrast(roles.value("inversePrimary").value<QColor>(), surface) >= 3.0,
+                 "and its action stands off it");
+      }
+    }
+  }
+
   // Solving is on the theme's hot path; it has to stay cheap.
   void solvingIsFast() {
     QElapsedTimer timer;

@@ -2,12 +2,32 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 
+// Material 3 connected button group.
+//
+// A connected group is a row of buttons that reads as one control. Material
+// gives the leading and trailing buttons asymmetric corners, full on the
+// outside and small on the inside, so the ends belong to the row rather than to
+// themselves. The chosen button rounds fully; pressing one squares its inner
+// corners further and, because Material widens whatever is under the finger,
+// expands it while its neighbours give up the same width.
 Item {
     id: group
     property var options: []
     property var value
     property string accessibleName: ""
     signal chosen(var value)
+
+    // Material expands the pressed button by 15% of its width and takes that
+    // back from the buttons beside it.
+    readonly property real expandedRatio: 0.15
+    readonly property int pressedIndex: {
+        for (let i = 0; i < segments.count; ++i) {
+            const item = segments.itemAt(i)
+            if (item && item.down) return i
+        }
+        return -1
+    }
+
     readonly property real segmentWidth: Math.max(76, ...options.map(option => metrics.advanceWidth(option.label) + 52))
     implicitWidth: segmentWidth * options.length
     implicitHeight: 48
@@ -16,8 +36,17 @@ Item {
     Accessible.role: Accessible.Grouping
     Accessible.name: accessibleName
     FontMetrics { id: metrics; font.family: Theme.fontFamily; font.pixelSize: Theme.labelLarge; font.weight: Font.Medium }
+
+    // The spacing Material leaves between connected buttons.
+    readonly property real gap: 2
+    readonly property real evenWidth: (width - gap*Math.max(0, options.length-1))/Math.max(1, options.length)
+    // What the pressed button takes, and what each of the others gives back.
+    readonly property real expansion: pressedIndex >= 0 ? evenWidth*expandedRatio : 0
+    readonly property real donation: options.length > 1 ? expansion/(options.length-1) : 0
+
     Row {
     anchors.fill: parent
+    spacing: group.gap
     Repeater {
         id: segments
         model: group.options
@@ -26,9 +55,13 @@ Item {
             required property var modelData
             required property int index
             readonly property bool selected: group.value === modelData.key
+            readonly property bool leading: index === 0
+            readonly property bool trailing: index === segments.count-1
             objectName: modelData.name || ""
             text: modelData.label
-            width: group.width / Math.max(1, group.options.length); height: 48
+            width: group.evenWidth + (group.pressedIndex === index ? group.expansion : -group.donation)
+            height: 48
+            Behavior on width { enabled: app.motion; NumberAnimation { duration: Theme.springFastSpatialMs; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.springFastSpatial } }
             hoverEnabled: true
             focusPolicy: selected ? Qt.StrongFocus : Qt.ClickFocus
             Accessible.role: Accessible.RadioButton
@@ -45,14 +78,25 @@ Item {
             Keys.onReturnPressed: clicked()
             Keys.onEnterPressed: clicked()
             background: Rectangle {
+                objectName: "segmentBackground"
                 y: 4; height: 40
-                topLeftRadius: button.index === 0 ? 20 : 0
+                // Outer corners are full; inner ones are a small step, and a
+                // smaller one still while the button is held. Choosing a button
+                // rounds it fully, which is what marks it out along the row.
+                readonly property real outer: button.selected ? Theme.shapeFull(height)
+                                            : button.leading || button.trailing ? Theme.shapeFull(height)
+                                            : Theme.shapeSmall
+                readonly property real inner: button.selected ? Theme.shapeFull(height)
+                                            : button.down ? Theme.shapeExtraSmall : Theme.shapeSmall
+                topLeftRadius: button.leading ? outer : inner
                 bottomLeftRadius: topLeftRadius
-                topRightRadius: button.index === segments.count-1 ? 20 : 0
+                topRightRadius: button.trailing ? outer : inner
                 bottomRightRadius: topRightRadius
                 color: button.selected ? Theme.primaryContainer : "transparent"
                 border.width: 1; border.color: Theme.controlOutline
                 Behavior on color { ColorAnimation { duration: Theme.fast; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.fastEffectsCurve } }
+                Behavior on topLeftRadius { enabled: app.motion; SpringAnimation { spring: 5; damping: 0.8; mass: 0.8 } }
+                Behavior on topRightRadius { enabled: app.motion; SpringAnimation { spring: 5; damping: 0.8; mass: 0.8 } }
                 Rectangle {
                     anchors.fill: parent
                     topLeftRadius: parent.topLeftRadius; bottomLeftRadius: parent.bottomLeftRadius
@@ -66,7 +110,7 @@ Item {
                 Row {
                     anchors.centerIn: parent; spacing: 8
                     Icon { name: "check"; size: 18; visible: button.selected; ink: Theme.containerText; anchors.verticalCenter: parent.verticalCenter }
-                    SungText { text: button.text; font.pixelSize: Theme.labelLarge; font.weight: Font.Medium; color: button.selected ? Theme.containerText : Theme.text }
+                    SungText { text: button.text; font.pixelSize: Theme.labelLarge; font.weight: Font.Medium; color: button.selected ? Theme.containerText : Theme.text; elide: Text.ElideRight; width: Math.min(implicitWidth, button.width-(button.selected?42:24)) }
                 }
             }
             Rectangle {

@@ -2,6 +2,10 @@ import QtQuick
 import QtQuick.Controls
 Switch {
     id: control
+    // What the setting actually does. Material puts an explanation this long in
+    // a rich tooltip rather than a plain one, so it can be read rather than
+    // glanced at.
+    property string hint: ""
     implicitHeight: Math.max(48, label.implicitHeight+16)
     // A settings row anchors its label and its control to the same edges as
     // the rows around it, so a column of switches and value controls lines up.
@@ -39,4 +43,15 @@ Switch {
         }
     }
     contentItem: SungText { id:label;text: control.text;rightPadding:68;verticalAlignment:Text.AlignVCenter;wrapMode:Text.Wrap;font.pixelSize:Theme.bodyLarge }
+    Loader {
+        active: control.hint.length > 0
+        sourceComponent: MRichTooltip {
+            objectName: "settingHint"
+            parent: control
+            visible: control.hovered || control.activeFocus
+            x: 0; y: control.height
+            subhead: control.text
+            supporting: control.hint
+        }
+    }
 }

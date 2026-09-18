@@ -809,7 +809,8 @@ void runSearchSelectionTests(Backend *b,QQuickWindow *w) {
   if(sortItem){
     auto indicator=qobject_cast<QQuickItem*>(sortItem->property("indicator").value<QObject*>());
     auto label=findItem(sortItem,"menuItemLabel");
-    check(indicator&&indicator->isVisible()&&label&&label->x()+label->property("leftPadding").toReal()>=indicator->x()+indicator->width()+8,"Material menu checkmark leaves readable label spacing");
+    const auto labelStart=label?label->mapToItem(sortItem,QPointF(label->property("leftPadding").toReal(),0)).x():0.0;
+    check(indicator&&indicator->isVisible()&&label&&labelStart>=indicator->x()+indicator->width()+8,"Material menu checkmark leaves readable label spacing");
   }else check(false,"sort menu exposes current ordering");
   shot("compact-sort-menu");QTest::keyClick(w,Qt::Key_Escape);QTest::qWait(200);
   click("settingsButton");shot("compact-settings-light");QTest::keyClick(w,Qt::Key_Escape);QTest::qWait(200);
