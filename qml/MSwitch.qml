@@ -12,12 +12,13 @@ Switch {
     leftPadding: 0
     rightPadding: 0
     hoverEnabled: true
-    opacity: enabled ? 1 : 0.38
+    readonly property bool dimmed: !enabled
     indicator: Rectangle {
         implicitWidth: 52; implicitHeight: 32
         x: control.width-control.rightPadding-width; y: (control.height-height)/2
         radius: Theme.shapeLarge
-        color: control.checked ? Theme.primary : Theme.high
+        color: control.dimmed ? Qt.rgba(Theme.text.r,Theme.text.g,Theme.text.b,Theme.disabledContainerOpacity)
+             : control.checked ? Theme.primary : Theme.high
         border.width: control.checked ? 0 : 2; border.color: Theme.controlOutline
         Behavior on color { ColorAnimation { duration: Theme.fast; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.fastEffectsCurve } }
         Rectangle {
@@ -42,7 +43,7 @@ Switch {
             Behavior on width { NumberAnimation { duration: Theme.fast; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.fastEffectsCurve } }
         }
     }
-    contentItem: SungText { id:label;text: control.text;rightPadding:68;verticalAlignment:Text.AlignVCenter;wrapMode:Text.Wrap;font.pixelSize:Theme.bodyLarge }
+    contentItem: SungText { id:label;opacity: control.dimmed ? Theme.disabledContentOpacity : 1;text: control.text;rightPadding:68;verticalAlignment:Text.AlignVCenter;wrapMode:Text.Wrap;font.pixelSize:Theme.bodyLarge }
     Loader {
         active: control.hint.length > 0
         sourceComponent: MRichTooltip {

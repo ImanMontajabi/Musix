@@ -12,12 +12,36 @@ Item {
 
     property bool open: false
     property real peek: 0.6
+    // A modal sheet takes the screen over: Material scrims what it covers and
+    // a press on that scrim puts the sheet away. A standard one leaves the
+    // content behind it live.
+    property bool modal: false
     default property alias content: body.data
     signal closed()
 
     readonly property real restingY: sheet.open ? Math.max(0, parent.height-height) : parent.height
     property real drag: 0
 
+    // The scrim covers the window, not the sheet, so it is a sibling.
+    Item {
+        parent: sheet.parent
+        objectName: "bottomSheetScrimHost"
+        anchors.fill: parent
+        z: sheet.z - 1
+        visible: sheet.modal && sheet.open
+        Rectangle {
+            objectName: "bottomSheetScrim"
+            anchors.fill: parent
+            color: Qt.rgba(0, 0, 0, 0.32)
+            opacity: sheet.open ? 1 : 0
+            Behavior on opacity { NumberAnimation { duration: Theme.fast; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.fastEffectsCurve } }
+            TapHandler { onTapped: { sheet.open = false; sheet.closed() } }
+        }
+    }
+
+    // Above the page it covers, and below the snackbar, which Material keeps
+    // in front of a sheet.
+    z: 30
     anchors.left: parent ? parent.left : undefined
     anchors.right: parent ? parent.right : undefined
     height: Math.round(parent ? parent.height*peek : 0)

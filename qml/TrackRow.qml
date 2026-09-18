@@ -30,14 +30,14 @@ ItemDelegate {
     signal dismissRequested()
     property bool active: queueMode ? rowIndex===app.currentIndex : app.current.id !== undefined && app.current.id === track.id
     signal menuRequested(var item, int index, var anchor)
-    ListView.onReused: {motionRaised=false;opacity=Qt.binding(()=>enabled?1:0.45);}
+    ListView.onReused: {motionRaised=false;opacity=Qt.binding(()=>enabled?1:Theme.disabledContentOpacity);}
     Behavior on implicitHeight {enabled:app.motion && visible && !dragging;NumberAnimation {id:rowResize;duration:220;easing.type:Easing.InOutCubic}}
     Connections {target:app;function onSettingsChanged(){if(!app.motion)rowResize.complete();}}
     implicitHeight: queueMode ? (app.compactDensity?56:72) : Theme.rowHeight
     width: ListView.view ? ListView.view.width : 500
     hoverEnabled: true
     enabled: track.available !== false
-    opacity: enabled ? 1 : 0.45
+    opacity: enabled ? 1 : Theme.disabledContentOpacity
     Accessible.description: selectable ? "Ctrl-click to toggle selection, Shift-click for a range. Drag selected songs to move them." : ""
     Accessible.name: (track.title || "") + ", " + (track.artist || "")
     Accessible.selected: selected
@@ -60,6 +60,16 @@ ItemDelegate {
         radius: Theme.shapeLarge; color: row.selected ? Theme.primaryContainer : row.motionRaised ? Theme.container : row.active ? Theme.high : row.hovered ? Theme.container : "transparent"
         border.width: row.keyboardCurrent ? 2 : 0; border.color: Theme.primary
         Behavior on color { ColorAnimation { duration: Theme.fast; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.fastEffectsCurve } }
+        // Material gives a dragged control its own state layer, heavier than
+        // the one a press leaves, so a row being carried reads as held.
+        Rectangle {
+            objectName: "rowDraggedLayer"
+            anchors.fill: parent; radius: parent.radius
+            color: Theme.text
+            opacity: row.dragging || row.motionRaised ? Theme.draggedOpacity : 0
+            visible: opacity > 0
+            Behavior on opacity { NumberAnimation { duration: Theme.fast; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.fastEffectsCurve } }
+        }
     }
     MouseArea {
         id: pointer; anchors.fill: parent; anchors.rightMargin: 60

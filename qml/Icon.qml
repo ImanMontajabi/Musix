@@ -22,7 +22,7 @@ Item {
         objectName: "iconOutline"
         anchors.fill: parent
         visible: icon.hasOutline && icon.fill < 1
-        source: icon.live && icon.hasOutline ? "image://symbols/" + icon.name + "_outline/" + icon.ink.toString().substring(1) : ""
+        source: icon.live && icon.hasOutline ? "image://symbols/" + icon.name + "_outline/" + Math.round(icon.size) + "/" + icon.ink.toString().substring(1) : ""
         cache: false
         sourceSize: Qt.size(icon.size * Screen.devicePixelRatio, icon.size * Screen.devicePixelRatio)
         fillMode: Image.PreserveAspectFit
@@ -32,7 +32,7 @@ Item {
         objectName: "iconFill"
         anchors.fill: parent
         opacity: icon.hasOutline ? icon.fill : 1
-        source: icon.live ? "image://symbols/" + icon.name + "/" + icon.ink.toString().substring(1) : ""
+        source: icon.live ? "image://symbols/" + icon.name + "/" + Math.round(icon.size) + "/" + icon.ink.toString().substring(1) : ""
         // Fresh textures on window re-entry also support Qt's software renderer.
         cache: false
         sourceSize: Qt.size(icon.size * Screen.devicePixelRatio, icon.size * Screen.devicePixelRatio)

@@ -131,8 +131,15 @@ QtObject {
     readonly property int labelLarge: 14
     readonly property int labelMedium: 12
     readonly property int labelSmall: 11
+    // Material's four state layers, and what it does to a disabled control: the
+    // container drops to a tenth of onSurface and the content to 38% of
+    // onSurfaceVariant, rather than the whole control fading together.
     readonly property real hoverOpacity: 0.08
+    readonly property real focusOpacity: 0.10
     readonly property real pressedOpacity: 0.10
+    readonly property real draggedOpacity: 0.16
+    readonly property real disabledContainerOpacity: 0.10
+    readonly property real disabledContentOpacity: 0.38
     readonly property bool followDesktop: app.theme === "system" && desktopTheme.available
     readonly property bool dark: followDesktop ? desktopTheme.dark : app.theme === "dark" || (app.theme === "system" && Application.styleHints.colorScheme === Qt.Dark)
     readonly property color background: followDesktop ? desktopTheme.colors.background : role("background", dark ? "#181211" : "#fff8f6")

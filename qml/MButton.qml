@@ -40,7 +40,10 @@ AbstractButton {
     property real startRadius: 0
     property real endRadius: 0
     readonly property real opticalShift: Theme.opticalShift(startRadius, endRadius)
-    property color ink: filled ? Theme.primaryText : toggle && selected ? Theme.containerText : selected ? Theme.primary : Theme.text
+    readonly property bool dimmed: !enabled && !busy
+    readonly property bool hasContainer: filled || tonal || selected
+    property color ink: dimmed ? Theme.muted
+                      : filled ? Theme.primaryText : toggle && selected ? Theme.containerText : selected ? Theme.primary : Theme.text
     // Material draws the container at the size's own height and keeps a 48dp
     // touch target around it, so a small button is a 40dp shape you can still
     // hit comfortably. The target is the footprint the layout sees.
@@ -49,7 +52,8 @@ AbstractButton {
     implicitHeight: control.touchTarget
     hoverEnabled: true
     focusPolicy: Qt.StrongFocus
-    opacity: enabled || busy ? 1 : 0.38
+    // Material does not fade a disabled control as a whole; the container and
+    // the content take their own treatment below.
     Accessible.name: tip
     Accessible.description: busy ? "Loading" : confirmed ? "Added to queue" : ""
     Loader {
@@ -88,7 +92,9 @@ AbstractButton {
         radius: control.down ? (control.toggle ? Theme.shapeSmall : control.sizedSquare)
                              : control.toggle && control.selected ? control.sizedSquare
                              : Theme.shapeFull(Math.min(width, height))
-        color: control.filled ? Theme.primary
+        color: control.dimmed
+                 ? (control.hasContainer ? Qt.rgba(Theme.text.r,Theme.text.g,Theme.text.b,Theme.disabledContainerOpacity) : "transparent")
+             : control.filled ? Theme.primary
              : control.toggle && control.selected ? Theme.primaryContainer
              : control.tonal || control.selected ? Theme.high : "transparent"
         border.color: "transparent"
@@ -112,6 +118,7 @@ AbstractButton {
         visible: control.visualFocus
     }
     contentItem: Item {
+        opacity: control.dimmed ? Theme.disabledContentOpacity : 1
         Row {
             id: contentRow; anchors.verticalCenter: parent.verticalCenter
             // Material nudges content inside an asymmetric shape so it looks

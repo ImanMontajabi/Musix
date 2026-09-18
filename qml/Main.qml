@@ -83,7 +83,7 @@ ApplicationWindow {
     property bool searchFocused: (window.activeFocusItem && window.activeFocusItem.handlesTextInput===true) || searchField.activeFocus || (window.activeFocusItem && window.activeFocusItem.objectName==="lyricSearchField")
     readonly property bool editableLocal: {app.playlists;return !!localPlaylist && !app.smartPlaylist(localPlaylist).id;}
     readonly property bool modalOpen: immersiveQueue.visible || otherModalOpen
-    readonly property bool otherModalOpen: trimDialog.visible || onboarding.visible || artworkViewer.visible || (immersiveLoader.item && immersiveLoader.item.popupVisible) || viewLayoutDialog.visible || volumeControl.popupVisible || homeEditor.visible || outputPicker.visible || sessionsDialog.visible || statsDialog.visible || playlistVersionsDialog.visible || playlistCoverDialog.visible || commandPalette.visible || artworkControls.visible || smartDialog.visible || trackDetails.visible || shortcutHelp.visible || duplicateDialog.visible || serverToolbar.dialogOpen || serverConnection.visible || serverAddDialog.visible || serverRenameDialog.visible || serverDeleteDialog.visible || serverRatingDialog.visible || musicFoldersDialog.visible || musicFolderEntry.visible || cleanupDialog.visible || navigationDrawer.visible || bulkActions.visible || volumeStepMenu.visible || rateDialog.visible || lyricTimingDialog.visible || settingsDialog.visible || playlistDialog.visible || addPlaylistDialog.visible || deletePlaylistDialog.visible || actions.visible || playlistActions.visible || sleepMenu.visible || (fileDialogs!==null && fileDialogs.visible) || audioDeviceDialog.visible || collectionSortMenu.visible
+    readonly property bool otherModalOpen: trimDialog.visible || onboarding.visible || artworkViewer.visible || (immersiveLoader.item && immersiveLoader.item.popupVisible) || viewLayoutDialog.visible || volumeControl.popupVisible || homeEditor.visible || outputPicker.visible || sessionsDialog.visible || statsDialog.visible || playlistVersionsDialog.visible || playlistCoverDialog.visible || commandPalette.visible || artworkControls.visible || smartDialog.visible || trackDetails.visible || shortcutHelp.visible || duplicateDialog.visible || serverToolbar.dialogOpen || serverConnection.visible || serverAddDialog.visible || serverRenameDialog.visible || serverDeleteDialog.visible || serverRatingDialog.visible || musicFoldersDialog.visible || musicFolderEntry.visible || cleanupDialog.visible || navigationDrawer.visible || bulkActions.visible || volumeStepMenu.visible || rateDialog.visible || lyricTimingDialog.visible || settingsDialog.visible || playlistDialog.visible || addPlaylistDialog.visible || deletePlaylistDialog.visible || actions.visible || playlistActions.visible || sleepMenu.visible || (fileDialogs!==null && fileDialogs.visible) || audioDeviceDialog.visible || collectionSort.menuOpen
     property bool sliderFocused: window.activeFocusItem && window.activeFocusItem.handlesArrowKeys === true
     function selectedView() {var item=window.activeFocusItem;while(item){if(item.sourceRows!==undefined)return item;item=item.parent;}return tracks;}
     function addBatch(view) {batchItems=view.selection.items();addPlaylistDialog.open();}
@@ -879,7 +879,24 @@ ApplicationWindow {
                                 Accessible.name: "Find songs in this list"
                             }
                             MButton { symbol: "close"; tip: "Clear list filter"; visible: !!app.collection.query; onClicked: app.collection.query="" }
-                            MButton { objectName: "collectionSortButton"; symbol: "sort"; tip: "Sort songs"; text: app.collection.sortKey==="original"?"Order":app.collection.sortKey==="title"?"Title":app.collection.sortKey==="artist"?"Artist":app.collection.sortKey==="folder"?"Folder":"Duration"; tonal: true; onClicked: collectionSortMenu.popup(this,width-collectionSortMenu.width,height+4) }
+                            // What a list is sorted by is a value, not an
+                            // action, so Material draws it as a field that
+                            // opens its options rather than as a button.
+                            MExposedDropdown {
+                                id: collectionSort
+                                objectName: "collectionSortControl"
+                                fieldName: "collectionSortButton"
+                                label: "Sort"
+                                implicitHeight: 48
+                                options: [{key:"original",label:"Original order",name:"sort_original"},
+                                          {key:"title",label:"Title",name:"sort_title"},
+                                          {key:"artist",label:"Artist",name:"sort_artist"},
+                                          {key:"duration",label:"Duration",name:"sort_duration"}]
+                                    .concat(app.page==="library" && app.libraryId==="files"
+                                            ? [{key:"folder",label:"Folder",name:"sort_folder"}] : [])
+                                value: app.collection.sortKey
+                                onChosen: key => app.collection.sortKey = key
+                            }
                         }
                         SelectionBar { Layout.fillWidth: true; view: tracks; canRemove: window.editableLocal || app.serverPlaylistEditable }
                         Item {
@@ -1316,6 +1333,9 @@ ApplicationWindow {
     MBottomSheet {
         id: panelSheet; objectName: "panelSheet"
         parent: window.contentItem
+        // At this width the sheet is most of the window, so it takes the
+        // screen over rather than sitting alongside what it covers.
+        modal: true
         open: window.sheetMode && !!window.side && !window.immersive && !window.compactMode
         onClosed: window.side=""
         Item { id: sheetHost; anchors.fill: parent; anchors.margins: 18; anchors.topMargin: 6 }
@@ -1898,13 +1918,6 @@ ApplicationWindow {
         Repeater {
             model: [1,2,5,10]
             MMenuItem { required property int modelData; objectName: "volumeStep_"+modelData; text: modelData+"%"; checkable: true; checked: app.volumeStep===modelData; onTriggered: app.volumeStep=modelData }
-        }
-    }
-    MMenu {
-        id: collectionSortMenu; objectName: "collectionSortMenu"
-        Repeater {
-            model: [{key:"original",label:"Original order"},{key:"title",label:"Title"},{key:"artist",label:"Artist"},{key:"duration",label:"Duration"}].concat(app.page==="library" && app.libraryId==="files" ? [{key:"folder",label:"Folder"}] : [])
-            MMenuItem { required property var modelData; objectName: "sort_"+modelData.key; text: modelData.label; checkable: true; checked: app.collection.sortKey===modelData.key; onTriggered: app.collection.sortKey=modelData.key }
         }
     }
     SmartPlaylistDialog { id: smartDialog; anchors.centerIn: parent }

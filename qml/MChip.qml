@@ -13,12 +13,14 @@ AbstractButton {
     Accessible.role: selectable ? Accessible.CheckBox : Accessible.Button
     Accessible.checkable: selectable
     Accessible.checked: selected
-    opacity: enabled ? 1 : 0.38
+    readonly property bool dimmed: !enabled
     background: Rectangle {
         y: 4; height: control.height - 8; radius: Theme.shapeSmall
-        color: control.selected ? Theme.primaryContainer : "transparent"
+        color: control.dimmed && control.selected
+                 ? Qt.rgba(Theme.text.r,Theme.text.g,Theme.text.b,Theme.disabledContainerOpacity)
+             : control.selected ? Theme.primaryContainer : "transparent"
         border.width: control.selected ? 0 : 1
-        border.color: Theme.controlOutline
+        border.color: control.dimmed ? Qt.rgba(Theme.text.r,Theme.text.g,Theme.text.b,Theme.disabledContainerOpacity) : Theme.controlOutline
         Behavior on color { ColorAnimation { duration: Theme.fast; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.fastEffectsCurve } }
         Rectangle {
             anchors.fill: parent; radius: parent.radius
@@ -33,6 +35,7 @@ AbstractButton {
         }
     }
     contentItem: Item {
+        opacity: control.dimmed ? Theme.disabledContentOpacity : 1
         Icon { x: 12; name: "check"; size: 18; visible: control.selectable && control.selected; ink: Theme.containerText; anchors.verticalCenter: parent.verticalCenter }
         SungText {
             id: label; x: control.selectable && control.selected ? 38 : (parent.width-implicitWidth)/2

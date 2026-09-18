@@ -12,6 +12,8 @@
 #include <QPainter>
 #include <QProcess>
 #include <QQmlContext>
+#include <QQmlEngine>
+#include <QQuickImageProvider>
 #include <QQmlExpression>
 #include <QQuickItem>
 #include <QQuickWindow>
@@ -3160,5 +3162,166 @@ void runMaterialSchemeTests(Backend *b, QQuickWindow *w) {
   w->resize(1400, 900);
   QTest::qWait(500);
   c.shot("10-restored");
+  c.finish();
+}
+
+// Material's finer grain: symbols drawn at the optical size they are used at,
+// the anatomy of a disabled control, the state layer a drag leaves, a value
+// drawn as a field rather than a button, and the scrim a sheet that takes the
+// screen over owes what it covers.
+void runMaterialGrainTests(Backend *b, QQuickWindow *w) {
+  Check c{b, w, qEnvironmentVariable("SUNG_TEST_OUTPUT")};
+  QDir().mkpath(c.directory + "/music");
+  QWindowSystemInterface::handleFocusWindowChanged(w);
+  w->resize(1400, 900);
+  QTest::qWait(500);
+  b->setTheme("dark");
+  b->setMotion(true);
+  b->setVolume(0);
+  b->setAutoplay(false);
+  b->setWatchMusicFolders(false);
+  b->setOnlineArtwork(false);
+
+  paintCover(c.directory + "/music/cover.png", QColor("#24485f"), QColor("#c87a2f"));
+  for (int i = 1; i <= 4; ++i)
+    if (!encodeTrack(c, QString("%1/music/%2.flac").arg(c.directory).arg(i),
+                     QString("Track %1").arg(i), "Grain", "Rill", i))
+      return c.finish();
+  b->importMusicFolder(QUrl::fromLocalFile(c.directory + "/music"));
+  c.check(c.until([&] { return !b->importingLocal(); }, 40000), "import the grain fixture");
+  QMetaObject::invokeMethod(w, "chooseLibrary", Q_ARG(QVariant, QVariant("files")));
+  c.check(c.until([&] { return b->results()->count() == 4; }), "the library is listed");
+  QTest::qWait(500);
+
+  // --- Symbols are drawn at their optical size, not scaled to it ---
+  auto readAsset = [](const QString &path) {
+    QFile file(path);
+    return file.open(QIODevice::ReadOnly) ? QString::fromUtf8(file.readAll()) : QString();
+  };
+  const auto small = readAsset(":/assets/icons/play_20.svg");
+  const auto base = readAsset(":/assets/icons/play.svg");
+  const auto large = readAsset(":/assets/icons/play_40.svg");
+  c.check(!small.isEmpty() && !base.isEmpty() && !large.isEmpty(),
+          "every symbol ships at Material's three optical sizes");
+  c.check(small != base && large != base,
+          "each of which is its own drawing rather than the same one scaled");
+  c.check(small.contains("height=\"20\"") && large.contains("height=\"40\""),
+          "drawn at the size it is named for");
+  // The provider picks by the points asked for, not by the pixels wanted.
+  auto provider = qmlEngine(w)->imageProvider("symbols");
+  c.check(provider, "the symbol provider is registered");
+  if (provider) {
+    auto *images = static_cast<QQuickImageProvider *>(provider);
+    QSize got;
+    const auto tiny = images->requestImage("play/18/ffffff", &got, QSize(96, 96));
+    const auto normal = images->requestImage("play/24/ffffff", &got, QSize(96, 96));
+    const auto big = images->requestImage("play/36/ffffff", &got, QSize(96, 96));
+    c.check(!tiny.isNull() && !normal.isNull() && !big.isNull(), "and renders at any of them");
+    c.check(tiny != normal && big != normal,
+            "handing back a different drawing for a small and a large symbol");
+    const auto fallback = images->requestImage("play/24/ffffff", &got, QSize(96, 96));
+    c.check(fallback == normal, "and the same one for the same request");
+  }
+  c.shot("01-symbols");
+
+  // --- A disabled control takes Material's own anatomy ---
+  auto previous = shownItem(w->contentItem(), "playerShuffle");
+  auto play = shownItem(w->contentItem(), "playButton");
+  b->clearQueue();
+  QTest::qWait(400);
+  c.check(play && !play->property("enabled").toBool(), "an empty queue disables playback");
+  if (play) {
+    auto container = play->property("background").value<QQuickItem *>();
+    auto content = play->property("contentItem").value<QQuickItem *>();
+    c.check(qAbs(play->opacity() - 1) < 0.01,
+            QString("the control itself is not faded (%1)").arg(play->opacity(), 0, 'f', 2));
+    const auto fill = container->property("color").value<QColor>();
+    // Material's disabled container is a tenth of onSurface, not the accent.
+    c.check(qAbs(fill.alphaF() - 0.10) < 0.02,
+            QString("its container drops to a tenth of onSurface (alpha %1)").arg(fill.alphaF(), 0, 'f', 2));
+    c.check(content && qAbs(content->opacity() - 0.38) < 0.01,
+            QString("and its content to 38%% (%1)").arg(content ? content->opacity() : 0, 0, 'f', 2));
+    c.check(play->property("ink").value<QColor>() == c.themeColor("muted"),
+            "in the onSurfaceVariant role Material gives it");
+    c.shot("02-disabled");
+  }
+  Q_UNUSED(previous)
+
+  // --- A dragged row carries the heavier state layer ---
+  QVariantList queued;
+  for (int i = 0; i < 4; ++i)
+    queued.append(b->results()->get(i));
+  b->enqueueItems(queued);
+  w->setProperty("side", "queue");
+  QTest::qWait(700);
+  auto queue = shownItem(w->contentItem(), "queueView");
+  auto row = queue ? shownItem(queue, "queueRow_1") : nullptr;
+  c.check(row, "a queue row can be taken hold of");
+  if (row) {
+    auto layer = anyItem(row, "rowDraggedLayer");
+    c.check(layer && !layer->isVisible(), "which leaves no layer while it is at rest");
+    const auto from = row->mapToScene(row->boundingRect().center()).toPoint();
+    QTest::mousePress(w, Qt::LeftButton, Qt::NoModifier, from);
+    QTest::mouseMove(w, from + QPoint(0, 40), 40);
+    QTest::qWait(250);
+    c.check(layer && layer->isVisible(), "and the layer Material asks for once it is being carried");
+    c.check(layer && qAbs(layer->opacity() - 0.16) < 0.01,
+            QString("at Material's 16%% for a drag (%1)").arg(layer ? layer->opacity() : 0, 0, 'f', 2));
+    c.shotNow("03-dragged");
+    QTest::mouseRelease(w, Qt::LeftButton, Qt::NoModifier, from + QPoint(0, 40));
+    QTest::qWait(500);
+  }
+  w->setProperty("side", "");
+  QTest::qWait(400);
+
+  // --- A value is drawn as a field, not as a button ---
+  w->setProperty("collectionTools", true);
+  QTest::qWait(500);
+  auto sort = shownItem(w->contentItem(), "collectionSortControl");
+  c.check(sort, "sorting is an exposed dropdown");
+  if (sort) {
+    c.check(anyItem(sort, "dropdownLabel") != nullptr, "with the label above it Material gives a field");
+    auto value = anyItem(sort, "dropdownValue");
+    c.check(value && value->property("text").toString() == "Original order",
+            QString("showing what the list is sorted by (%1)")
+                .arg(value ? value->property("text").toString() : QString()));
+    auto chevron = anyItem(sort, "dropdownChevron");
+    const double closed = chevron ? chevron->rotation() : 0;
+    c.click("collectionSortButton");
+    c.check(sort->property("menuOpen").toBool(), "which opens its options");
+    c.check(chevron && qAbs(chevron->rotation() - closed) > 45,
+            "and turns the chevron to say so");
+    c.check(anyItem(w->contentItem(), "sort_title") != nullptr, "the options being the sorts on offer");
+    c.shotNow("04-exposed-dropdown");
+    c.click("sort_title");
+    c.check(b->collection()->sortKey() == "title", "choosing one sorts the list");
+    c.check(value && value->property("text").toString() == "Title", "and the field says so");
+    c.shot("05-exposed-dropdown-chosen");
+    b->collection()->setSortKey("original");
+    QTest::qWait(300);
+  }
+
+  // --- A sheet that takes the screen over scrims what it covers ---
+  w->setProperty("side", "queue");
+  w->resize(880, 860);
+  QTest::qWait(900);
+  auto sheet = anyItem(w->contentItem(), "panelSheet");
+  c.check(sheet && sheet->isVisible() && sheet->property("modal").toBool(),
+          "the supporting pane arrives as a modal sheet on a narrow window");
+  auto scrim = anyItem(w->contentItem(), "bottomSheetScrim");
+  c.check(scrim && scrim->isVisible() && scrim->opacity() > 0.9,
+          "with the scrim Material puts behind one");
+  c.shot("06-modal-sheet");
+  if (scrim) {
+    // A press on the scrim is how Material dismisses a modal sheet.
+    const auto point = scrim->mapToScene(QPointF(scrim->width()/2, 60)).toPoint();
+    QTest::mouseClick(w, Qt::LeftButton, Qt::NoModifier, point);
+    QTest::qWait(700);
+    c.check(w->property("side").toString().isEmpty(), "and pressing it puts the sheet away");
+  }
+  w->resize(1400, 900);
+  QTest::qWait(600);
+  c.shot("07-restored");
+  b->clearQueue();
   c.finish();
 }

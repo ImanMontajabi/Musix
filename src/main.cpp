@@ -44,6 +44,13 @@ public:
       return {};
     QSize s = !requested.isEmpty() ? requested : QSize(24, 24);
     s = s.boundedTo(QSize(256, 256));
+    // Material draws each symbol at several optical sizes rather than scaling
+    // one of them, so a glyph keeps its stroke weight wherever it is used. The
+    // caller says how many points it is asking for, because the pixels it wants
+    // depend on the display and the optical size does not.
+    const int points = parts.value(1).toInt();
+    if (points > 0 && points <= 22) name += "_20";
+    else if (points > 32) name += "_40";
     // Cache the untinted raster, not the QML texture. Window remapping still gets
     // fresh textures, while theme transitions reuse the same SVG coverage mask.
     QMutexLocker lock(&m_mutex);
@@ -52,7 +59,11 @@ public:
     if (const auto mask=m_masks.object(key)) img=*mask;
     else {
       QFile f(":/assets/icons/" + name + ".svg");
-      if (!f.open(QIODevice::ReadOnly)) return {};
+      // A symbol with no drawing at that optical size falls back to its own.
+      if (!f.open(QIODevice::ReadOnly)) {
+        f.setFileName(":/assets/icons/" + parts.value(0) + ".svg");
+        if (!f.open(QIODevice::ReadOnly)) return {};
+      }
       QSvgRenderer svg(f.readAll());
       img=QImage(s,QImage::Format_ARGB32_Premultiplied);
       img.fill(Qt::transparent);
@@ -61,7 +72,7 @@ public:
     }
     QPainter p(&img);
     p.setCompositionMode(QPainter::CompositionMode_SourceIn);
-    p.fillRect(img.rect(), QColor("#" + parts.value(1, "ffffff")));
+    p.fillRect(img.rect(), QColor("#" + parts.value(2, "ffffff")));
     p.end();
     if (size)
       *size = s;
@@ -179,6 +190,7 @@ int main(int argc, char **argv) {
   }
   if(args.contains("--immersive-edges-test")){QTimer::singleShot(0,&app,[&]{runImmersiveEdgeTests(&backend,window);});return app.exec();}
   if(args.contains("--immersive-preferences-test")){QTimer::singleShot(0,&app,[&]{runImmersivePreferencesTest(&backend,window);});return app.exec();}
+  if(args.contains("--material-grain-test")){QTimer::singleShot(0,&app,[&]{runMaterialGrainTests(&backend,window);});return app.exec();}
   if(args.contains("--material-scheme-test")){QTimer::singleShot(0,&app,[&]{runMaterialSchemeTests(&backend,window);});return app.exec();}
   if(args.contains("--material-sizing-test")){QTimer::singleShot(0,&app,[&]{runMaterialSizingTests(&backend,window);});return app.exec();}
   if(args.contains("--material-expressive-test")){QTimer::singleShot(0,&app,[&]{runMaterialExpressiveTests(&backend,window);});return app.exec();}
