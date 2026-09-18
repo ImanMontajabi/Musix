@@ -1563,3 +1563,394 @@ void runWindowWashTests(Backend *b, QQuickWindow *w) {
   b->clearQueue();
   c.finish();
 }
+
+// --- Material foundations ----------------------------------------------------
+// Shape, motion and typography are systems rather than features, so they are
+// checked structurally: not "does this one corner look right" but "does every
+// corner in the window come from the scale".
+
+namespace {
+// Every step of Material's corner radius scale.
+bool onShapeScale(double radius, double width, double height) {
+  for (double step : {0.0, 4.0, 8.0, 12.0, 16.0, 20.0, 28.0, 32.0, 48.0})
+    if (qAbs(radius - step) < 0.01)
+      return true;
+  // `full` is a real half rounding rather than a large fixed number, measured
+  // across the shorter side, which is what makes a bar read as a pill whether
+  // it lies flat or stands upright.
+  const double shorter = qMin(width, height);
+  return shorter > 0 && qAbs(radius - shorter / 2) < 0.51;
+}
+struct Rounded { QString name; double radius, width, height; };
+void collectRadii(QQuickItem *root, QList<Rounded> &out) {
+  if (root->isVisible()) {
+    const auto radius = root->property("radius");
+    if (radius.isValid() && radius.canConvert<double>() && radius.toDouble() > 0)
+      out.append({root->objectName(), radius.toDouble(), root->width(), root->height()});
+  }
+  for (auto child : root->childItems())
+    collectRadii(child, out);
+}
+} // namespace
+
+void runMaterialFoundationTests(Backend *b, QQuickWindow *w) {
+  Check c{b, w, qEnvironmentVariable("SUNG_TEST_OUTPUT")};
+  QDir().mkpath(c.directory + "/music");
+  QWindowSystemInterface::handleFocusWindowChanged(w);
+  w->resize(1400, 900);
+  QTest::qWait(500);
+  b->setTheme("dark");
+  b->setMotion(true);
+  b->setVolume(0);
+  b->setAutoplay(false);
+  b->setPrepareNext(false);
+  b->setWatchMusicFolders(false);
+  b->setOnlineArtwork(false);
+
+  paintCover(c.directory + "/music/cover.png", QColor("#1f4f6b"), QColor("#d98324"));
+  for (int i = 1; i <= 3; ++i)
+    if (!encodeTrack(c, QString("%1/music/%2.flac").arg(c.directory).arg(i),
+                     QString("Track %1").arg(i), "Foundations", "Rill", i))
+      return c.finish();
+  b->importMusicFolder(QUrl::fromLocalFile(c.directory + "/music"));
+  c.check(c.until([&] { return !b->importingLocal(); }, 40000), "import the foundations fixture");
+  b->library("files");
+  c.check(c.until([&] { return b->results()->count() == 3; }), "the fixture is listed");
+
+  // --- Shape: the scale, and nothing but the scale ---
+  const QList<QPair<QString, double>> scale{
+      {"shapeNone", 0},      {"shapeExtraSmall", 4},  {"shapeSmall", 8},
+      {"shapeMedium", 12},   {"shapeLarge", 16},      {"shapeLargeIncreased", 20},
+      {"shapeExtraLarge", 28}, {"shapeExtraLargeIncreased", 32}, {"shapeExtraExtraLarge", 48}};
+  for (const auto &step : scale)
+    c.check(qAbs(c.evaluate("Theme." + step.first).toDouble() - step.second) < 0.01,
+            QString("%1 is %2dp, as Material specifies").arg(step.first).arg(step.second));
+  c.check(qAbs(c.evaluate("Theme.shapeFull(48)").toDouble() - 24) < 0.01,
+          "full rounding is half the height, not a large fixed number");
+  // Material's optical roundness: a nested shape subtracts the padding.
+  c.check(qAbs(c.evaluate("Theme.shapeInside(48,14)").toDouble() - 34) < 0.01,
+          "nested shapes subtract their padding rather than sharing a radius");
+
+  QList<Rounded> radii;
+  collectRadii(w->contentItem(), radii);
+  c.check(radii.size() > 25,
+          QString("the window has rounded shapes to check (%1)").arg(radii.size()));
+  QStringList offScale;
+  for (const auto &entry : radii)
+    if (!onShapeScale(entry.radius, entry.width, entry.height))
+      offScale << QString("%1 r=%2 %3x%4")
+                      .arg(entry.name.isEmpty() ? QString("(unnamed)") : entry.name)
+                      .arg(entry.radius, 0, 'f', 1)
+                      .arg(entry.width, 0, 'f', 1)
+                      .arg(entry.height, 0, 'f', 1);
+  c.check(offScale.isEmpty(),
+          QString("every corner on screen comes from the scale%1")
+              .arg(offScale.isEmpty() ? QString() : ", but " + offScale.mid(0, 6).join("; ")));
+  c.shot("01-shape-scale");
+
+  // --- Motion: the published spring conversions, and a real overshoot ---
+  c.check(b->motionScheme() == "expressive",
+          "Material recommends the expressive scheme, so it is the default");
+  const auto curve = [&c](const QString &token) { return c.evaluate("Theme." + token).toList(); };
+  const auto spatial = curve("springSpatial");
+  c.check(spatial.size() >= 4 && qAbs(spatial[1].toDouble() - 1.21) < 0.001,
+          "the expressive spatial spring is the published conversion");
+  c.check(spatial.size() >= 4 && spatial[1].toDouble() > 1.0,
+          "which overshoots its target, because spatial springs bounce");
+  for (const auto &effects : {"springFastEffects", "springEffects", "springSlowEffects"}) {
+    const auto points = curve(effects);
+    c.check(points.size() >= 4 && points[1].toDouble() <= 1.0 && points[3].toDouble() <= 1.0,
+            QString("%1 never overshoots, because colour and opacity must not").arg(effects));
+  }
+  c.check(c.evaluate("Theme.springSpatialMs").toInt() == 500 &&
+              c.evaluate("Theme.springFastEffectsMs").toInt() == 150,
+          "the spring durations are the published ones");
+
+  // Switching the scheme reaches the tokens, and the standard scheme settles
+  // rather than bouncing.
+  b->setMotionScheme("standard");
+  QTest::qWait(200);
+  const auto settled = curve("springSpatial");
+  c.check(settled.size() >= 4 && qAbs(settled[1].toDouble() - 1.06) < 0.001,
+          "the standard scheme swaps in its own spatial spring");
+  c.check(settled[1].toDouble() < spatial[1].toDouble(),
+          "which overshoots less than the expressive one");
+  b->setMotionScheme("expressive");
+  QTest::qWait(200);
+
+  // The tokens are not decoration: a real animated property has to overshoot.
+  auto rail = shownItem(w->contentItem(), "navigationRail");
+  c.check(rail, "the navigation rail is on screen to measure");
+  if (rail) {
+    const auto expand = [&](const QString &scheme) {
+      b->setMotionScheme(scheme);
+      c.evaluate("railSettings.expanded=false");
+      c.until([&] { return qAbs(rail->width() - 88) < 1; }, 2000);
+      QTest::qWait(200);
+      c.evaluate("railSettings.expanded=true");
+      double widest = 0;
+      QElapsedTimer timer;
+      timer.start();
+      while (timer.elapsed() < 1200) {
+        widest = qMax(widest, rail->width());
+        QTest::qWait(8);
+      }
+      return widest;
+    };
+    const double bouncy = expand("expressive");
+    const double flat = expand("standard");
+    c.check(bouncy > 220.5,
+            QString("the expressive scheme overshoots the rail's 220dp (reached %1)")
+                .arg(bouncy, 0, 'f', 1));
+    c.check(bouncy > flat,
+            QString("further than the standard scheme does (%1 against %2)")
+                .arg(bouncy, 0, 'f', 1).arg(flat, 0, 'f', 1));
+    b->setMotionScheme("expressive");
+    c.evaluate("railSettings.expanded=false");
+    QTest::qWait(400);
+  }
+
+  // --- Typography: emphasis on the font's own axes ---
+  c.check(c.evaluate("Theme.emphasizedWidth").toInt() > c.evaluate("Theme.regularWidth").toInt(),
+          "emphasis widens the variable font rather than only thickening it");
+  auto title = shownItem(w->contentItem(), "collectionHeaderTitle");
+  c.check(title && title->property("emphasized").toBool(),
+          "the page headline uses the emphasized style");
+  if (title) {
+    const auto axes = title->property("font").value<QFont>().variableAxisValue(
+        QFont::Tag("wdth"));
+    c.check(qAbs(axes - c.evaluate("Theme.emphasizedWidth").toDouble()) < 0.01,
+            QString("and the width axis is really set (%1)").arg(axes));
+    c.check(title->property("font").value<QFont>().weight() >= QFont::DemiBold,
+            "at the emphasized weight");
+  }
+  c.shot("02-emphasized-type");
+
+  b->stop();
+  b->clearQueue();
+  c.finish();
+}
+
+void runMaterialComponentTests(Backend *b, QQuickWindow *w) {
+  Check c{b, w, qEnvironmentVariable("SUNG_TEST_OUTPUT")};
+  QDir().mkpath(c.directory + "/music");
+  QWindowSystemInterface::handleFocusWindowChanged(w);
+  w->resize(1400, 900);
+  QTest::qWait(500);
+  b->setTheme("dark");
+  b->setMotion(true);
+  b->setVolume(0);
+  b->setAutoplay(false);
+  b->setPrepareNext(false);
+  b->setWatchMusicFolders(false);
+  b->setOnlineArtwork(false);
+
+  paintCover(c.directory + "/music/cover.png", QColor("#1f4f6b"), QColor("#d98324"));
+  for (int i = 1; i <= 6; ++i)
+    if (!encodeTrack(c, QString("%1/music/%2.flac").arg(c.directory).arg(i),
+                     QString("Track %1").arg(i), "Components", "Rill", i))
+      return c.finish();
+  b->importMusicFolder(QUrl::fromLocalFile(c.directory + "/music"));
+  c.check(c.until([&] { return !b->importingLocal(); }, 40000), "import the component fixture");
+  QMetaObject::invokeMethod(w, "chooseLibrary", Q_ARG(QVariant, QVariant("files")));
+  c.check(c.until([&] { return b->results()->count() == 6; }), "the library is listed");
+  QTest::qWait(500);
+
+  // --- Split button: one control, two targets, asymmetric corners ---
+  auto split = shownItem(w->contentItem(), "collectionPlay");
+  c.check(split, "the collection action is a split button");
+  auto action = split ? shownItem(split, "splitButtonAction") : nullptr;
+  auto reveal = split ? shownItem(split, "splitButtonMenu") : nullptr;
+  c.check(action && reveal, "made of a common button and a menu button");
+  if (action && reveal) {
+    // Material's inner corners: the facing edges are a small step, the outer
+    // ones full, which is what makes two targets read as one control.
+    const double actionOuter = action->property("background").value<QQuickItem *>()
+                                   ->property("topLeftRadius").toDouble();
+    const double actionInner = action->property("background").value<QQuickItem *>()
+                                   ->property("topRightRadius").toDouble();
+    const double revealInner = reveal->property("background").value<QQuickItem *>()
+                                   ->property("topLeftRadius").toDouble();
+    const double revealOuter = reveal->property("background").value<QQuickItem *>()
+                                   ->property("topRightRadius").toDouble();
+    c.check(qAbs(actionInner - revealInner) < 0.01,
+            "the facing corners match each other across the seam");
+    c.check(actionInner < actionOuter && revealInner < revealOuter,
+            "and are smaller than the outer corners");
+    c.check(qAbs(actionOuter - 24) < 0.01 && qAbs(revealOuter - 24) < 0.01,
+            "the outer corners are full for a 48dp control");
+    c.check(qAbs(reveal->x() - (action->x() + action->width())) < 4,
+            "the halves sit together rather than apart");
+    // The two halves do different things.
+    c.check(b->queue()->count() == 0, "nothing is queued yet");
+    c.click("splitButtonAction");
+    c.check(c.until([&] { return b->queue()->count() == 6 && b->playing(); }, 8000),
+            "the action half plays the collection");
+    b->stop();
+    b->clearQueue();
+    QTest::qWait(300);
+    const double resting = reveal->property("background").value<QQuickItem *>()
+                               ->property("topRightRadius").toDouble();
+    c.click("splitButtonMenu");
+    c.check(c.until([&] { return split->property("menuOpen").toBool(); }, 3000),
+            "the menu half opens a menu");
+    c.check(c.until([&] {
+      return reveal->property("background").value<QQuickItem *>()
+                 ->property("topRightRadius").toDouble() < resting - 2;
+    }, 2000), "and morphs its shape while it is open, as Material asks");
+    c.shot("01-split-button-open");
+    auto shuffle = shownItem(w->contentItem(), "collectionShuffle");
+    c.check(shuffle, "the menu offers the related ways of starting the same songs");
+    QTest::keyClick(w, Qt::Key_Escape);
+    c.check(c.until([&] { return !split->property("menuOpen").toBool(); }, 3000),
+            "closing it releases the morph");
+  }
+
+  // --- FAB menu: two to six related actions, and a morph into its own close ---
+  auto fab = shownItem(w->contentItem(), "fab");
+  auto fabMenu = anyItem(w->contentItem(), "libraryFab");
+  c.check(fab && fabMenu, "the library carries a floating action button");
+  if (fab && fabMenu) {
+    const int actions = fabMenu->property("count").toInt();
+    c.check(actions >= 2 && actions <= 6,
+            QString("it opens between two and six related actions (%1)").arg(actions));
+    auto shape = shownItem(fab, "fabShape");
+    const double rested = shape ? shape->property("radius").toDouble() : 0;
+    c.check(!shownItem(w->contentItem(), "fabMenuItem_0"), "which are closed to begin with");
+    c.click("fab");
+    c.check(c.until([&] { return fabMenu->property("open").toBool(); }, 3000), "tapping opens them");
+    c.check(c.until([&] { return shownItem(w->contentItem(), "fabMenuItem_0") != nullptr; }, 3000),
+            "the actions appear");
+    c.check(c.until([&] { return shape && shape->property("radius").toDouble() > rested + 2; }, 2000),
+            "and the button morphs into the menu's close button");
+    c.shot("02-fab-menu-open");
+    c.click("fab");
+    c.check(c.until([&] { return !fabMenu->property("open").toBool(); }, 3000), "tapping again closes them");
+    c.check(c.until([&] { return shape && qAbs(shape->property("radius").toDouble() - rested) < 1; }, 2000),
+            "and the shape comes back");
+  }
+
+  // --- Carousel: items change size across the viewport, and snap ---
+  b->home();
+  c.check(c.until([&] { return !b->busy(); }), "Home loads");
+  QTest::qWait(600);
+  auto carousel = shownItem(w->contentItem(), "carousel");
+  c.check(carousel, "Home lays its shelves out as carousels");
+  if (carousel) {
+    c.check(carousel->property("snapMode").toInt() == 1,
+            "which snap items into place rather than resting part-way");
+    auto first = anyItem(carousel, "carouselCell_0");
+    c.check(first, "the carousel has cells");
+    if (first) {
+      auto card = shownItem(first, "carouselCard");
+      c.check(card && qAbs(card->scale() - 1) < 0.02,
+              "a cell fully in view is at full size");
+      // Scrolling it towards the edge has to shrink it: that squashed preview
+      // is what Material found people read as "there is more here".
+      carousel->setProperty("contentX", carousel->property("contentX").toReal() +
+                                            carousel->property("cellWidth").toReal() * 0.7);
+      QTest::qWait(300);
+      c.check(card && card->scale() < 0.95,
+              QString("and shrinks as it leaves the viewport (%1)")
+                  .arg(card ? card->scale() : 0, 0, 'f', 2));
+      c.check(card && qAbs(card->property("parallax").toReal()) > 0.05,
+              "with its visual travelling at a different speed from its container");
+      carousel->setProperty("contentX", 0);
+      QTest::qWait(300);
+      c.check(card && qAbs(card->scale() - 1) < 0.02, "and grows back on return");
+    }
+    c.shot("03-carousel");
+  }
+
+  // --- Pull to refresh ---
+  QMetaObject::invokeMethod(w, "chooseLibrary", Q_ARG(QVariant, QVariant("files")));
+  QTest::qWait(500);
+  auto puller = anyItem(w->contentItem(), "contentRefresh");
+  auto tracks = shownItem(w->contentItem(), "tracksView");
+  c.check(puller && tracks, "the song list can be pulled to refresh");
+  if (puller && tracks) {
+    c.check(!puller->isVisible(), "the indicator is out of the way at rest");
+    const double origin = tracks->property("originY").toReal();
+    tracks->setProperty("contentY", origin - 20);
+    QTest::qWait(150);
+    c.check(puller->isVisible() && puller->property("progress").toReal() > 0.1 &&
+                !puller->property("armed").toBool(),
+            "a short pull shows the indicator without arming it");
+    c.shot("04-pull-started");
+    tracks->setProperty("contentY", origin - 90);
+    QTest::qWait(150);
+    c.check(puller->property("armed").toBool(), "pulling past the threshold arms it");
+    c.shot("05-pull-armed");
+    tracks->setProperty("contentY", origin);
+    QTest::qWait(200);
+    c.check(!puller->isVisible(), "and letting go without a refresh puts it away");
+  }
+
+  // --- Navigation: a rail at this size, a bar once the window is compact ---
+  c.check(!w->property("compactWindow").toBool(), "a wide window is not compact");
+  c.check(shownItem(w->contentItem(), "navigationRail"), "so navigation is a rail");
+  c.check(!shownItem(w->contentItem(), "navigationBar"), "and not a bar");
+  w->resize(520, 760);
+  QTest::qWait(700);
+  c.check(w->property("compactWindow").toBool(), "a narrow window is compact");
+  auto bar = shownItem(w->contentItem(), "navigationBar");
+  c.check(bar, "which moves navigation to a bar along the bottom");
+  c.check(!shownItem(w->contentItem(), "navigationRail"), "and stands the rail down");
+  if (bar) {
+    c.check(bar->width() >= w->width() - 2, "the bar spans the window");
+    const auto foot = bar->mapToScene(QPointF(0, bar->height())).y();
+    c.check(qAbs(foot - w->height()) < 2,
+            QString("and sits at the bottom of it (ends at %1 of %2)").arg(foot).arg(w->height()));
+    int destinations = 0;
+    for (const auto *key : {"home", "search", "library"})
+      if (shownItem(bar, QString("navBar_") + key))
+        ++destinations;
+    c.check(destinations == 3, "with three destinations, which is Material's minimum");
+    for (const auto *key : {"home", "search", "library"})
+      c.check(shownItem(bar, QString("navBarLabel_") + key),
+              QString("the %1 label is shown, never dropped").arg(key));
+    // Exactly one destination carries the active indicator.
+    int active = 0;
+    for (const auto *key : {"home", "search", "library"})
+      if (auto indicator = shownItem(bar, QString("navBarIndicator_") + key))
+        if (indicator->property("color").value<QColor>() == c.themeColor("primaryContainer"))
+          ++active;
+    c.check(active == 1, QString("exactly one destination is marked active (%1)").arg(active));
+    c.shot("06-navigation-bar");
+    c.click("navBar_search");
+    c.check(c.until([&] { return w->property("destination") == "search"; }, 3000),
+            "and choosing one navigates");
+    c.click("navBar_home");
+    c.check(c.until([&] { return w->property("destination") == "home"; }, 3000), "as does another");
+    c.shot("07-navigation-bar-home");
+  }
+  w->resize(1400, 900);
+  QTest::qWait(700);
+  c.check(shownItem(w->contentItem(), "navigationRail"), "widening brings the rail back");
+  c.check(!shownItem(w->contentItem(), "navigationBar"), "and puts the bar away");
+
+  // --- Floating toolbar in the immersive player ---
+  QMetaObject::invokeMethod(w, "chooseLibrary", Q_ARG(QVariant, QVariant("files")));
+  QTest::qWait(300);
+  b->enqueueItems(b->results()->rows);
+  b->playAt(0);
+  c.check(c.until([&] { return b->playing(); }), "a song plays");
+  w->setProperty("immersive", true);
+  c.check(c.until([&] { return shownItem(w->contentItem(), "immersiveToolbar") != nullptr; }, 4000),
+          "the immersive transport sits on a floating toolbar");
+  auto toolbar = shownItem(w->contentItem(), "immersiveToolbar");
+  if (toolbar) {
+    c.check(toolbar->property("radius").toReal() > 20,
+            "which floats as a rounded bar rather than being anchored into the surface");
+    c.check(shownItem(toolbar, "immersivePlayButton"), "and holds the transport controls");
+    c.check(!shownItem(w->contentItem(), "navigationBar"),
+            "a toolbar and a navigation bar are never shown together");
+  }
+  c.shot("08-floating-toolbar");
+  w->setProperty("immersive", false);
+  QTest::qWait(400);
+
+  b->stop();
+  b->clearQueue();
+  c.finish();
+}

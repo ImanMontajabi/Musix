@@ -201,12 +201,12 @@ ListView {
         }
     }
     Rectangle {
-        parent: list; anchors.fill: parent; z: 9; radius: 16; color: "transparent"; border.color: Theme.primary; border.width: 2
+        parent: list; anchors.fill: parent; z: 9; radius: Theme.shapeLarge; color: "transparent"; border.color: Theme.primary; border.width: 2
         visible: drop.containsDrag
     }
     Rectangle {
         objectName: "dropInsertionLine"
-        parent: list; z: 10; height: 3; radius: 1.5; color: Theme.primary; width: list.width
+        parent: list; z: 10; height: 3; radius: Theme.shapeFull(3); color: Theme.primary; width: list.width
         visible: drop.containsDrag && drop.before>=0
         y: {const item=list.itemAtIndex(drop.before);return Math.max(0,Math.min(list.height-3,item?item.y-list.contentY:list.contentHeight-list.contentY));}
     }

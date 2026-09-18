@@ -103,7 +103,10 @@ if ready:
     for name,flag in [("dynamic-color","--dynamic-color-test"),("navigation-motion","--navigation-motion-test"),
                       ("artist-hero","--artist-hero-test"),("singalong","--singalong-test"),
                       ("crossfade-ui","--crossfade-ui-test"),("track-details","--track-details-test"),
-                      ("queue-history","--queue-history-test")]:
+                      ("queue-history","--queue-history-test"),
+                      ("window-wash","--window-wash-test"),
+                      ("material-foundations","--material-foundations-test"),
+                      ("material-components","--material-components-test")]:
         e=profile(name+"-profile");e.update(SUNG_HELPER=str(root/"tests/catalog_fixture.py"),SUNG_PYTHON="/usr/bin/python3",SUNG_TEST_OUTPUT=str(out/name))
         stage(name,[str(build/"sung"),"--isolated",flag],300,e)
     e=profile("interface-audit-profile");e.update(SUNG_HELPER=str(root/"tests/catalog_fixture.py"),SUNG_PYTHON="/usr/bin/python3",SUNG_TEST_OUTPUT=str(out/"interface-audit"))

@@ -70,7 +70,7 @@ MDialog {
                 objectName: "playlistVersion_"+index
                 width: list.width
                 height: 72
-                radius: 16
+                radius: Theme.shapeLarge
                 color: Theme.high
                 RowLayout {
                     anchors.fill: parent

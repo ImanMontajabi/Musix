@@ -63,14 +63,14 @@ Slider {
             SungText { width: parent.width; text: app.formatTime(s.previewValue); color: Theme.text; font.pixelSize: 12; horizontalAlignment: Text.AlignHCenter }
             SungText { width: parent.width; visible: !!s.previewLine; text: s.previewLine; color: Theme.muted; font.pixelSize: 12; wrapMode: Text.Wrap; maximumLineCount: 2; horizontalAlignment: Text.AlignHCenter }
         }
-        background: Rectangle { color: Theme.high; radius: 12; border.color: Theme.outline }
+        background: Rectangle { color: Theme.high; radius: Theme.shapeMedium; border.color: Theme.outline }
     }
     background: Item {
         id: track
         x: s.leftPadding; y: s.topPadding+(s.availableHeight-height)/2
         width: s.availableWidth; height: s.volumeMode ? 4 : 14
-        Rectangle { x: Math.min(parent.width,s.thumbCenter+s.thumbWidth/2+s.trackGap); width: parent.width-x; anchors.verticalCenter: parent.verticalCenter; height: 4; radius: 2; color: s.inactiveColor }
-        Rectangle { visible: s.volumeMode; width: s.thumbCenter; height: 4; radius: 2; color: Theme.primary }
+        Rectangle { x: Math.min(parent.width,s.thumbCenter+s.thumbWidth/2+s.trackGap); width: parent.width-x; anchors.verticalCenter: parent.verticalCenter; height: 4; radius: Theme.shapeFull(4); color: s.inactiveColor }
+        Rectangle { visible: s.volumeMode; width: s.thumbCenter; height: 4; radius: Theme.shapeFull(4); color: Theme.primary }
         Item {
             id: played; objectName: "playedWave"
             visible: !s.volumeMode
@@ -89,7 +89,7 @@ Slider {
                 XAnimator { target: wave; from: 0; to: -28; duration: 1400; loops: Animation.Infinite; running: !s.volumeMode && app.playing && app.motion && s.visible && played.width>0 && s.Window.window && s.Window.window.visible && s.Window.window.visibility!==Window.Minimized }
             }
         }
-        Rectangle { x: parent.width-4; y: (parent.height-4)/2; width: 4; height: 4; radius: 2; color: Theme.muted; visible: !s.volumeMode && s.thumbCenter+s.thumbWidth/2+s.trackGap<parent.width-4 }
+        Rectangle { x: parent.width-4; y: (parent.height-4)/2; width: 4; height: 4; radius: Theme.shapeFull(4); color: Theme.muted; visible: !s.volumeMode && s.thumbCenter+s.thumbWidth/2+s.trackGap<parent.width-4 }
     }
     handle: Rectangle {
         x: s.leftPadding+s.visualPosition*(s.availableWidth-width)
@@ -100,7 +100,7 @@ Slider {
         Rectangle {
             objectName: "sliderFocusRing"
             anchors.centerIn: parent
-            width: parent.width+12; height: parent.height+12; radius: 8
+            width: parent.width+12; height: parent.height+12; radius: Theme.shapeSmall
             color: "transparent"; border.width: 2; border.color: Theme.primary
             visible: s.visualFocus
         }

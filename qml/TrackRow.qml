@@ -35,7 +35,7 @@ ItemDelegate {
     Accessible.name: (track.title || "") + ", " + (track.artist || "")
     Accessible.selected: selected
     background: Rectangle {
-        radius: 16; color: row.selected ? Theme.primaryContainer : row.motionRaised ? Theme.container : row.active ? Theme.high : row.hovered ? Theme.container : "transparent"
+        radius: Theme.shapeLarge; color: row.selected ? Theme.primaryContainer : row.motionRaised ? Theme.container : row.active ? Theme.high : row.hovered ? Theme.container : "transparent"
         border.width: row.keyboardCurrent ? 2 : 0; border.color: Theme.primary
         Behavior on color { ColorAnimation { duration: Theme.fast; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.fastEffectsCurve } }
     }
@@ -64,8 +64,8 @@ ItemDelegate {
         Item {
             Layout.preferredWidth: row.queueMode?(app.compactDensity?36:48):Theme.rowArtwork; Layout.preferredHeight: Layout.preferredWidth
             Icon { anchors.centerIn: parent; name: "shuffle"; size: 24; ink: Theme.primary; visible: row.track.kind==="smart" }
-            Artwork { visible: row.track.kind!=="smart"; anchors.fill: parent; url: row.track.art || ""; radius: 8; pixels: 112 }
-            Rectangle { anchors.centerIn: parent; width: 28; height: 28; radius: 8; visible: opacity>0; opacity: row.selectionVisible?1:0; color: row.selected?Theme.primary:Theme.container; border.width: row.selected?0:2; border.color: Theme.muted
+            Artwork { visible: row.track.kind!=="smart"; anchors.fill: parent; url: row.track.art || ""; radius: Theme.shapeSmall; pixels: 112 }
+            Rectangle { anchors.centerIn: parent; width: 28; height: 28; radius: Theme.shapeSmall; visible: opacity>0; opacity: row.selectionVisible?1:0; color: row.selected?Theme.primary:Theme.container; border.width: row.selected?0:2; border.color: Theme.muted
                 Behavior on opacity { NumberAnimation { duration: app.motion?Theme.fast:0; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.fastEffectsCurve } }
                 Icon { anchors.centerIn: parent; name: "check"; size: 20; ink: Theme.primaryText; visible: row.selected }
             }

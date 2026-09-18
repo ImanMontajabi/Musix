@@ -70,3 +70,5 @@ void runQueueHistoryTests(Backend*,QQuickWindow*);
 void runListeningStatsTests(Backend*,QQuickWindow*);
 void runPlaylistVersionsTests(Backend*,QQuickWindow*);
 void runWindowWashTests(Backend*,QQuickWindow*);
+void runMaterialFoundationTests(Backend*,QQuickWindow*);
+void runMaterialComponentTests(Backend*,QQuickWindow*);

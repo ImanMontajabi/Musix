@@ -11,7 +11,7 @@ T.ScrollBar {
     policy: T.ScrollBar.AsNeeded
     visible: size < 1
     contentItem: Rectangle {
-        implicitWidth: 4; implicitHeight: 4; radius: 2
+        implicitWidth: 4; implicitHeight: 4; radius: Theme.shapeFull(4)
         color: bar.pressed ? Theme.primary : Theme.muted
         opacity: bar.hovered || bar.pressed ? 1 : 0.6
     }

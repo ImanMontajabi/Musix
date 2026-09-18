@@ -5,13 +5,18 @@ Item {
     readonly property string albumCardId:track.id || track.browseId || ""
     property var track: ({})
     property var openHandler: null
+    // Material's carousel moves an item's visual at a different speed from its
+    // container. -1 to 1, nought at rest. The shift is small and unclipped, so
+    // the artwork keeps its rounded corners and its square.
+    property real parallax: 0
     signal menuRequested(var item, var anchor)
     readonly property bool playableCover: !!(track.videoId || track.localPath || track.serverSong) || ["album","playlist","local","local-album","local-artist"].indexOf(track.kind)>=0
     readonly property bool loadingCover: !!app.coverPlayId && app.coverPlayId===(track.browseId || track.id || "")
     width: 180; height: width + 68
     Item {
         id: art; width: parent.width; height: width
-        property real radius: (card.track.kind === "artist" || card.track.kind === "local-artist") ? width/2 : 20
+        transform: Translate { x: card.parallax*7 }
+        property real radius: (card.track.kind === "artist" || card.track.kind === "local-artist") ? Theme.shapeFull(width) : Theme.shapeLargeIncreased
         readonly property bool mosaic: !!card.track.artworks && card.track.artworks.length>0
         Artwork { anchors.fill: parent; url: card.track.art || ""; radius: art.radius; pixels: 400; visible: !art.mosaic }
         Loader { anchors.fill: parent; active: art.mosaic; sourceComponent: PlaylistCover { artworks: card.track.artworks; radius: art.radius } }

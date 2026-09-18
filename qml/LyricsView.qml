@@ -43,7 +43,7 @@ Item {
             width: lyricResults.width; implicitHeight: matchText.implicitHeight+24; enabled: modelData.start>=0
             Accessible.name: modelData.text; Accessible.description: modelData.start>=0 ? "Seek to "+app.formatTime(Math.max(0,modelData.start-app.lyricOffset)) : "Untimed lyric"
             onClicked: lyricPane.jumpMatch(index)
-            background: Rectangle { radius: 12; color: parent.ListView.isCurrentItem?Theme.high:"transparent" }
+            background: Rectangle { radius: Theme.shapeMedium; color: parent.ListView.isCurrentItem?Theme.high:"transparent" }
             SungText { font.features: {"tnum": 1}; anchors.right: parent.right; anchors.rightMargin: 12; anchors.verticalCenter: parent.verticalCenter; visible: modelData.start>=0; text: app.formatTime(Math.max(0,modelData.start-app.lyricOffset)); color: Theme.muted; font.pixelSize: 12 }
             contentItem: MatchText { id: matchText; sourceText: modelData.text; query: lyricSearch.text; leftPadding: 12; rightPadding: modelData.start>=0?64:12; topPadding: 12; bottomPadding: 12; wrapMode: Text.Wrap; font.pixelSize: 18; color: Theme.text }
         }
@@ -95,7 +95,7 @@ Item {
             ToolTip.delay: 700
             ToolTip.text: app.formatTime(Math.max(0,modelData.start-app.lyricOffset))
             onClicked: { app.seekLyric(modelData.start);lyricPane.following=true;resumeFollow.stop(); }
-            background: Rectangle { radius: 12; color: lyricLine.hovered ? Theme.high : "transparent"; border.width: lyricLine.visualFocus?2:0; border.color: Theme.primary }
+            background: Rectangle { radius: Theme.shapeMedium; color: lyricLine.hovered ? Theme.high : "transparent"; border.width: lyricLine.visualFocus?2:0; border.color: Theme.primary }
             contentItem: SungText {
                 id: lyricLabel; objectName: "lyricLabel"
                 text: lyricLine.modelData.text || "…"

@@ -29,21 +29,21 @@ Flow {
                 objectName: "accentTip"
                 visible: swatch.hovered; delay: 650; padding: 10
                 contentItem: SungText { text: picker.names[swatch.index]; font.pixelSize: 12; color: Theme.background }
-                background: Rectangle { color: Theme.text; radius: 8 }
+                background: Rectangle { color: Theme.text; radius: Theme.shapeSmall }
             }
             background: Rectangle {
                 anchors.centerIn: parent
-                width: 40; height: 40; radius: 20
+                width: 40; height: 40; radius: Theme.shapeLargeIncreased
                 color: swatch.modelData ? swatch.modelData : Theme.high
                 border.width: swatch.modelData ? 0 : 2
                 border.color: Theme.controlOutline
                 Rectangle {
-                    anchors.fill: parent; anchors.margins: -4; radius: 24
+                    anchors.fill: parent; anchors.margins: -4; radius: Theme.shapeExtraLarge
                     color: "transparent"; border.width: 2; border.color: Theme.primary
                     visible: swatch.visualFocus
                 }
                 Rectangle {
-                    anchors.fill: parent; radius: 20
+                    anchors.fill: parent; radius: Theme.shapeLargeIncreased
                     color: Theme.text
                     opacity: swatch.down ? Theme.pressedOpacity : swatch.hovered ? Theme.hoverOpacity : 0
                     Behavior on opacity { NumberAnimation { duration: Theme.fast } }

@@ -69,7 +69,7 @@ MDialog {
                     Layout.fillWidth: true
                     Layout.preferredHeight: 84
                     Layout.minimumHeight: 72
-                    radius: 20
+                    radius: Theme.shapeLargeIncreased
                     color: Theme.high
                     ColumnLayout {
                         anchors.fill: parent
@@ -80,7 +80,7 @@ MDialog {
                             objectName: parent.parent.modelData.name+"Value"
                             text: parent.parent.modelData.value
                             font.pixelSize: Theme.headlineSmall
-                            font.weight: Font.Medium
+                            emphasized: true
                             Layout.fillWidth: true
                             elide: Text.ElideRight
                         }
@@ -122,7 +122,7 @@ MDialog {
                                 // A day with nothing in it still shows a floor,
                                 // so the row reads as a scale rather than a gap.
                                 height: Math.max(3, parent.height*modelData.seconds/parent.parent.peak)
-                                radius: 6
+                                radius: Theme.shapeSmall
                                 color: modelData.seconds > 0 ? Theme.primary : Theme.outline
                                 Behavior on height { enabled: app.motion; NumberAnimation { duration: Theme.normal; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curve } }
                             }
@@ -170,7 +170,7 @@ MDialog {
                 objectName: "statsRow_"+index
                 width: rankings.width
                 height: 56
-                radius: 14
+                radius: Theme.shapeMedium
                 color: index % 2 === 0 ? Theme.container : "transparent"
                 RowLayout {
                     anchors.fill: parent

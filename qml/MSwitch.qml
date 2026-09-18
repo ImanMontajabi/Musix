@@ -12,19 +12,19 @@ Switch {
     indicator: Rectangle {
         implicitWidth: 52; implicitHeight: 32
         x: control.width-control.rightPadding-width; y: (control.height-height)/2
-        radius: 16
+        radius: Theme.shapeLarge
         color: control.checked ? Theme.primary : Theme.high
         border.width: control.checked ? 0 : 2; border.color: Theme.controlOutline
         Behavior on color { ColorAnimation { duration: Theme.fast; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.fastEffectsCurve } }
         Rectangle {
-            anchors.fill: parent; anchors.margins: -4; radius: 20
+            anchors.fill: parent; anchors.margins: -4; radius: Theme.shapeLargeIncreased
             color: "transparent"; border.width: 2; border.color: Theme.primary
             visible: control.visualFocus
         }
         Rectangle {
             x: (control.checked ? 36 : 16) - width/2
             anchors.verticalCenter: parent.verticalCenter
-            width: 40; height: 40; radius: 20
+            width: 40; height: 40; radius: Theme.shapeLargeIncreased
             color: control.checked ? Theme.primary : Theme.text
             opacity: control.down || control.visualFocus ? Theme.pressedOpacity : control.hovered ? Theme.hoverOpacity : 0
             Behavior on opacity { NumberAnimation { duration: Theme.fast } }

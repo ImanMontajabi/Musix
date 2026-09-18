@@ -179,6 +179,8 @@ int main(int argc, char **argv) {
   }
   if(args.contains("--immersive-edges-test")){QTimer::singleShot(0,&app,[&]{runImmersiveEdgeTests(&backend,window);});return app.exec();}
   if(args.contains("--immersive-preferences-test")){QTimer::singleShot(0,&app,[&]{runImmersivePreferencesTest(&backend,window);});return app.exec();}
+  if(args.contains("--material-components-test")){QTimer::singleShot(0,&app,[&]{runMaterialComponentTests(&backend,window);});return app.exec();}
+  if(args.contains("--material-foundations-test")){QTimer::singleShot(0,&app,[&]{runMaterialFoundationTests(&backend,window);});return app.exec();}
   if(args.contains("--window-wash-test")){QTimer::singleShot(0,&app,[&]{runWindowWashTests(&backend,window);});return app.exec();}
   if(args.contains("--playlist-versions-test")){QTimer::singleShot(0,&app,[&]{runPlaylistVersionsTests(&backend,window);});return app.exec();}
   if(args.contains("--listening-stats-test")){QTimer::singleShot(0,&app,[&]{runListeningStatsTests(&backend,window);});return app.exec();}

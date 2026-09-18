@@ -18,7 +18,7 @@ MDialog {
             id: crop; Layout.fillWidth:true; Layout.fillHeight:true; clip:true
             Item {
                 id: square; width:Math.min(parent.width,parent.height); height:width; anchors.centerIn:parent; clip:true
-                Rectangle {anchors.fill:parent;color:Theme.high;radius:20}
+                Rectangle {anchors.fill:parent;color:Theme.high;radius:Theme.shapeLargeIncreased}
                 Image {
                     id: picture; source:dialog.preview; cache:false; visible:!!dialog.preview
                     readonly property real ratio:sourceSize.height>0?sourceSize.width/sourceSize.height:1

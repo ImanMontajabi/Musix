@@ -69,7 +69,7 @@ Item {
                 // collapsed into an ordinary header row.
                 font.pixelSize: Theme.displaySmall-(Theme.displaySmall-Theme.titleLarge)*hero.collapse
                 Behavior on font.pixelSize { NumberAnimation { duration: app.motion?Theme.normal:0; easing.type: Easing.OutCubic } }
-                font.weight: Font.Medium
+                emphasized: true
                 wrapMode: Text.Wrap
                 maximumLineCount: 2
                 elide: Text.ElideRight

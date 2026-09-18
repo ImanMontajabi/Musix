@@ -4,7 +4,7 @@ Item {
     id: root
     property string url: ""
     property string motionUrl: ""
-    property real radius: 16
+    property real radius: Theme.shapeLarge
     property int pixels: 360
     property bool crossfade: false
     readonly property bool transitioning: art.transitioning

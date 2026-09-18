@@ -37,7 +37,7 @@ AbstractButton {
         }
         Rectangle {
             objectName: "navigationFocusRing"
-            anchors.fill: parent; anchors.margins: 2; radius: 18
+            anchors.fill: parent; anchors.margins: 2; radius: Theme.shapeLarge
             color: "transparent"; border.color: Theme.primary; border.width: 2
             visible: control.visualFocus
         }
@@ -68,7 +68,7 @@ AbstractButton {
             Item {
                 width: 24; height: 24; anchors.verticalCenter: parent.verticalCenter
                 Icon { anchors.centerIn: parent; visible: !control.artUrl; name: control.symbol; ink: control.selected ? Theme.primary : Theme.text; Accessible.ignored: true }
-                Artwork { anchors.centerIn: parent; visible: !!control.artUrl; width: 24; height: 24; radius: 6; pixels: 96; url: control.artUrl }
+                Artwork { anchors.centerIn: parent; visible: !!control.artUrl; width: 24; height: 24; radius: Theme.shapeSmall; pixels: 96; url: control.artUrl }
             }
             SungText {
                 objectName: "navigationWideLabel"

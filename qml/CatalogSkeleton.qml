@@ -25,8 +25,8 @@ Item {
                 y: skeleton.cards?Math.floor(index/columns)*230:index*80
                 width: skeleton.cards?skeleton.width/columns-20:skeleton.width; height: skeleton.cards?210:72
                 Rectangle { width: skeleton.cards?Math.min(parent.width,180):52; height: width; radius: skeleton.cards?20:12; color: Theme.high }
-                Rectangle { x: skeleton.cards?0:68; y: skeleton.cards?Math.min(parent.width,180)+14:14; width: skeleton.cards?parent.width*0.72:parent.width*0.38; height: 12; radius: 6; color: Theme.high }
-                Rectangle { x: skeleton.cards?0:68; y: skeleton.cards?Math.min(parent.width,180)+36:38; width: skeleton.cards?parent.width*0.45:parent.width*0.23; height: 9; radius: 5; color: Theme.high }
+                Rectangle { x: skeleton.cards?0:68; y: skeleton.cards?Math.min(parent.width,180)+14:14; width: skeleton.cards?parent.width*0.72:parent.width*0.38; height: 12; radius: Theme.shapeSmall; color: Theme.high }
+                Rectangle { x: skeleton.cards?0:68; y: skeleton.cards?Math.min(parent.width,180)+36:38; width: skeleton.cards?parent.width*0.45:parent.width*0.23; height: 9; radius: Theme.shapeExtraSmall; color: Theme.high }
             }
         }
     }

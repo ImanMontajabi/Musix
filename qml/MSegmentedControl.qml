@@ -70,7 +70,7 @@ Item {
                 }
             }
             Rectangle {
-                anchors.fill: parent; anchors.margins: 2; radius: 8
+                anchors.fill: parent; anchors.margins: 2; radius: Theme.shapeSmall
                 color: "transparent"; border.width: 2; border.color: Theme.primary; visible: button.visualFocus
             }
         }

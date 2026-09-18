@@ -13,10 +13,10 @@ Dialog {
     focus: true
     onOpened: if (initialFocus) initialFocus.forceActiveFocus(Qt.TabFocusReason)
     padding: 24
-    background: Rectangle { color: Theme.container; radius: 28 }
+    background: Rectangle { color: Theme.container; radius: Theme.shapeExtraLarge }
     header: Item {
         implicitHeight: Math.max(72, titleLabel.implicitHeight + 48)
-        SungText { id: titleLabel; objectName: "dialogTitle"; anchors.verticalCenter: parent.verticalCenter; x: 24; width: parent.width-48; text: dialog.title; font.pixelSize: Theme.headlineSmall; font.weight: Font.Normal; wrapMode: Text.Wrap; maximumLineCount: 2 }
+        SungText { id: titleLabel; objectName: "dialogTitle"; anchors.verticalCenter: parent.verticalCenter; x: 24; width: parent.width-48; text: dialog.title; font.pixelSize: Theme.headlineSmall; emphasized: true; wrapMode: Text.Wrap; maximumLineCount: 2 }
     }
     footer: DialogButtonBox {
         visible: dialog.standardButtons !== Dialog.NoButton

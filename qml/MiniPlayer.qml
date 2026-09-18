@@ -23,14 +23,14 @@ Window {
     Shortcut { sequence: "Ctrl+Right"; onActivated: app.next() }
     Shortcut { sequence: "Ctrl+Left"; onActivated: app.previous() }
     Rectangle {
-        anchors.fill: parent; anchors.margins: 1; radius: 24; color: Theme.container
+        anchors.fill: parent; anchors.margins: 1; radius: Theme.shapeExtraLarge; color: Theme.container
         border.width: 1; border.color: Theme.outline
         MouseArea { anchors.fill: parent; onPressed: mini.startSystemMove() }
         ColumnLayout {
             anchors.fill: parent; anchors.margins: 16; spacing: 4
             RowLayout {
                 Layout.fillWidth: true; spacing: 12
-                Artwork { url: app.current.art || ""; motionUrl: app.currentMotionArt; crossfade:true; Layout.preferredWidth: 54; Layout.preferredHeight: 54; radius: 12; pixels: 128; fit:app.currentArtworkFit }
+                Artwork { url: app.current.art || ""; motionUrl: app.currentMotionArt; crossfade:true; Layout.preferredWidth: 54; Layout.preferredHeight: 54; radius: Theme.shapeMedium; pixels: 128; fit:app.currentArtworkFit }
                 ColumnLayout {
                     Layout.fillWidth: true; spacing: 4
                     SungText { text: presentation.shown.title || "Nothing playing"; opacity: presentation.fade; transform: Translate { x: presentation.offset } Layout.fillWidth: true; font.pixelSize: 16; font.weight: Font.DemiBold }
@@ -77,7 +77,7 @@ Window {
     }
     Rectangle {
         anchors.left: parent.left; anchors.right: parent.right; anchors.bottom: parent.bottom; anchors.margins: 8
-        height: 58; radius: 16; color: Theme.primaryContainer; visible: !!app.error
+        height: 58; radius: Theme.shapeLarge; color: Theme.primaryContainer; visible: !!app.error
         SungText { anchors.left: parent.left; anchors.right: retry.left; anchors.verticalCenter: parent.verticalCenter; anchors.margins: 14; text: app.error; color: Theme.containerText; font.pixelSize: 12 }
         MButton { id: retry; anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter; text: app.canRetry?"Retry":"Open"; ink: Theme.containerText; onClicked: app.canRetry?app.retry():mini.restoreRequested() }
     }

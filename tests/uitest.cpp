@@ -255,7 +255,8 @@ void runUiAudit(Backend *b, QQuickWindow *w) {
   shot("11-history");
   click("playlistsTab");
   shot("12-playlists-empty");
-  click("newPlaylistButton");
+  click("fab");
+  click("fabMenuItem_0");
   auto field = findItem(w->contentItem(), "playlistName");
   check(field != nullptr, "playlist field is accessible");
   if (field)
@@ -738,8 +739,18 @@ void runSearchSelectionTests(Backend *b,QQuickWindow *w) {
   check(findItem(w->contentItem(),"importLyricsButton"),"lyrics import is available even without timed provider lyrics");
   click("importLyricsButton");QTest::qWait(300);check(w->property("fileDialogs").value<QObject*>()!=nullptr,"lazy native lyric picker loads successfully");
   if(auto dialogs=w->property("fileDialogs").value<QObject*>()){if(auto picker=dialogs->property("lyricPicker").value<QObject*>())QMetaObject::invokeMethod(picker,"reject");}
-  QTest::keyClick(w,Qt::Key_Escape);b->toggleLike(songs[0].toMap());
-  b->stop();b->clearQueue();b->library("files");QTest::qWait(200);click("addLocalFilesButton");
+  // Rejecting a native dialog leaves the offscreen harness with no focused
+  // window, so Escape has nothing to reach. Hand focus back first, then close
+  // the timing dialog deliberately rather than relying on a later stray click
+  // to dismiss it.
+  QTest::qWait(200);QWindowSystemInterface::handleFocusWindowChanged(nullptr);QWindowSystemInterface::handleFocusWindowChanged(w);QTest::qWait(100);
+  QTest::keyClick(w,Qt::Key_Escape);
+  check(until([&]{auto dialog=w->findChild<QObject*>("lyricTimingDialog");return !dialog||!dialog->property("visible").toBool();},3000),"the lyric timing dialog closes");
+  b->toggleLike(songs[0].toMap());
+  // Adding local files now lives in the library's FAB, which has its own test.
+  // What follows is about the native audio picker, so it is asked for directly.
+  b->stop();b->clearQueue();b->library("files");QTest::qWait(200);
+  QMetaObject::invokeMethod(w,"openFileDialog",Q_ARG(QVariant,QVariant("audio")));QTest::qWait(300);
   if(auto dialogs=w->property("fileDialogs").value<QObject*>()){
     auto picker=dialogs->property("audioPicker").value<QObject*>();check(picker&&picker->property("fileMode").toInt()==1,"audio picker supports multiple files");if(picker)QMetaObject::invokeMethod(picker,"reject");
   }

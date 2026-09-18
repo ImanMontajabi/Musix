@@ -12,7 +12,7 @@ Menu {
         highlightMoveDuration: 0
         ScrollBar.vertical: MScrollBar { objectName: "menuScrollBar" }
     }
-    background: Rectangle { color: Theme.high; radius: 20; border.color: Theme.outline }
+    background: Rectangle { color: Theme.high; radius: Theme.shapeLargeIncreased; border.color: Theme.outline }
     enter: Transition { NumberAnimation { property: "opacity"; from: 0; to: 1; duration: Theme.enterDuration; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.fastEffectsCurve } }
     exit: Transition { NumberAnimation { property: "opacity"; to: 0; duration: Theme.exitDuration; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.fastEffectsCurve } }
 }

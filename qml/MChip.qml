@@ -15,7 +15,7 @@ AbstractButton {
     Accessible.checked: selected
     opacity: enabled ? 1 : 0.38
     background: Rectangle {
-        y: 4; height: control.height - 8; radius: 8
+        y: 4; height: control.height - 8; radius: Theme.shapeSmall
         color: control.selected ? Theme.primaryContainer : "transparent"
         border.width: control.selected ? 0 : 1
         border.color: Theme.controlOutline
@@ -27,7 +27,7 @@ AbstractButton {
             Behavior on opacity { NumberAnimation { duration: Theme.fast } }
         }
         Rectangle {
-            anchors.fill: parent; anchors.margins: -3; radius: 11
+            anchors.fill: parent; anchors.margins: -3; radius: Theme.shapeMedium
             color: "transparent"; border.width: 2; border.color: Theme.primary
             visible: control.visualFocus
         }

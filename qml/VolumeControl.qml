@@ -17,7 +17,7 @@ RowLayout {
         onOpened:{percent.text=String(Math.round(app.volume*100));percent.forceActiveFocus();percent.selectAll();}
         function apply(){if(percent.acceptableInput){app.volume=Number(percent.text)/100;close();}}
         closePolicy:Popup.CloseOnEscape|Popup.CloseOnPressOutside
-        background:Rectangle {radius:24;color:Theme.high;border.width:1;border.color:Theme.outline}
+        background:Rectangle {radius:Theme.shapeExtraLarge;color:Theme.high;border.width:1;border.color:Theme.outline}
         enter:Transition {NumberAnimation {property:"opacity";from:0;to:1;duration:Theme.enterDuration}}
         exit:Transition {NumberAnimation {property:"opacity";to:0;duration:Theme.exitDuration}}
         ColumnLayout {anchors.fill:parent;spacing:8

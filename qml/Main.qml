@@ -11,7 +11,7 @@ ApplicationWindow {
     objectName: "sungWindow"
     visible: true
     width: 1180; height: 800
-    minimumWidth: 780; minimumHeight: 580
+    minimumWidth: 480; minimumHeight: 580
     font.family: Theme.fontFamily
     title: app.current.title ? app.current.title + " · Sung" : "Sung"
     color: Theme.background
@@ -120,9 +120,9 @@ ApplicationWindow {
     Rectangle {
         id: dragGhost; parent: window.contentItem; z: 1000
         objectName: "trackDragPreview"
-        width: 180; height: 68; radius: 20; color: Theme.high; border.color: Theme.outline
+        width: 180; height: 68; radius: Theme.shapeLargeIncreased; color: Theme.high; border.color: Theme.outline
         Repeater { model: dragGhost.visible?Math.min(3,trackDrag.items.length):0
-            Artwork { required property int index; x: 12+(2-index)*6; y: 10+(2-index)*3; width: 42; height: 42; radius: 8; pixels: 96; rotation: (2-index)*5; url: trackDrag.items[index].art || "" }
+            Artwork { required property int index; x: 12+(2-index)*6; y: 10+(2-index)*3; width: 42; height: 42; radius: Theme.shapeSmall; pixels: 96; rotation: (2-index)*5; url: trackDrag.items[index].art || "" }
         }
         visible: Drag.active
         Drag.source: trackDrag; Drag.keys: ["sung-tracks"]; Drag.hotSpot.x: 0; Drag.hotSpot.y: 0
@@ -304,7 +304,11 @@ ApplicationWindow {
     NavigationTransition { id: destinationTransition; objectName: "destinationTransition"; target: contentColumn }
     NavigationTransition { id: tabTransition; objectName: "tabTransition"; target: contentBody }
     readonly property var libraryOrder: ["favorites","playlists","files","local-albums","local-artists","mixes","history","server"]
+    // Material's compact window class. Below it a rail would be taking room the
+    // content needs, so navigation moves to a bar along the bottom.
+    readonly property bool compactWindow: width < 600
     readonly property bool artistPage: app.page==="artist" || app.page==="local-artist" || (app.page==="server" && app.serverRequest.mode==="artist")
+    function confirmQueued() { toastPending=false;toastText="Added to queue";toastPending=true; }
     function applyLibrary(kind) { destination="library";libraryTab=kind;localPlaylist="";side="";app.library(kind); }
     function chooseLibrary(kind) {
         const from=libraryOrder.indexOf(libraryTab), to=libraryOrder.indexOf(kind)
@@ -406,7 +410,7 @@ ApplicationWindow {
         id:immersiveQueue;objectName:"immersiveQueueSheet";edge:Qt.RightEdge
         width:Math.min(420,window.width-32);height:window.height;modal:true;dim:true;focus:true;interactive:false
         padding:24;leftPadding:24;rightPadding:24;topPadding:24;bottomPadding:24;closePolicy:Popup.CloseOnEscape|Popup.CloseOnPressOutside
-        background:Rectangle {color:Theme.container;radius:28}
+        background:Rectangle {color:Theme.container;radius:Theme.shapeExtraLarge}
         Overlay.modal:Rectangle {color:Qt.rgba(0,0,0,0.32)}
         enter:Transition {NumberAnimation {property:"position";to:1;duration:app.motion?350:0;easing.type:Easing.BezierSpline;easing.bezierCurve:Theme.curve}}
         exit:Transition {NumberAnimation {property:"position";to:0;duration:Theme.normal;easing.type:Easing.BezierSpline;easing.bezierCurve:Theme.exitCurve}}
@@ -454,6 +458,7 @@ ApplicationWindow {
             objectName: "navigationRail"
             // M3 places the expanded rail beside body content, so it only opens
             // where there is room for it; narrower windows stay collapsed.
+            visible: !window.compactWindow
             readonly property bool roomToExpand: window.width>=1080
             readonly property bool expanded: railSettings.expanded && roomToExpand
             readonly property var pinned: expanded ? app.pins.slice(0,6) : []
@@ -513,14 +518,22 @@ ApplicationWindow {
             MButton { objectName: "settingsButton"; symbol: "settings"; tip: "Settings"; text: navigationRail.expanded?"Settings":""; leftAligned: navigationRail.expanded; Layout.preferredWidth: navigationRail.expanded?188:48; Layout.alignment: navigationRail.expanded ? Qt.AlignLeft : Qt.AlignHCenter; Layout.leftMargin: navigationRail.expanded ? 16 : 0; Layout.bottomMargin: 20; onClicked: settingsDialog.open() }
         }
         ColumnLayout {
-            Layout.fillWidth: true; Layout.fillHeight: true; Layout.rightMargin: 16; Layout.topMargin: 16; Layout.bottomMargin: 16; spacing: 12
+            // A navigation bar spans the window and sits against its bottom
+            // edge, so the column gives up its own margins on those sides once
+            // the window is compact.
+            Layout.fillWidth: true; Layout.fillHeight: true
+            Layout.leftMargin: window.compactWindow ? 12 : 0
+            Layout.rightMargin: window.compactWindow ? 0 : 16
+            Layout.topMargin: 16
+            Layout.bottomMargin: window.compactWindow ? 0 : 16
+            spacing: 12
             RowLayout {
                 Layout.fillWidth: true; spacing: 12
                 MButton { symbol: "back"; tip: "Back"; enabled: app.canBack; onClicked: window.navigateBack() }
                 Rectangle {
                     id: searchBox; z: 20
                     Layout.fillWidth: true; Layout.preferredHeight: 56; Layout.maximumWidth: 640
-                    color: searchField.activeFocus ? Theme.high : Theme.container; radius: 28
+                    color: searchField.activeFocus ? Theme.high : Theme.container; radius: Theme.shapeExtraLarge
                     border.width: searchField.activeFocus?2:0; border.color: Theme.primary
                     Behavior on color { ColorAnimation { duration: Theme.fast; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.fastEffectsCurve } }
                     RowLayout {
@@ -573,7 +586,7 @@ ApplicationWindow {
                         enter: Transition { NumberAnimation { property: "opacity"; from: 0; to: 1; duration: app.motion?Theme.fast:0; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.fastEffectsCurve } }
                         exit: Transition { NumberAnimation { property: "opacity"; to: 0; duration: app.motion?Theme.fast:0; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.fastEffectsCurve } }
                         onClosed: searchField.dismissed=true
-                        background: Rectangle { radius: 20; color: Theme.high; border.width: 1; border.color: Theme.outline }
+                        background: Rectangle { radius: Theme.shapeLargeIncreased; color: Theme.high; border.width: 1; border.color: Theme.outline }
                         contentItem: ListView {
                             id: suggestionList; objectName: "suggestionList"; clip: true; model: searchField.suggestions; currentIndex: searchField.highlighted
                             ScrollBar.vertical: ScrollBar {}
@@ -582,9 +595,9 @@ ApplicationWindow {
                                 readonly property bool highlighted: index===searchField.highlighted
                                 required property var modelData; required property int index
                                 width: suggestionList.width; height: 56
-                                Rectangle { anchors.fill: parent; radius: 12; color: suggestionRow.highlighted?Theme.primaryContainer:"transparent" }
+                                Rectangle { anchors.fill: parent; radius: Theme.shapeMedium; color: suggestionRow.highlighted?Theme.primaryContainer:"transparent" }
                                 Rectangle {
-                                    objectName: "suggestionStateLayer"; anchors.fill: parent; radius: 12
+                                    objectName: "suggestionStateLayer"; anchors.fill: parent; radius: Theme.shapeMedium
                                     color: suggestionRow.highlighted?Theme.containerText:Theme.text
                                     opacity: suggestionButton.down?Theme.pressedOpacity:suggestionButton.hovered?Theme.hoverOpacity:0
                                     Behavior on opacity { NumberAnimation { duration: Theme.fast; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.fastEffectsCurve } }
@@ -622,7 +635,7 @@ ApplicationWindow {
                     Behavior on headerExtent {enabled:!tracks.moving;NumberAnimation {duration:app.motion?120:0;easing.type:Easing.OutCubic}}
                     visible: !(window.width < 1000 && window.side)
                     Layout.fillWidth: true; Layout.fillHeight: true
-                    radius: 28; color: window.washed(Theme.surface); clip: true
+                    radius: Theme.shapeExtraLarge; color: window.washed(Theme.surface); clip: true
                     AmbientBackdrop {
                         objectName: "homeBackdrop"; anchors.fill: parent
                         // The window wash already carries this cover; repeating
@@ -649,12 +662,12 @@ ApplicationWindow {
                             Layout.fillWidth: true; spacing: 16
                             Artwork { id:collectionArtwork;objectName:"collectionArtwork";opacity:window.albumFlying?0:1;visible: !!app.cover; url: app.cover; Layout.preferredWidth: content.headerExtent; Layout.preferredHeight: content.headerExtent; radius: (app.page==="artist" || app.page==="local-artist") ? width/2 : app.albumInfo.summary?24:12; pixels: app.albumInfo.summary?384:180
                                 AbstractButton {anchors.fill:parent;objectName:"inspectCollectionArtwork";Accessible.name:"View artwork";focusPolicy:Qt.StrongFocus;onClicked:artworkViewer.inspect(app.cover)
-                                    background:Rectangle {color:"transparent";radius:24;border.width:parent.visualFocus?2:0;border.color:Theme.primary}
+                                    background:Rectangle {color:"transparent";radius:Theme.shapeExtraLarge;border.width:parent.visualFocus?2:0;border.color:Theme.primary}
                                 }
                             }
                             ColumnLayout {
                                 Layout.fillWidth: true; spacing: 6
-                            SungText { text: window.serverDisconnected ? "Music server" : window.destination==="library"&&window.libraryTab==="playlists"&&!window.localPlaylist ? "Playlists" : app.title; objectName: "collectionHeaderTitle"; font.pixelSize: app.page==="home"?Theme.displaySmall:Theme.headlineMedium-(Theme.headlineMedium-Theme.titleLarge)*content.headerCollapse; Behavior on font.pixelSize { NumberAnimation { duration: app.motion?Theme.normal:0; easing.type: Easing.OutCubic } } font.weight: Font.Medium; Layout.fillWidth: true; wrapMode: Text.Wrap; maximumLineCount: 2 }
+                            SungText { text: window.serverDisconnected ? "Music server" : window.destination==="library"&&window.libraryTab==="playlists"&&!window.localPlaylist ? "Playlists" : app.title; objectName: "collectionHeaderTitle"; emphasized: true; font.pixelSize: app.page==="home"?Theme.displaySmall:Theme.headlineMedium-(Theme.headlineMedium-Theme.titleLarge)*content.headerCollapse; Behavior on font.pixelSize { NumberAnimation { duration: app.motion?Theme.normal:0; easing.type: Easing.OutCubic } } Layout.fillWidth: true; wrapMode: Text.Wrap; maximumLineCount: 2 }
                                 SungText { objectName: "albumArtist"; visible: !!app.albumInfo.artist;opacity:1-content.headerCollapse;Layout.maximumHeight:implicitHeight*(1-content.headerCollapse);clip:true; Layout.fillWidth: true; text: app.albumInfo.artist || ""; font.pixelSize: 16; color: Theme.muted; maximumLineCount: 2; wrapMode: Text.Wrap }
                                 SungText { objectName: "albumSummary"; visible: !!app.albumInfo.summary;opacity:1-content.headerCollapse;Layout.maximumHeight:implicitHeight*(1-content.headerCollapse);clip:true; Layout.fillWidth: true; text: app.albumInfo.summary || ""; font.pixelSize: 13; color: Theme.muted; wrapMode: Text.Wrap }
                             }
@@ -664,10 +677,6 @@ ApplicationWindow {
                             MButton { objectName: "musicFoldersButton"; text: "Folders"; tip: "Manage music folders"; visible: window.destination==="library" && window.libraryTab==="files"; onClicked: musicFoldersDialog.open() }
                             MButton { objectName: "rescanFoldersButton"; symbol: "refresh"; tip: "Rescan music folders"; visible: window.destination==="library" && window.libraryTab==="files" && app.musicFolders.length>0; enabled: !app.importingLocal; onClicked: app.rescanMusicFolders() }
                             MButton { objectName: "playlistCleanupButton"; text: "Clean up"; visible: window.editableLocal; onClicked: window.openCleanup(window.localPlaylist) }
-                            MButton { objectName: "addLocalFilesButton"; symbol: "plus"; tip: "Add local audio files"; visible: window.destination==="library" && window.libraryTab==="files"; enabled: !app.importingLocal; tonal: true; onClicked: window.openFileDialog("audio") }
-                            MButton { objectName: "newPlaylistButton"; symbol: "plus"; tip: "New playlist"; visible: window.destination==="library" && window.libraryTab==="playlists" && !window.localPlaylist; tonal: true; onClicked: {window.playlistAction="create";playlistName.clear();playlistDialog.open();} }
-                            MButton { objectName: "newSmartPlaylistButton"; text: "Smart playlist"; visible: window.destination==="library" && window.libraryTab==="playlists" && !window.localPlaylist; onClicked: smartDialog.edit("") }
-                            MButton { objectName: "importM3uButton"; text: "Import M3U"; tip: "Import an M3U playlist"; visible: window.destination==="library" && window.libraryTab==="playlists" && !window.localPlaylist; enabled: !app.importingLocal; onClicked: window.openFileDialog("m3u-import") }
                             MButton { objectName: "editSmartPlaylistButton"; text: "Edit rules"; visible: !!window.localPlaylist && !window.editableLocal; onClicked: smartDialog.edit(window.localPlaylist) }
                         }
                         Flow {
@@ -720,8 +729,17 @@ ApplicationWindow {
                             // exactly one Play is ever on screen.
                             visible: tracks.selection.count===0 && app.results.count>0 && app.sections.length===0 && !(window.destination==="library" && window.libraryTab==="playlists" && !window.localPlaylist) && !!(app.results.get(0).videoId || app.results.get(0).localPath || app.results.get(0).serverSong) && (!window.artistPage || content.compactHeader)
                             Layout.fillWidth: true; spacing: 10
-                            MButton { text: "Play"; symbol: "play"; filled: true; enabled: app.collection.count>0; onClicked: app.playCollection(0) }
-                            MButton { symbol: "queue"; tip: "Add displayed songs to queue"; tonal: true; enabled: app.collection.count>0; onClicked: {const before=app.queue.count;app.enqueueCollection();if(app.queue.count>before)confirm();} }
+                            MSplitButton {
+                                objectName: "collectionPlay"
+                                text: "Play"; symbol: "play"; filled: true
+                                enabled: app.collection.count>0
+                                onClicked: app.playCollection(0)
+                                menu: MMenu {
+                                    MMenuItem { objectName: "collectionShuffle"; text: "Shuffle"; enabled: app.collection.count>1; onTriggered: {app.shuffle=true;app.playCollection(Math.floor(Math.random()*app.collection.count));} }
+                                    MMenuItem { objectName: "collectionQueue"; text: "Add to queue"; enabled: app.collection.count>0; onTriggered: {const before=app.queue.count;app.enqueueCollection();if(app.queue.count>before)window.confirmQueued();} }
+                                    MMenuItem { objectName: "collectionPlayNext"; text: "Play next"; enabled: app.collection.count>0; onTriggered: app.enqueueItems(app.collection.rows(),true) }
+                                }
+                            }
                             Item { Layout.fillWidth: true }
                             MButton { objectName: "collectionToolsButton"; symbol: "filter"; tip: "Find and sort songs"; selected: window.collectionTools || !!app.collection.query || app.collection.sortKey!=="original"; onClicked: {window.collectionTools=!window.collectionTools;if(window.collectionTools)Qt.callLater(()=>collectionSearch.forceActiveFocus());} }
                             SungText { visible: !app.albumInfo.summary || content.compactHeader || !!app.collection.query; text: app.collection.query ? app.collection.count+" / "+app.results.count : window.countText(app.results.count); color: Theme.muted; font.pixelSize: 12 }
@@ -738,7 +756,7 @@ ApplicationWindow {
                                 text: app.collection.query
                                 onTextEdited: app.collection.query=text
                                 onAccepted: {if(app.collection.count>0)app.playCollection(0);content.forceActiveFocus();}
-                                background: Rectangle { radius: 16; color: Theme.container; border.width: collectionSearch.activeFocus?2:0; border.color: Theme.primary }
+                                background: Rectangle { radius: Theme.shapeLarge; color: Theme.container; border.width: collectionSearch.activeFocus?2:0; border.color: Theme.primary }
                                 Accessible.name: "Find songs in this list"
                             }
                             MButton { symbol: "close"; tip: "Clear list filter"; visible: !!app.collection.query; onClicked: app.collection.query="" }
@@ -748,6 +766,36 @@ ApplicationWindow {
                         Item {
                             id: contentBody
                             objectName: "contentBody"
+                            // Material names pull to refresh as the interaction
+                            // its loading indicator is for. The gesture acts on
+                            // whichever list is on screen.
+                            MPullToRefresh {
+                                objectName: "contentRefresh"
+                                target: shelves.visible ? shelves : tracks.visible ? tracks : localGroups.visible ? localGroups : null
+                                enabled: !!target && (app.page!=="library" || window.libraryTab!=="playlists")
+                                busy: app.busy || app.importingLocal
+                                onTriggered: {
+                                    if(window.destination==="library" && window.libraryTab.startsWith("local")) app.rescanMusicFolders()
+                                    else if(window.destination==="library" && window.libraryTab==="files") app.rescanMusicFolders()
+                                    else app.refresh()
+                                }
+                            }
+                            MFabMenu {
+                                id: libraryFab
+                                objectName: "libraryFab"
+                                anchors.right: parent.right
+                                anchors.bottom: parent.bottom
+                                anchors.margins: 8
+                                visible: window.destination==="library" && !window.localPlaylist && ["files","local-albums","local-artists","playlists"].indexOf(window.libraryTab)>=0
+                                onVisibleChanged: if(!visible)close()
+                                label: "Add to your library"
+                                actions: window.libraryTab==="playlists"
+                                    ? [{label:"New playlist",symbol:"plus",action:function(){window.playlistAction="create";playlistName.clear();playlistDialog.open();}},
+                                       {label:"Smart playlist",symbol:"filter",action:function(){smartDialog.edit("")}},
+                                       {label:"Import M3U",symbol:"folder",action:function(){window.openFileDialog("m3u-import")}}]
+                                    : [{label:"Add files",symbol:"plus",action:function(){window.openFileDialog("audio")}},
+                                       {label:"Add folder",symbol:"folder",action:function(){musicFoldersDialog.open()}}]
+                            }
                             property real shift: 0
                             transform: Translate { x: contentBody.shift }
                             Layout.fillWidth: true; Layout.fillHeight: true
@@ -777,20 +825,19 @@ ApplicationWindow {
                                         MButton { symbol: "back"; tip: "Previous covers"; enabled: !shelf.atXBeginning; implicitWidth: 40; implicitHeight: 40; onClicked: shelf.flick(1300,0) }
                                         MButton { symbol: "chevron"; tip: "More covers"; enabled: !shelf.atXEnd; implicitWidth: 40; implicitHeight: 40; onClicked: shelf.flick(-1300,0) }
                                     }
-                                    ListView {
+                                    MCarousel {
                                         id: shelf
                                         Layout.fillWidth: true; Layout.preferredHeight: cellWidth+68
-                                        Behavior on cellWidth {enabled:app.motion && visible;NumberAnimation {duration:260;easing.type:Easing.InOutCubic}}
-                                        property real cellWidth: Math.max(app.viewCompactDensity?112:142,Math.min(app.viewCompactDensity?148:190,(width-40)/(app.viewCompactDensity?4.35:3.35)))
-                                        orientation: ListView.Horizontal; spacing: 20; clip: true; boundsBehavior: Flickable.StopAtBounds
-                                        model: modelData.items; reuseItems: true; cacheBuffer: 0
-                                        ScrollBar.horizontal: ScrollBar { policy: ScrollBar.AsNeeded }
-                                        delegate: ArtCard { required property var modelData; width: ListView.view.cellWidth; track: modelData;openHandler:window.openCollection }
+                                        Behavior on cellWidth {enabled:app.motion && visible;NumberAnimation {duration:Theme.springSpatialMs;easing.type:Easing.BezierSpline;easing.bezierCurve:Theme.springSpatial}}
+                                        cellWidth: Math.max(app.viewCompactDensity?112:142,Math.min(app.viewCompactDensity?148:190,(width-40)/(app.viewCompactDensity?4.35:3.35)))
+                                        model: modelData.items
+                                        openHandler: window.openCollection
                                     }
                                 }
                             }
                             GridView {
                                 id: localGroups; objectName: "localGroups"; anchors.fill: parent; clip: true; reuseItems: true; cacheBuffer: 0
+                                bottomMargin: libraryFab.visible ? libraryFab.height+24 : 0
                                 visible: app.page==="library" && app.viewMode==="grid" && (app.libraryId==="local-albums" || app.libraryId==="local-artists")
                                 model: visible ? app.collection : null
                                 cellWidth: width/Math.max(2,Math.floor(width/Theme.gridCell));
@@ -803,6 +850,7 @@ ApplicationWindow {
                             }
                             TrackList {
                                 id: tracks; groupDiscs: !!app.albumInfo.multipleDiscs && app.collection.sortKey==="original"; objectName: "tracksView"; anchors.fill: parent; clip: true
+                                bottomMargin: libraryFab.visible ? libraryFab.height+24 : 0
                                 visible: !localGroups.visible && app.sections.length===0 && !(window.destination==="library"&&window.libraryTab==="playlists"&&!window.localPlaylist)
                                 groupFolders: app.page==="library" && app.libraryId==="files" && app.collection.sortKey==="folder"
                                 model: app.collection; reuseItems: true; cacheBuffer: 100; boundsBehavior: Flickable.StopAtBounds
@@ -831,6 +879,7 @@ ApplicationWindow {
                             }
                             GridView {
                                 id:playlistGrid;objectName:"playlistGrid";anchors.fill:parent;clip:true;reuseItems:true;cacheBuffer:0
+                                bottomMargin: libraryFab.visible ? libraryFab.height+24 : 0
                                 visible:window.destination==="library"&&window.libraryTab==="playlists"&&!window.localPlaylist&&app.viewMode==="grid"
                                 model:visible?app.playlists:[];cellWidth:width/Math.max(2,Math.floor(width/Theme.gridCell));
                                 Behavior on cellWidth {enabled:app.motion && playlistGrid.visible;NumberAnimation {duration:260;easing.type:Easing.InOutCubic}}
@@ -848,11 +897,11 @@ ApplicationWindow {
                                 visible: window.destination==="library"&&window.libraryTab==="playlists"&&!window.localPlaylist&&app.viewMode!=="grid"
                                 model: app.playlists
                                 delegate: Rectangle {
-                                    required property var modelData; width: localPlaylists.width; height:app.viewCompactDensity?64:76; radius: 18; color: Theme.container
+                                    required property var modelData; width: localPlaylists.width; height:app.viewCompactDensity?64:76; radius: Theme.shapeLarge; color: Theme.container
                                     RowLayout {
                                         anchors.fill: parent; anchors.margins: 12; spacing: 12
-                                        AbstractButton { Layout.preferredWidth: 48; Layout.preferredHeight: 48; focusPolicy: Qt.StrongFocus; Accessible.name: "Open "+modelData.title; contentItem: PlaylistCover { artworks: modelData.artworks || [] } background: Rectangle { color: "transparent"; radius: 14; border.width: parent.activeFocus?2:0; border.color: Theme.primary } onClicked: {window.localPlaylist=modelData.id;app.openPlaylist(modelData.id);} }
-                                        AbstractButton { Layout.fillWidth: true; Layout.fillHeight: true; focusPolicy: Qt.StrongFocus; Accessible.name: modelData.title; background: Rectangle { color: "transparent"; radius: 8; border.width: parent.activeFocus?2:0; border.color: Theme.primary } onClicked: {window.localPlaylist=modelData.id;app.openPlaylist(modelData.id);} contentItem: Column { spacing: 4; SungText { text: modelData.title; font.pixelSize: 16; width: parent.width } SungText { text: modelData.smart?"Smart playlist":window.countText(modelData.count); color: Theme.muted; font.pixelSize: 12 } } }
+                                        AbstractButton { Layout.preferredWidth: 48; Layout.preferredHeight: 48; focusPolicy: Qt.StrongFocus; Accessible.name: "Open "+modelData.title; contentItem: PlaylistCover { artworks: modelData.artworks || [] } background: Rectangle { color: "transparent"; radius: Theme.shapeMedium; border.width: parent.activeFocus?2:0; border.color: Theme.primary } onClicked: {window.localPlaylist=modelData.id;app.openPlaylist(modelData.id);} }
+                                        AbstractButton { Layout.fillWidth: true; Layout.fillHeight: true; focusPolicy: Qt.StrongFocus; Accessible.name: modelData.title; background: Rectangle { color: "transparent"; radius: Theme.shapeSmall; border.width: parent.activeFocus?2:0; border.color: Theme.primary } onClicked: {window.localPlaylist=modelData.id;app.openPlaylist(modelData.id);} contentItem: Column { spacing: 4; SungText { text: modelData.title; font.pixelSize: 16; width: parent.width } SungText { text: modelData.smart?"Smart playlist":window.countText(modelData.count); color: Theme.muted; font.pixelSize: 12 } } }
                                         MButton { symbol: "more"; tip: "Playlist actions"; onClicked: {window.editPlaylistId=modelData.id;playlistName.text=modelData.title;playlistActions.popup(this,width-playlistActions.width,height+4);} }
                                     }
                                 }
@@ -879,7 +928,7 @@ ApplicationWindow {
                     activeFocusOnTab: true; Accessible.role: Accessible.Grip; Accessible.name: "Resize side panel"
                     Keys.onLeftPressed: geometry.panelWidth=Math.min(window.width-560,geometry.panelWidth+24)
                     Keys.onRightPressed: geometry.panelWidth=Math.max(320,geometry.panelWidth-24)
-                    Rectangle { anchors.centerIn: parent; width: 3; height: 40; radius: 2; color: Theme.primary; opacity: gripMouse.containsMouse || gripMouse.pressed || panelGrip.activeFocus ? 1 : 0.25 }
+                    Rectangle { anchors.centerIn: parent; width: 3; height: 40; radius: Theme.shapeFull(3); color: Theme.primary; opacity: gripMouse.containsMouse || gripMouse.pressed || panelGrip.activeFocus ? 1 : 0.25 }
                     MouseArea {
                         id: gripMouse; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.SplitHCursor
                         property real startX; property real startWidth
@@ -893,7 +942,7 @@ ApplicationWindow {
                     Layout.fillWidth: window.width < 1000
                     property real revealWidth: window.side ? (window.width < 1000 ? window.width-104 : Math.max(320,Math.min(geometry.panelWidth,window.width-560))) : 0
                     Layout.preferredWidth: Math.max(0,revealWidth)
-                    Layout.fillHeight: true; radius: 28; color: window.washed(Theme.surface)
+                    Layout.fillHeight: true; radius: Theme.shapeExtraLarge; color: window.washed(Theme.surface)
                     visible: Layout.preferredWidth>1; clip: true
                     Behavior on revealWidth { enabled: !gripMouse.pressed; NumberAnimation { duration: app.motion?350:0; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curve } }
                     AmbientBackdrop {
@@ -923,17 +972,17 @@ ApplicationWindow {
                 }
             }
             Rectangle {
-                Layout.fillWidth: true; Layout.preferredHeight: 112; color: window.washed(Theme.container); radius: 28
+                Layout.fillWidth: true; Layout.preferredHeight: 112; color: window.washed(Theme.container); radius: Theme.shapeExtraLarge
                 RowLayout {
                     anchors.fill: parent; anchors.leftMargin: 16; anchors.rightMargin: 16; spacing: 16
                     AbstractButton { id: nowButton; objectName: "nowButton"; Layout.preferredWidth: 64; Layout.preferredHeight: 64; enabled: app.currentIndex>=0; focusPolicy: Qt.StrongFocus; Accessible.name: "Now playing"; onClicked: window.activateSide("now")
-                        contentItem: Artwork { id: nowArtwork; url: app.current.art || ""; motionUrl: app.currentMotionArt; crossfade:true; radius: 12; pixels: 150; fit:app.currentArtworkFit; opacity: window.coverFlying?0:1 }
-                        background: Rectangle { anchors.fill: parent; anchors.margins: -3; color: "transparent"; radius: 15; border.width: parent.activeFocus?2:0; border.color: Theme.primary }
+                        contentItem: Artwork { id: nowArtwork; url: app.current.art || ""; motionUrl: app.currentMotionArt; crossfade:true; radius: Theme.shapeMedium; pixels: 150; fit:app.currentArtworkFit; opacity: window.coverFlying?0:1 }
+                        background: Rectangle { anchors.fill: parent; anchors.margins: -3; color: "transparent"; radius: Theme.shapeLarge; border.width: parent.activeFocus?2:0; border.color: Theme.primary }
                     }
                     ColumnLayout {
                         Layout.preferredWidth: Math.max(100,Math.min(220,window.width*0.17)); spacing: 6; opacity: nowPresentation.fade*window.coverDetailsOpacity; transform: Translate { x: nowPresentation.offset }
-                        AbstractButton { Layout.fillWidth: true; implicitHeight: 24; focusPolicy: Qt.StrongFocus; enabled: app.currentIndex>=0; Accessible.name: "Now playing: " + (app.current.title || "Nothing playing"); onClicked: window.activateSide("now"); contentItem: MatchText { revealFocused: parent.activeFocus; sourceText: nowPresentation.shown.title || "Nothing playing"; font.pixelSize: 15; font.weight: Font.DemiBold } background: Rectangle { color: "transparent"; radius: 4; border.width: parent.activeFocus?1:0; border.color: Theme.primary } }
-                        AbstractButton { Layout.fillWidth: true; implicitHeight: 24; focusPolicy: Qt.StrongFocus; enabled: !!app.current.artistId; Accessible.name: "Go to " + (app.current.artist || "artist"); onClicked: app.open(window.relatedItem(app.current,"artist")); contentItem: MatchText { revealFocused: parent.activeFocus; sourceText: nowPresentation.shown.artist || ""; color: Theme.muted; font.pixelSize: 13 } background: Rectangle { color: "transparent"; radius: 4; border.width: parent.activeFocus?1:0; border.color: Theme.primary } }
+                        AbstractButton { Layout.fillWidth: true; implicitHeight: 24; focusPolicy: Qt.StrongFocus; enabled: app.currentIndex>=0; Accessible.name: "Now playing: " + (app.current.title || "Nothing playing"); onClicked: window.activateSide("now"); contentItem: MatchText { revealFocused: parent.activeFocus; sourceText: nowPresentation.shown.title || "Nothing playing"; font.pixelSize: 15; font.weight: Font.DemiBold } background: Rectangle { color: "transparent"; radius: Theme.shapeExtraSmall; border.width: parent.activeFocus?1:0; border.color: Theme.primary } }
+                        AbstractButton { Layout.fillWidth: true; implicitHeight: 24; focusPolicy: Qt.StrongFocus; enabled: !!app.current.artistId; Accessible.name: "Go to " + (app.current.artist || "artist"); onClicked: app.open(window.relatedItem(app.current,"artist")); contentItem: MatchText { revealFocused: parent.activeFocus; sourceText: nowPresentation.shown.artist || ""; color: Theme.muted; font.pixelSize: 13 } background: Rectangle { color: "transparent"; radius: Theme.shapeExtraSmall; border.width: parent.activeFocus?1:0; border.color: Theme.primary } }
                     }
                     MButton { symbol: "heart"; tip: app.liked?"Unlike":"Like"; selected: app.liked; enabled: app.currentIndex>=0; visible: window.width>=1050; onClicked: app.toggleLike(app.current) }
                     ColumnLayout {
@@ -958,6 +1007,24 @@ ApplicationWindow {
                     MButton { objectName: "queueButton"; symbol: "queue"; tip: "Queue · Ctrl+L"; selected: window.side==="queue"; onClicked: window.activateSide("queue") }
                     MButton {id:outputButton;objectName:"playerOutputButton";symbol:"chevron";implicitWidth:32;tip:"Audio output · "+app.audioDeviceName;selected:outputPicker.visible;onClicked:outputPicker.showAt(outputButton)}
                     VolumeControl {id:volumeControl;showSlider:window.width>=1160}
+                }
+            }
+            MNavigationBar {
+                objectName: "navigationBar"
+                Layout.fillWidth: true
+                Layout.leftMargin: -parent.Layout.leftMargin
+                Layout.topMargin: 4
+                visible: window.compactWindow
+                destinations: [{key:"home",icon:"home",label:"Home"},{key:"search",icon:"search",label:"Search"},{key:"library",icon:"library",label:"Library"}]
+                current: window.destination
+                onChosen: key => {
+                    if(window.destination===key)return
+                    destinationTransition.fadeThrough(() => {
+                        window.destination=key
+                        if(key==="home")app.home()
+                        else if(key==="search"){app.startSearch();window.focusSearch();}
+                        else window.applyLibrary("favorites")
+                    })
                 }
             }
         }
@@ -1052,7 +1119,7 @@ ApplicationWindow {
             contentWidth: availableWidth; clip: true
             ColumnLayout {
                 width: nowScroll.availableWidth; spacing: 18
-                Artwork { Layout.alignment: Qt.AlignHCenter; Layout.preferredWidth: Math.min(320,nowScroll.availableWidth); Layout.preferredHeight: width; url: app.current.art || ""; motionUrl: app.currentMotionArt || ""; radius: 24; pixels: 650; highResolution:true;crossfade:true; fit:app.currentArtworkFit }
+                Artwork { Layout.alignment: Qt.AlignHCenter; Layout.preferredWidth: Math.min(320,nowScroll.availableWidth); Layout.preferredHeight: width; url: app.current.art || ""; motionUrl: app.currentMotionArt || ""; radius: Theme.shapeExtraLarge; pixels: 650; highResolution:true;crossfade:true; fit:app.currentArtworkFit }
                 SungText { text: app.current.title || "Nothing playing"; Layout.fillWidth: true; font.pixelSize: 24; font.weight: Font.Medium; wrapMode: Text.Wrap; elide: Text.ElideNone }
                 SungText { text: app.current.artist || ""; Layout.fillWidth: true; font.pixelSize: 16; color: Theme.muted }
                 RowLayout {
@@ -1078,7 +1145,7 @@ ApplicationWindow {
     MMenu {
         id: actions; objectName: "trackActions"
         width: 230; padding: 8
-        background: Rectangle { color: Theme.high; radius: 20; border.color: Theme.outline }
+        background: Rectangle { color: Theme.high; radius: Theme.shapeLargeIncreased; border.color: Theme.outline }
         MMenuItem { text: "Open"; visible: !(window.menuItem.videoId || window.menuItem.localPath || window.menuItem.serverSong); onTriggered: app.open(window.menuItem) }
         MMenuItem { objectName: "playKeepQueueAction"; text: "Play now, keep queue"; visible: !!(window.menuItem.videoId || window.menuItem.localPath || window.menuItem.serverSong); onTriggered: app.playKeepingQueue(window.menuItem) }
         MMenuItem { text: "Play next"; visible: !!(window.menuItem.videoId || window.menuItem.localPath || window.menuItem.serverSong); onTriggered: app.enqueue(window.menuItem,true) }
@@ -1235,7 +1302,7 @@ ApplicationWindow {
     }
     MDialog {
         id: playlistDialog; objectName: "playlistDialog"; initialFocus: playlistName; acceptText: window.playlistAction==="rename" ? "Save" : "Create"; anchors.centerIn: parent; width: 380; modal: true; acceptEnabled: playlistName.text.trim().length>0; title: window.playlistAction==="rename"?"Rename playlist":"New playlist"
-        background: Rectangle { color: Theme.container; radius: 28 }
+        background: Rectangle { color: Theme.container; radius: Theme.shapeExtraLarge }
         palette.windowText: Theme.text; palette.text: Theme.text; palette.buttonText: Theme.text
         standardButtons: Dialog.Save | Dialog.Cancel
         MTextField { id: playlistName; objectName: "playlistName"; width: parent.width; label: "Playlist name"; maximumLength: 120; onAccepted: if(playlistDialog.acceptEnabled)playlistDialog.accept() }
@@ -1244,7 +1311,7 @@ ApplicationWindow {
     }
     MDialog {
         id: addPlaylistDialog; objectName: "addPlaylistDialog"; anchors.centerIn: parent; width: 360; height: Math.min(window.height-64,Math.min(500,268+app.playlists.length*52)); modal: true; title: "Add to playlist"; standardButtons: Dialog.Cancel
-        background: Rectangle { color: Theme.container; radius: 28 }
+        background: Rectangle { color: Theme.container; radius: Theme.shapeExtraLarge }
         palette.windowText: Theme.text
         property bool contentReady: false
         onAboutToShow: contentReady=true
@@ -1262,7 +1329,7 @@ ApplicationWindow {
     }
     MDialog {
         id: deletePlaylistDialog; objectName: "deletePlaylistDialog"; anchors.centerIn: parent; width: 380; modal: true; title: "Delete playlist?"; standardButtons: Dialog.Yes | Dialog.No; onOpened: {standardButton(Dialog.Yes).text="Delete";standardButton(Dialog.No).text="Cancel";}
-        background: Rectangle { color: Theme.container; radius: 24 }
+        background: Rectangle { color: Theme.container; radius: Theme.shapeExtraLarge }
         palette.windowText: Theme.text; palette.buttonText: Theme.text
         onAccepted: {app.deletePlaylist(window.editPlaylistId);window.localPlaylist="";}
     }
@@ -1293,7 +1360,7 @@ ApplicationWindow {
     ServerConnection { id: serverConnection }
     MDialog {
         id: settingsDialog; objectName: "settingsDialog"; anchors.centerIn: parent; width: Math.min(window.width-48,880); height: Math.min(window.height-48,740); modal: true; title: "Settings"
-        padding: 24; background: Rectangle { color: Theme.container; radius: 28 }
+        padding: 24; background: Rectangle { color: Theme.container; radius: Theme.shapeExtraLarge }
         palette.windowText: Theme.text; palette.buttonText: Theme.text; palette.text: Theme.text
         standardButtons: Dialog.Close
         scrollSource: contentItem.item ? contentItem.item.scrollFlickable : null
@@ -1503,14 +1570,14 @@ ApplicationWindow {
         objectName: "errorBar"
         anchors.bottom: parent.bottom; anchors.bottomMargin: 140; anchors.horizontalCenter: parent.horizontalCenter
         width: Math.min(window.width-120,errorText.implicitWidth+(app.canRetry?180:100)); height: Math.min(150,errorText.implicitHeight+32)
-        radius: 18; color: Theme.containerText; visible: !!app.error; z: 50
+        radius: Theme.shapeLarge; color: Theme.containerText; visible: !!app.error; z: 50
         SungText { id: errorText; anchors.fill: parent; anchors.margins: 16; anchors.rightMargin: app.canRetry?140:58; text: app.error; wrapMode: Text.Wrap; elide: Text.ElideRight; maximumLineCount: 5; color: Theme.primaryContainer; font.pixelSize: 13 }
         MButton { anchors.right: parent.right; anchors.rightMargin: 48; anchors.verticalCenter: parent.verticalCenter; text: "Retry"; visible: app.canRetry; ink: Theme.primaryContainer; onClicked: app.retry() }
         MButton { anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter; symbol: "close"; ink: Theme.primaryContainer; tip: "Dismiss error"; onClicked: app.dismissError() }
     }
     Rectangle {
         anchors.bottom: parent.bottom; anchors.bottomMargin: 140; anchors.horizontalCenter: parent.horizontalCenter; z: 40
-        id: toastBar; objectName: "toastBar"; width: Math.min(window.width-48,720,toastLabel.implicitWidth+(window.toastHasUndo?168:40)); height: Math.max(48,toastLabel.implicitHeight+24); radius: 16; color: Theme.text
+        id: toastBar; objectName: "toastBar"; width: Math.min(window.width-48,720,toastLabel.implicitWidth+(window.toastHasUndo?168:40)); height: Math.max(48,toastLabel.implicitHeight+24); radius: Theme.shapeLarge; color: Theme.text
         opacity: window.toastPending && !app.error && !window.modalOpen ? 1 : 0
         visible: opacity>0 && !app.error && !window.modalOpen
         Accessible.role: Accessible.AlertMessage; Accessible.name: window.toastText

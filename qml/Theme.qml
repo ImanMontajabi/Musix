@@ -26,7 +26,56 @@ QtObject {
         for(let i=0;i<=100;++i){const color=blend(seed,end,i/100);if(surfaces.every(s=>contrast(color,s)>=4.5))return color;}
         return end;
     }
+    // --- Shape ---------------------------------------------------------------
+    // Material's ten step corner radius scale. Components map to a step by how
+    // round they should look, not by how big they are, and `full` is a real
+    // half-height rounding rather than a large fixed number.
+    readonly property int shapeNone: 0
+    readonly property int shapeExtraSmall: 4
+    readonly property int shapeSmall: 8
+    readonly property int shapeMedium: 12
+    readonly property int shapeLarge: 16
+    readonly property int shapeLargeIncreased: 20
+    readonly property int shapeExtraLarge: 28
+    readonly property int shapeExtraLargeIncreased: 32
+    readonly property int shapeExtraExtraLarge: 48
+    function shapeFull(size) { return size/2 }
+    // Nested shapes look unbalanced sharing a radius. Material subtracts the
+    // padding between them instead.
+    function shapeInside(outer,padding) { return Math.max(0,outer-padding) }
+
+    // --- Motion --------------------------------------------------------------
+    // Material replaced easing and duration with springs. Qt Quick animates on
+    // curves, and the specification publishes the curve each spring converts to
+    // for exactly this case, so the tokens below are those conversions.
+    //
+    // Two schemes. Expressive overshoots its target and settles back, which is
+    // what gives it life; standard eases in without the bounce. Spatial springs
+    // move things, so they may overshoot. Effects springs carry colour and
+    // opacity, where overshooting would mean passing through a wrong value, so
+    // they never do.
+    readonly property bool expressiveMotion: app.motionScheme !== "standard"
+    readonly property var springFastSpatial: expressiveMotion ? [0.42,1.67,0.21,0.90,1,1] : [0.27,1.06,0.18,1.00,1,1]
+    readonly property var springSpatial: expressiveMotion ? [0.38,1.21,0.22,1.00,1,1] : [0.27,1.06,0.18,1.00,1,1]
+    readonly property var springSlowSpatial: expressiveMotion ? [0.39,1.29,0.35,0.98,1,1] : [0.27,1.06,0.18,1.00,1,1]
+    readonly property var springFastEffects: [0.31,0.94,0.34,1.00,1,1]
+    readonly property var springEffects: [0.34,0.80,0.34,1.00,1,1]
+    readonly property var springSlowEffects: [0.34,0.88,0.34,1.00,1,1]
+    readonly property int springFastSpatialMs: app.motion ? 350 : 0
+    readonly property int springSpatialMs: app.motion ? (expressiveMotion ? 500 : 500) : 0
+    readonly property int springSlowSpatialMs: app.motion ? (expressiveMotion ? 650 : 750) : 0
+    readonly property int springFastEffectsMs: app.motion ? 150 : 0
+    readonly property int springEffectsMs: app.motion ? 200 : 0
+    readonly property int springSlowEffectsMs: app.motion ? 300 : 0
+
+    // --- Typography ----------------------------------------------------------
     readonly property string fontFamily: "Google Sans Flex"
+    // Material's emphasized styles lean on a variable font's weight and width
+    // to carry hierarchy, rather than only its size. Google Sans Flex is
+    // variable, so the emphasis is real rather than a synthesised bold.
+    readonly property int emphasizedWeight: Font.DemiBold
+    readonly property int emphasizedWidth: 110
+    readonly property int regularWidth: 100
     readonly property int displaySmall: 36
     readonly property int headlineMedium: 28
     readonly property int headlineSmall: 24
@@ -57,16 +106,18 @@ QtObject {
     readonly property color containerText: useSource ? role("onPrimaryContainer",readable(primary,[primaryContainer])) : followDesktop ? desktopTheme.colors.containerText : (dark ? "#ffdbcb" : "#743419")
     readonly property color secondary: followDesktop ? desktopTheme.colors.secondary : role("secondary", dark ? "#d8c4a0" : "#6c5b3b")
     readonly property color error: dark ? "#ffb4ab" : "#ba1a1a"
-    readonly property int fast: app.motion ? 150 : 0
-    readonly property int normal: app.motion ? 200 : 0
-    readonly property int slow: app.motion ? 500 : 0
-    readonly property int enterDuration: app.motion ? 200 : 0
+    // The names the rest of the application already uses, now resolved through
+    // the spring tokens above rather than carrying their own numbers. Changing
+    // the motion scheme therefore reaches every animation in the app at once.
+    readonly property int fast: springFastEffectsMs
+    readonly property int normal: springEffectsMs
+    readonly property int slow: springSlowEffectsMs
+    readonly property int enterDuration: springFastEffectsMs
     readonly property int exitDuration: app.motion ? 100 : 0
-    readonly property var enterCurve: [0,0,0,1,1,1]
+    readonly property var enterCurve: springFastEffects
     readonly property var exitCurve: [0.3,0,1,1,1,1]
-    // M3 published spring-to-curve conversions for non-gesture transitions.
-    readonly property var fastSpatialCurve: [0.42,1.67,0.21,0.90,1,1]
-    readonly property var effectsCurve: [0.34,0.80,0.34,1,1,1]
-    readonly property var fastEffectsCurve: [0.31,0.94,0.34,1,1,1]
-    readonly property var curve: [0.27,1.06,0.18,1,1,1]
+    readonly property var fastSpatialCurve: springFastSpatial
+    readonly property var effectsCurve: springEffects
+    readonly property var fastEffectsCurve: springFastEffects
+    readonly property var curve: springSpatial
 }

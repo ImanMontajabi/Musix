@@ -16,7 +16,7 @@ TextField {
     selectionColor: Theme.primary; selectedTextColor: Theme.primaryText
     Accessible.name: label || placeholderText
     background: Rectangle {
-        radius: 4; color: "transparent"
+        radius: Theme.shapeExtraSmall; color: "transparent"
         border.width: field.activeFocus ? 2 : 1
         border.color: field.activeFocus ? Theme.primary : Theme.controlOutline
         Behavior on border.color { ColorAnimation { duration: Theme.fast; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.fastEffectsCurve } }

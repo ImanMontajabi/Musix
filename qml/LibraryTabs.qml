@@ -87,13 +87,13 @@ Flickable {
                 contentItem: SungText { id: label; text: tab.text; horizontalAlignment: Text.AlignHCenter; font.weight: Font.Medium; font.pixelSize: Theme.labelLarge; color: tab.selected ? Theme.primary : Theme.muted }
                 Rectangle {
                     objectName: "tabFocusRing"
-                    anchors.fill: parent; anchors.margins: 2; anchors.bottomMargin: 6; radius: 8
+                    anchors.fill: parent; anchors.margins: 2; anchors.bottomMargin: 6; radius: Theme.shapeSmall
                     color: "transparent"; border.width: 2; border.color: Theme.primary
                     visible: tab.visualFocus
                 }
                 Rectangle {
                     anchors.bottom: parent.bottom; anchors.horizontalCenter: parent.horizontalCenter
-                    width: label.implicitWidth; height: 3; radius: 1.5; color: Theme.primary
+                    width: label.implicitWidth; height: 3; radius: Theme.shapeFull(3); color: Theme.primary
                     opacity: tab.selected ? 1 : 0
                     Behavior on opacity { NumberAnimation { duration: Theme.fast; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.fastEffectsCurve } }
                 }

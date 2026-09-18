@@ -99,8 +99,8 @@ Item {
                 visible:player.displayedLayout!=="lyrics" && player.displayedLayout!=="singalong"
                 Layout.preferredWidth: player.coverSize; Layout.minimumWidth: player.coverSize; Layout.maximumWidth: player.coverSize; Layout.fillHeight: true; Layout.minimumHeight: 0; spacing: 12
                 Item { Layout.fillHeight: true }
-                Artwork { id: immersiveArt; objectName: "immersiveArtwork"; Layout.preferredWidth: player.coverSize; Layout.preferredHeight: player.coverSize; Layout.maximumHeight: player.coverSize; url: app.current.art || ""; motionUrl: app.currentMotionArt; crossfade:true; opacity: player.coverHidden?0:1; radius: 28; pixels: 850; highResolution: true; fit:app.currentArtworkFit
-                    AbstractButton {anchors.fill:parent;Accessible.name:"View artwork";focusPolicy:Qt.StrongFocus;onClicked:player.artworkRequested();background:Rectangle {color:"transparent";radius:28;border.width:parent.visualFocus?2:0;border.color:Theme.primary}}
+                Artwork { id: immersiveArt; objectName: "immersiveArtwork"; Layout.preferredWidth: player.coverSize; Layout.preferredHeight: player.coverSize; Layout.maximumHeight: player.coverSize; url: app.current.art || ""; motionUrl: app.currentMotionArt; crossfade:true; opacity: player.coverHidden?0:1; radius: Theme.shapeExtraLarge; pixels: 850; highResolution: true; fit:app.currentArtworkFit
+                    AbstractButton {anchors.fill:parent;Accessible.name:"View artwork";focusPolicy:Qt.StrongFocus;onClicked:player.artworkRequested();background:Rectangle {color:"transparent";radius:Theme.shapeExtraLarge;border.width:parent.visualFocus?2:0;border.color:Theme.primary}}
                 }
                 SungText { text: presentation.shown.title || "Nothing playing"; opacity: presentation.fade*player.detailsOpacity; transform: Translate { x: presentation.offset } Layout.fillWidth: true; font.pixelSize: player.width<900?22:30; font.weight: Font.DemiBold; wrapMode: Text.Wrap; maximumLineCount: 2 }
                 AbstractButton {
@@ -109,7 +109,7 @@ Item {
                     Accessible.name: "Open artist · "+(app.current.artist || "")
                     onClicked: player.collectionRequested(player.artistTarget)
                     contentItem:SungText {text:presentation.shown.artist || "";font.pixelSize:18;color:parent.hovered&&parent.enabled?Theme.primary:Theme.muted;opacity:presentation.fade*player.detailsOpacity}
-                    background:Rectangle {color:parent.down?Theme.high:parent.hovered&&parent.enabled?Qt.rgba(Theme.primary.r,Theme.primary.g,Theme.primary.b,Theme.hoverOpacity):"transparent";radius:12;border.width:parent.visualFocus?2:0;border.color:Theme.primary}
+                    background:Rectangle {color:parent.down?Theme.high:parent.hovered&&parent.enabled?Qt.rgba(Theme.primary.r,Theme.primary.g,Theme.primary.b,Theme.hoverOpacity):"transparent";radius:Theme.shapeMedium;border.width:parent.visualFocus?2:0;border.color:Theme.primary}
                 }
                 AbstractButton {
                     objectName:"immersiveAlbumButton";Layout.fillWidth:true;implicitHeight:40;leftPadding:0;rightPadding:8;visible:!!app.current.album
@@ -117,7 +117,7 @@ Item {
                     Accessible.name: "Open album · "+(app.current.album || "")
                     onClicked: player.collectionRequested(player.albumTarget)
                     contentItem:SungText {text:presentation.shown.album || "";font.pixelSize:14;color:parent.hovered&&parent.enabled?Theme.primary:Theme.muted;opacity:presentation.fade*player.detailsOpacity}
-                    background:Rectangle {color:parent.down?Theme.high:parent.hovered&&parent.enabled?Qt.rgba(Theme.primary.r,Theme.primary.g,Theme.primary.b,Theme.hoverOpacity):"transparent";radius:12;border.width:parent.visualFocus?2:0;border.color:Theme.primary}
+                    background:Rectangle {color:parent.down?Theme.high:parent.hovered&&parent.enabled?Qt.rgba(Theme.primary.r,Theme.primary.g,Theme.primary.b,Theme.hoverOpacity):"transparent";radius:Theme.shapeMedium;border.width:parent.visualFocus?2:0;border.color:Theme.primary}
                 }
                 Item { Layout.fillHeight: true }
             }
@@ -134,14 +134,24 @@ Item {
             Behavior on opacity {NumberAnimation {duration:Theme.normal;easing.type:Easing.BezierSpline;easing.bezierCurve:Theme.effectsCurve}}
             onShowAllRequested: player.queueRequested()
         }
-        RowLayout {
-            Layout.alignment: Qt.AlignHCenter; spacing: 16; opacity:player.controlsShown?1:0
+        // Material replaced the bottom app bar with docked and floating
+        // toolbars. The transport floats over the artwork rather than being
+        // anchored into it, which is what a floating toolbar is for. It keeps
+        // the standard colour style: a vibrant bar over an arbitrary cover
+        // would fight whatever colour the artwork happens to be.
+        MFloatingToolbar {
+            objectName: "immersiveToolbar"
+            Layout.alignment: Qt.AlignHCenter
+            implicitHeight: 80
+            opacity: player.controlsShown?1:0
             Behavior on opacity {NumberAnimation {duration:Theme.normal;easing.type:Easing.BezierSpline;easing.bezierCurve:Theme.effectsCurve}}
-            MButton { symbol: "shuffle"; selected: app.shuffle; tip: app.shuffle?"Shuffle on":"Shuffle off"; onClicked: app.shuffle=!app.shuffle }
-            MButton { symbol: "previous"; tip: "Previous"; enabled: app.queue.count>0; onClicked: app.previous() }
-            MButton { objectName: "immersivePlayButton"; busy: app.buffering; morphPlayback:true; symbol: app.playing||app.resolving?"pause":"play"; filled: true; implicitWidth: 80; implicitHeight: 56; tip: app.playing||app.resolving?"Pause":"Play"; enabled: app.queue.count>0; onClicked: app.toggle() }
-            MButton { symbol: "next"; tip: "Next"; enabled: app.queue.count>0; onClicked: app.next() }
+            content: [
+            MButton { symbol: "shuffle"; selected: app.shuffle; tip: app.shuffle?"Shuffle on":"Shuffle off"; onClicked: app.shuffle=!app.shuffle },
+            MButton { symbol: "previous"; tip: "Previous"; enabled: app.queue.count>0; onClicked: app.previous() },
+            MButton { objectName: "immersivePlayButton"; busy: app.buffering; morphPlayback:true; symbol: app.playing||app.resolving?"pause":"play"; filled: true; implicitWidth: 80; implicitHeight: 56; tip: app.playing||app.resolving?"Pause":"Play"; enabled: app.queue.count>0; onClicked: app.toggle() },
+            MButton { symbol: "next"; tip: "Next"; enabled: app.queue.count>0; onClicked: app.next() },
             MButton { symbol: app.repeat===2?"repeat_one":"repeat"; selected: app.repeat>0; tip: app.repeat===0?"Repeat off":app.repeat===1?"Repeat queue":"Repeat song"; onClicked: app.repeat=(app.repeat+1)%3 }
+            ]
         }
         RowLayout {
             Layout.alignment: Qt.AlignHCenter; Layout.preferredWidth: Math.min(800,player.width-80); spacing: 12; opacity:player.controlsShown?1:0

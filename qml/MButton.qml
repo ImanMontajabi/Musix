@@ -44,11 +44,17 @@ AbstractButton {
             delay: 650; text: control.tip
             padding: 10
             contentItem: SungText { text: control.tip; font.pixelSize: 12; color: Theme.background }
-            background: Rectangle { color: Theme.text; radius: 8 }
+            background: Rectangle { color: Theme.text; radius: Theme.shapeSmall }
         }
     }
     background: Rectangle {
-        radius: control.down ? 14 : control.height / 2
+        // Material maps buttons to the full shape style, which is half of the
+        // shorter side rather than half the height: a narrow button is still a
+        // stadium, not an over-rounded lozenge. Pressing morphs it towards a
+        // squarer step, which is the shape morph the specification asks for on
+        // interaction states.
+        radius: control.down ? Theme.shapeMedium
+                             : Theme.shapeFull(Math.min(control.width, control.height))
         color: control.filled ? Theme.primary : control.tonal || control.selected ? Theme.high : "transparent"
         border.color: "transparent"
         border.width: 2
@@ -64,7 +70,9 @@ AbstractButton {
     Rectangle {
         objectName: "buttonFocusRing"
         anchors.fill: parent; anchors.margins: -3
-        radius: height / 2; color: "transparent"
+        // The ring sits outside the button, so optical roundness adds the gap
+        // between them rather than repeating the button's own radius.
+        radius: Theme.shapeInside(Theme.shapeFull(Math.min(width, height)), -3); color: "transparent"
         border.width: 2; border.color: Theme.primary
         visible: control.visualFocus
     }

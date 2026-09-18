@@ -172,6 +172,10 @@ class Backend : public QObject {
   Q_PROPERTY(QString sleepStatus READ sleepLabel NOTIFY settingsChanged)
   Q_PROPERTY(int crossfadeSeconds READ crossfadeSeconds WRITE setCrossfadeSeconds NOTIFY settingsChanged)
   Q_PROPERTY(bool gapless READ gapless WRITE setGapless NOTIFY settingsChanged)
+  // Material's two motion schemes. Expressive overshoots and settles, which the
+  // specification recommends for most products; standard eases in without the
+  // bounce, for when that reads as fussy.
+  Q_PROPERTY(QString motionScheme READ motionScheme WRITE setMotionScheme NOTIFY settingsChanged)
   Q_PROPERTY(bool crossfading READ crossfading NOTIFY playbackChanged)
   Q_PROPERTY(bool prepareNext READ prepareNext WRITE setPrepareNext NOTIFY settingsChanged)
   Q_PROPERTY(bool lyricsFallback READ lyricsFallback WRITE setLyricsFallback NOTIFY settingsChanged)
@@ -412,6 +416,13 @@ public:
   // Without an overlap, the next song still starts the instant this one ends.
   bool gapless() const {return m_settings.value("gapless",true).toBool();}
   void setGapless(bool enabled);
+  QString motionScheme() const {const auto v=m_settings.value("motionScheme","expressive").toString();return v=="standard"?v:"expressive";}
+  void setMotionScheme(const QString &value) {
+    const auto chosen=value=="standard"?QString("standard"):QString("expressive");
+    if(chosen==motionScheme())return;
+    m_settings.setValue("motionScheme",chosen);
+    emit settingsChanged();
+  }
   bool prepareNext() const {return m_settings.value("prepareNext",true).toBool();}
   void setPrepareNext(bool enabled);
   bool lyricsFallback() const {return m_settings.value("lyricsFallback",true).toBool();}

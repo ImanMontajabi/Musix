@@ -8,7 +8,7 @@ MDialog {
     ColumnLayout {anchors.fill:parent;spacing:12
         ListView {id:list;objectName:"homeEditorList";Layout.fillWidth:true;Layout.fillHeight:true;clip:true;spacing:6;model:dialog.sections;reuseItems:true
             ScrollBar.vertical:MScrollBar {}
-            delegate:Rectangle {required property var modelData;required property int index;width:list.width;height:64;radius:16;color:Theme.high
+            delegate:Rectangle {required property var modelData;required property int index;width:list.width;height:64;radius:Theme.shapeLarge;color:Theme.high
                 RowLayout {anchors.fill:parent;anchors.margins:8;spacing:4
                     MSwitch {objectName:"homeVisible_"+index;text:modelData.title;leftPadding:8;Layout.fillWidth:true;checked:modelData.shown;onToggled:app.showHomeSection(modelData.title,checked)}
                     MButton {objectName:"homeUp_"+index;symbol:"back";rotation:90;tip:"Move up";Accessible.name:"Move "+modelData.title+" up";enabled:index>0;onClicked:app.moveHomeSection(modelData.title,-1)}

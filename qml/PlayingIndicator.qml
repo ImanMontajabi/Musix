@@ -12,7 +12,7 @@ Item {
             Rectangle {
                 required property int index
                 objectName: "audioBar_"+index
-                width: 3; height: 18; radius: 1.5; color: indicator.ink
+                width: 3; height: 18; radius: Theme.shapeFull(3); color: indicator.ink
                 transform: Scale {
                     origin.y: 18
                     yScale: indicator.animating ? 0.16+0.84*(app.audioLevels[index] || 0) : 0.16

@@ -9,7 +9,7 @@ Rectangle {
     function show(icon, text) {symbol=icon;label=text;shown=true;dismiss.restart();}
     visible: opacity>0
     opacity: shown?1:0
-    width: Math.max(120,contents.implicitWidth+32);height:48;radius:24
+    width: Math.max(120,contents.implicitWidth+32);height:48;radius:Theme.shapeFull(48)
     color: Theme.high
     Accessible.role: Accessible.StaticText
     Accessible.name: label

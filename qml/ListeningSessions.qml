@@ -16,7 +16,7 @@ MDialog {
             id:list;objectName:"sessionsList";Layout.fillWidth:true;Layout.fillHeight:true;clip:true;spacing:8;reuseItems:true;model:dialog.visible?app.sessions:[]
             ScrollBar.vertical:MScrollBar {}
             delegate:Rectangle {
-                required property var modelData;width:list.width;height:88;radius:16;color:Theme.high
+                required property var modelData;width:list.width;height:88;radius:Theme.shapeLarge;color:Theme.high
                 RowLayout {anchors.fill:parent;anchors.margins:12;spacing:8
                     ColumnLayout {Layout.fillWidth:true;spacing:3
                         SungText {text:modelData.title;Layout.fillWidth:true;font.weight:Font.Medium}
