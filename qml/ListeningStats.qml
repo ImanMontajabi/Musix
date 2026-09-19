@@ -136,7 +136,7 @@ MDialog {
                         SungText {
                             text: modelData.day
                             color: Theme.muted
-                            font.pixelSize: 10
+                            font.pixelSize: Theme.labelSmall
                             Layout.alignment: Qt.AlignHCenter
                         }
                     }

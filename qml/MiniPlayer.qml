@@ -34,7 +34,7 @@ Window {
                 ColumnLayout {
                     Layout.fillWidth: true; spacing: 4
                     SungText { text: presentation.shown.title || "Nothing playing"; opacity: presentation.fade; transform: Translate { x: presentation.offset } Layout.fillWidth: true; font.pixelSize: 16; font.weight: Font.DemiBold }
-                    SungText { text: presentation.shown.artist || ""; opacity: presentation.fade; transform: Translate { x: presentation.offset } Layout.fillWidth: true; font.pixelSize: 13; color: Theme.muted }
+                    SungText { text: presentation.shown.artist || ""; opacity: presentation.fade; transform: Translate { x: presentation.offset } Layout.fillWidth: true; font.pixelSize: Theme.bodyMedium; color: Theme.muted }
                 }
                 MButton { objectName: "miniRestoreButton"; symbol: "expand"; tip: "Full player · Ctrl+M"; onClicked: mini.restoreRequested() }
                 MButton { symbol: "close"; tip: "Quit Sung"; onClicked: Qt.quit() }
@@ -56,8 +56,8 @@ Window {
                 onAnimateChanged:if(!animate)settle()
                 Component.onCompleted:settle()
                 NumberAnimation {id:lineFade;target:lyricLine;property:"progress";to:1;duration:Theme.normal;easing.type:Easing.BezierSpline;easing.bezierCurve:Theme.effectsCurve;onFinished:lyricLine.previous=""}
-                SungText {anchors.fill:parent;text:lyricLine.previous;opacity:1-lyricLine.progress;horizontalAlignment:Text.AlignHCenter;font.pixelSize:13;color:Theme.primary;Accessible.ignored:true}
-                SungText {objectName:"miniLyricLine";anchors.fill:parent;text:lyricLine.shown;opacity:lyricLine.progress;horizontalAlignment:Text.AlignHCenter;font.pixelSize:13;color:Theme.primary;Accessible.name:text}
+                SungText {anchors.fill:parent;text:lyricLine.previous;opacity:1-lyricLine.progress;horizontalAlignment:Text.AlignHCenter;font.pixelSize:Theme.bodyMedium;color:Theme.primary;Accessible.ignored:true}
+                SungText {objectName:"miniLyricLine";anchors.fill:parent;text:lyricLine.shown;opacity:lyricLine.progress;horizontalAlignment:Text.AlignHCenter;font.pixelSize:Theme.bodyMedium;color:Theme.primary;Accessible.name:text}
             }
             RowLayout {
                 Layout.alignment: Qt.AlignHCenter; spacing: 12

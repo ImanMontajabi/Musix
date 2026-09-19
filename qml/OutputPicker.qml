@@ -13,11 +13,25 @@ Popup {
     enter:Transition {NumberAnimation {property:"opacity";from:0;to:1;duration:Theme.enterDuration}}
     exit:Transition {NumberAnimation {property:"opacity";to:0;duration:Theme.exitDuration}}
     contentItem:ColumnLayout {spacing:8
-        SungText {text:"Audio output";font.pixelSize:18;font.weight:Font.Medium;Layout.fillWidth:true}
+        SungText {text:"Audio output";font.pixelSize:Theme.titleMedium;font.weight:Font.Medium;Layout.fillWidth:true}
         ListView {id:devices;objectName:"outputDevices";Layout.fillWidth:true;Layout.fillHeight:true;clip:true;spacing:4;model:popup.visible?app.audioDevices:[]
             ScrollBar.vertical:MScrollBar {}
             Keys.onReturnPressed: {const device=app.audioDevices[currentIndex];if(device){app.audioDeviceId=device.id;popup.close();}}
-            delegate:MButton {required property var modelData;required property int index;objectName:"outputChoice_"+index;width:devices.width-8;height:48;text:modelData.name;leftAligned:true;selected:app.audioDeviceId===modelData.id;symbol:selected?"check":"";tip:modelData.name;onClicked:{app.audioDeviceId=modelData.id;popup.close();}}
+            // Material draws a choice of one out of a set as radio buttons in
+            // the leading slot, not as a check that appears once it is made.
+            delegate:MButton {
+                required property var modelData;required property int index
+                objectName:"outputChoice_"+index;width:devices.width-8;height:48
+                text:modelData.name;leftAligned:true;contentInset:44
+                selected:app.audioDeviceId===modelData.id;tip:modelData.name
+                onClicked:{app.audioDeviceId=modelData.id;popup.close();}
+                MRadioButton {
+                    objectName:"outputRadio_"+parent.index
+                    anchors.left:parent.left;anchors.leftMargin:-4;anchors.verticalCenter:parent.verticalCenter
+                    checked:parent.selected;enabled:false;presentational:true
+                    Accessible.ignored:true
+                }
+            }
         }
     }
 }

@@ -108,7 +108,7 @@ Item {
                     enabled:!!player.artistTarget.kind && presentation.shown.id===app.current.id;focusPolicy:Qt.StrongFocus
                     Accessible.name: "Open artist · "+(app.current.artist || "")
                     onClicked: player.collectionRequested(player.artistTarget)
-                    contentItem:SungText {text:presentation.shown.artist || "";font.pixelSize:18;color:parent.hovered&&parent.enabled?Theme.primary:Theme.muted;opacity:presentation.fade*player.detailsOpacity}
+                    contentItem:SungText {text:presentation.shown.artist || "";font.pixelSize:Theme.bodyLarge;color:parent.hovered&&parent.enabled?Theme.primary:Theme.muted;opacity:presentation.fade*player.detailsOpacity}
                     background:Rectangle {color:parent.down?Theme.high:parent.hovered&&parent.enabled?Qt.rgba(Theme.primary.r,Theme.primary.g,Theme.primary.b,Theme.hoverOpacity):"transparent";radius:Theme.shapeMedium;border.width:parent.visualFocus?2:0;border.color:Theme.primary}
                 }
                 AbstractButton {

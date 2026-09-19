@@ -23,7 +23,11 @@ ListView {
     readonly property real squashed: 0.38
 
     orientation: ListView.Horizontal
-    spacing: 20
+    // Material's multi-browse measurements: 16dp at either end of the run and
+    // 8dp between the items in it.
+    spacing: 8
+    leftMargin: 16
+    rightMargin: 16
     clip: true
     boundsBehavior: Flickable.StopAtBounds
     // Items snap into place to keep the layout, rather than resting part-way.
@@ -54,6 +58,9 @@ ListView {
             anchors.top: parent.top
             track: cell.modelData
             openHandler: carousel.openHandler
+            // A carousel item rounds at the extra large step, which is a step
+            // past what the same card takes in a grid.
+            corner: Theme.shapeExtraLarge
             // Items change size as they move through the carousel, growing back
             // as they come fully into view.
             scale: 1 - cell.squeeze*carousel.squashed

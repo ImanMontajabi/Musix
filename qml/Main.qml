@@ -28,6 +28,12 @@ ApplicationWindow {
     // The queue panel shows what is coming, or what has just gone.
     property string queueTab: "next"
     property bool collectionTools: false
+    // Where the library's primary action applies. The rail's slot and the FAB
+    // itself both ask this rather than each other: a slot sized by whether its
+    // child is visible, holding a child whose visibility is its parent's, never
+    // opens.
+    readonly property bool libraryAddApplies: destination==="library" && !localPlaylist
+                                              && ["files","local-albums","local-artists","playlists"].indexOf(libraryTab)>=0
     property var miniPlayer: null
     readonly property bool uiActive: (visible && visibility!==Window.Minimized) || (miniPlayer!==null && miniPlayer.visible && miniPlayer.visibility!==Window.Minimized)
     onUiActiveChanged: {app.setUiActive(uiActive);if(!uiActive){cancelCoverFlight();cancelAlbumFlight();}}
@@ -137,7 +143,7 @@ ApplicationWindow {
         }
         visible: Drag.active
         Drag.source: trackDrag; Drag.keys: ["sung-tracks"]; Drag.hotSpot.x: 0; Drag.hotSpot.y: 0
-        SungText { x: 80; width: 90; anchors.verticalCenter: parent.verticalCenter; text: window.countText(trackDrag.items.length); color: Theme.text; font.pixelSize: 13 }
+        SungText { x: 80; width: 90; anchors.verticalCenter: parent.verticalCenter; text: window.countText(trackDrag.items.length); color: Theme.text; font.pixelSize: Theme.labelLarge }
     }
     function countText(n) { return n + (n === 1 ? " track" : " tracks"); }
     TrackPresentation { id: nowPresentation; visible: !window.immersive && !window.compactMode }
@@ -493,6 +499,19 @@ ApplicationWindow {
                 Layout.leftMargin: navigationRail.expanded ? 16 : 0
                 onClicked: railSettings.expanded=!railSettings.expanded
             }
+            // Material's rail carries the surface's primary action above its
+            // destinations, as a FAB while the rail is collapsed and as an
+            // extended FAB once it has opened and there is room for the words.
+            Item {
+                id: railFabSlot
+                objectName: "railFabSlot"
+                visible: window.libraryAddApplies
+                Layout.preferredWidth: visible ? libraryFab.width : 0
+                Layout.preferredHeight: visible ? libraryFab.height : 0
+                Layout.alignment: navigationRail.expanded ? Qt.AlignLeft : Qt.AlignHCenter
+                Layout.leftMargin: navigationRail.expanded ? 16 : 0
+                Layout.bottomMargin: 4
+            }
             Repeater {
                 model: [{key:"home",icon:"home",label:"Home"},{key:"search",icon:"search",label:"Search"},{key:"library",icon:"library",label:"Library"}]
                 MNavigationItem {
@@ -820,9 +839,9 @@ ApplicationWindow {
                             }
                             ColumnLayout {
                                 Layout.fillWidth: true; spacing: 6
-                            SungText { text: window.serverDisconnected ? "Music server" : window.destination==="library"&&window.libraryTab==="playlists"&&!window.localPlaylist ? "Playlists" : app.title; objectName: "collectionHeaderTitle"; emphasized: true; font.pixelSize: app.page==="home"?Theme.displaySmall:Theme.headlineMedium-(Theme.headlineMedium-Theme.titleLarge)*content.headerCollapse; Behavior on font.pixelSize { NumberAnimation { duration: app.motion?Theme.normal:0; easing.type: Easing.OutCubic } } Layout.fillWidth: true; wrapMode: Text.Wrap; maximumLineCount: 2 }
+                            SungText { text: window.serverDisconnected ? "Music server" : window.destination==="library"&&window.libraryTab==="playlists"&&!window.localPlaylist ? "Playlists" : app.title; objectName: "collectionHeaderTitle"; emphasized: true; scaled: true; font.pixelSize: app.page==="home"?Theme.displaySmall:Theme.headlineMedium-(Theme.headlineMedium-Theme.titleLarge)*content.headerCollapse; Behavior on font.pixelSize { NumberAnimation { duration: app.motion?Theme.normal:0; easing.type: Easing.OutCubic } } Layout.fillWidth: true; wrapMode: Text.Wrap; maximumLineCount: 2 }
                                 SungText { objectName: "albumArtist"; visible: !!app.albumInfo.artist;opacity:1-content.headerCollapse;Layout.maximumHeight:implicitHeight*(1-content.headerCollapse);clip:true; Layout.fillWidth: true; text: app.albumInfo.artist || ""; font.pixelSize: 16; color: Theme.muted; maximumLineCount: 2; wrapMode: Text.Wrap }
-                                SungText { objectName: "albumSummary"; visible: !!app.albumInfo.summary;opacity:1-content.headerCollapse;Layout.maximumHeight:implicitHeight*(1-content.headerCollapse);clip:true; Layout.fillWidth: true; text: app.albumInfo.summary || ""; font.pixelSize: 13; color: Theme.muted; wrapMode: Text.Wrap }
+                                SungText { objectName: "albumSummary"; visible: !!app.albumInfo.summary;opacity:1-content.headerCollapse;Layout.maximumHeight:implicitHeight*(1-content.headerCollapse);clip:true; Layout.fillWidth: true; text: app.albumInfo.summary || ""; font.pixelSize: Theme.appBarSubtitle.medium; color: Theme.muted; wrapMode: Text.Wrap }
                             }
                             // The app bar's own actions. Material measures them
                             // against the room the title leaves and folds the
@@ -933,6 +952,21 @@ ApplicationWindow {
                                     MMenuItem { objectName: "collectionPlayNext"; symbol: "next"; text: "Play next"; enabled: app.collection.count>0; onTriggered: app.enqueueItems(app.collection.rows(),true) }
                                 }
                             }
+                            // Material's input chip: a filter the reader typed
+                            // stands on its own and carries the means to take
+                            // it back out, rather than living only inside a row
+                            // that can be folded away with it still applied.
+                            MChip {
+                                objectName: "collectionFilterChip"
+                                variant: "input"
+                                selectable: false
+                                symbol: "filter"
+                                visible: !!app.collection.query && !window.collectionTools
+                                text: app.collection.query
+                                Accessible.name: "Filter: " + app.collection.query
+                                onClicked: {window.collectionTools=true;Qt.callLater(()=>collectionSearch.forceActiveFocus());}
+                                onRemoved: app.collection.query=""
+                            }
                             Item { Layout.fillWidth: true }
                             MButton { objectName: "collectionToolsButton"; symbol: "filter"; tip: "Find and sort songs"; selected: window.collectionTools || !!app.collection.query || app.collection.sortKey!=="original"; onClicked: {window.collectionTools=!window.collectionTools;if(window.collectionTools)Qt.callLater(()=>collectionSearch.forceActiveFocus());} }
                             SungText { visible: !app.albumInfo.summary || content.compactHeader || !!app.collection.query; text: app.collection.query ? app.collection.count+" / "+app.results.count : window.countText(app.results.count); color: Theme.muted; font.pixelSize: 12 }
@@ -972,7 +1006,16 @@ ApplicationWindow {
                                 onChosen: key => app.collection.sortKey = key
                             }
                         }
-                        SelectionBar { Layout.fillWidth: true; view: tracks; canRemove: window.editableLocal || app.serverPlaylistEditable }
+                        // A docked toolbar is docked: it runs the width of the
+                        // surface it belongs to rather than sitting inside its
+                        // margins with square corners.
+                        SelectionBar {
+                            Layout.fillWidth: true
+                            Layout.leftMargin: -contentColumn.anchors.margins
+                            Layout.rightMargin: -contentColumn.anchors.margins
+                            view: tracks
+                            canRemove: window.editableLocal || app.serverPlaylistEditable
+                        }
                         Item {
                             id: contentBody
                             objectName: "contentBody"
@@ -990,13 +1033,26 @@ ApplicationWindow {
                                     else app.refresh()
                                 }
                             }
-                            MFabMenu {
-                                id: libraryFab
-                                objectName: "libraryFab"
+                            Item {
+                                id: contentFabHost
+                                objectName: "contentFabHost"
                                 anchors.right: parent.right
                                 anchors.bottom: parent.bottom
                                 anchors.margins: 8
-                                visible: window.destination==="library" && !window.localPlaylist && ["files","local-albums","local-artists","playlists"].indexOf(window.libraryTab)>=0
+                                width: libraryFab.inRail ? 0 : libraryFab.width
+                                height: libraryFab.inRail ? 0 : libraryFab.height
+                            }
+                            MFabMenu {
+                                id: libraryFab
+                                objectName: "libraryFab"
+                                readonly property bool inRail: navigationRail.visible
+                                parent: inRail ? railFabSlot : contentFabHost
+                                extended: inRail && navigationRail.expanded
+                                downward: inRail
+                                leadingEdge: inRail
+                                anchors.left: parent.left
+                                anchors.top: parent.top
+                                visible: window.libraryAddApplies
                                 onVisibleChanged: if(!visible)close()
                                 label: "Add to your library"
                                 actions: window.libraryTab==="playlists"
@@ -1079,7 +1135,7 @@ ApplicationWindow {
                                     objectName: "collectionEmptyState"; anchors.centerIn: parent; width: Math.min(parent.width,320); spacing: 14
                                     visible: app.collection.count===0 && !app.busy && !window.serverDisconnected
                                     Icon { anchors.horizontalCenter: parent.horizontalCenter; name: app.error?"refresh":app.collection.query || app.page==="search"?"search":"library"; size: 36; ink: Theme.muted }
-                                    SungText { width: parent.width; horizontalAlignment: Text.AlignHCenter; wrapMode: Text.Wrap; text: app.collection.query ? "No matching songs" : app.error ? "Couldn’t load music" : app.page==="library" ? (window.libraryTab==="files"?"No local music yet":window.libraryTab==="history"?"Nothing played yet":window.libraryTab.startsWith("mix-")?"No matching songs yet":"No liked songs yet") : app.page==="local" ? "No songs yet" : app.page==="search" && !app.query ? "Search music" : "No results"; color: Theme.muted; font.pixelSize: 18 }
+                                    SungText { width: parent.width; horizontalAlignment: Text.AlignHCenter; wrapMode: Text.Wrap; text: app.collection.query ? "No matching songs" : app.error ? "Couldn’t load music" : app.page==="library" ? (window.libraryTab==="files"?"No local music yet":window.libraryTab==="history"?"Nothing played yet":window.libraryTab.startsWith("mix-")?"No matching songs yet":"No liked songs yet") : app.page==="local" ? "No songs yet" : app.page==="search" && !app.query ? "Search music" : "No results"; color: Theme.muted; font.pixelSize: Theme.bodyLarge }
                                     MButton {
                                         objectName: "emptyStateAction"; anchors.horizontalCenter: parent.horizontalCenter; tonal: true
                                         text: app.collection.query?"Clear filters":app.error && app.canRetry?"Retry":window.libraryTab==="files" && app.page==="library"?"Add music":"Search music"
@@ -1118,7 +1174,7 @@ ApplicationWindow {
                                 Column {
                                     anchors.centerIn: parent; spacing: 18; visible: app.playlists.length===0
                                     Icon { anchors.horizontalCenter: parent.horizontalCenter; name: "library"; size: 36; ink: Theme.muted }
-                                    SungText { anchors.horizontalCenter: parent.horizontalCenter; text: "No playlists yet"; color: Theme.muted; font.pixelSize: 18 }
+                                    SungText { anchors.horizontalCenter: parent.horizontalCenter; text: "No playlists yet"; color: Theme.muted; font.pixelSize: Theme.bodyLarge }
                                     MButton { anchors.horizontalCenter: parent.horizontalCenter; text: "New playlist"; symbol: "plus"; filled: true; onClicked: {window.playlistAction="create";playlistName.clear();playlistDialog.open();} }
                                 }
                             }
@@ -1178,7 +1234,7 @@ ApplicationWindow {
                     // The panel's contents live once and move between here and
                     // the bottom sheet, so a narrow window changes where the
                     // pane is, not what it is.
-                    Item { id: sidePanelHost; anchors.fill: parent; anchors.margins: 18 }
+                    Item { id: sidePanelHost; anchors.fill: parent; anchors.margins: Theme.sideSheetPadding }
                 }
             }
             Rectangle {
@@ -1191,8 +1247,8 @@ ApplicationWindow {
                     }
                     ColumnLayout {
                         Layout.preferredWidth: Math.max(100,Math.min(220,window.width*0.17)); spacing: 6; opacity: nowPresentation.fade*window.coverDetailsOpacity; transform: Translate { x: nowPresentation.offset }
-                        AbstractButton { Layout.fillWidth: true; implicitHeight: 24; focusPolicy: Qt.StrongFocus; enabled: app.currentIndex>=0; Accessible.name: "Now playing: " + (app.current.title || "Nothing playing"); onClicked: window.activateSide("now"); contentItem: MatchText { revealFocused: parent.activeFocus; sourceText: nowPresentation.shown.title || "Nothing playing"; font.pixelSize: 15; font.weight: Font.DemiBold } background: Rectangle { color: "transparent"; radius: Theme.shapeExtraSmall; border.width: parent.activeFocus?1:0; border.color: Theme.primary } }
-                        AbstractButton { Layout.fillWidth: true; implicitHeight: 24; focusPolicy: Qt.StrongFocus; enabled: !!app.current.artistId; Accessible.name: "Go to " + (app.current.artist || "artist"); onClicked: app.open(window.relatedItem(app.current,"artist")); contentItem: MatchText { revealFocused: parent.activeFocus; sourceText: nowPresentation.shown.artist || ""; color: Theme.muted; font.pixelSize: 13 } background: Rectangle { color: "transparent"; radius: Theme.shapeExtraSmall; border.width: parent.activeFocus?1:0; border.color: Theme.primary } }
+                        AbstractButton { Layout.fillWidth: true; implicitHeight: 24; focusPolicy: Qt.StrongFocus; enabled: app.currentIndex>=0; Accessible.name: "Now playing: " + (app.current.title || "Nothing playing"); onClicked: window.activateSide("now"); contentItem: MatchText { revealFocused: parent.activeFocus; sourceText: nowPresentation.shown.title || "Nothing playing"; font.pixelSize: Theme.titleMedium; font.weight: Font.DemiBold } background: Rectangle { color: "transparent"; radius: Theme.shapeExtraSmall; border.width: parent.activeFocus?1:0; border.color: Theme.primary } }
+                        AbstractButton { Layout.fillWidth: true; implicitHeight: 24; focusPolicy: Qt.StrongFocus; enabled: !!app.current.artistId; Accessible.name: "Go to " + (app.current.artist || "artist"); onClicked: app.open(window.relatedItem(app.current,"artist")); contentItem: MatchText { revealFocused: parent.activeFocus; sourceText: nowPresentation.shown.artist || ""; color: Theme.muted; font.pixelSize: Theme.bodyMedium } background: Rectangle { color: "transparent"; radius: Theme.shapeExtraSmall; border.width: parent.activeFocus?1:0; border.color: Theme.primary } }
                     }
                     MButton { symbol: "heart"; tip: app.liked?"Unlike":"Like"; toggle: true; selected: app.liked; enabled: app.currentIndex>=0; visible: window.width>=1050; onClicked: app.toggleLike(app.current) }
                     ColumnLayout {
@@ -1308,7 +1364,8 @@ ApplicationWindow {
             }
             TrackList {
                 id: recentList; objectName: "recentlyPlayedView"
-                Layout.fillWidth: true; Layout.fillHeight: true; clip: true; reuseItems: true; cacheBuffer: 80; spacing: 4
+                Layout.fillWidth: true; Layout.fillHeight: true; clip: true; reuseItems: true; cacheBuffer: 80
+                segmented: true
                 visible: window.queueTab==="history"
                 model: app.recentlyPlayed; dragHub: trackDrag
                 onActivate: (row,item)=>app.playKeepingQueue(item)
@@ -1326,7 +1383,7 @@ ApplicationWindow {
                 MButton { objectName: "openFullHistory"; text: "Open history"; onClicked: {window.side="";window.chooseLibrary("history");} }
             }
             TrackList {
-                id: queueList; objectName: "queueView"; visible: window.queueTab==="next"; Layout.fillWidth: true; Layout.fillHeight: true; model: app.queue; clip: true; reuseItems: true; cacheBuffer: 80; spacing: 4
+                id: queueList; objectName: "queueView"; visible: window.queueTab==="next"; Layout.fillWidth: true; Layout.fillHeight: true; model: app.queue; clip: true; reuseItems: true; cacheBuffer: 80
                 queueMode: true; reorderEnabled: true; dragHub: trackDrag
                 onActivate: (row,item)=>app.playAt(row)
                 onMenuRequested: (item,index,anchor)=>window.trackMenu(item,index,anchor,true)
@@ -1386,10 +1443,12 @@ ApplicationWindow {
         objectName: "sidePanelBody"
         parent: window.sheetMode ? sheetHost : sidePanelHost
         anchors.fill: parent
-        spacing: 14
+        // Material sets a side sheet's headline apart from what it holds by
+        // this much, and no more.
+        spacing: Theme.sideSheetTopSpacing
         RowLayout {
             Layout.fillWidth: true
-            SungText { objectName: "sidePanelTitle"; text: window.side==="queue"?(window.queueTab==="history"?"Recently played":"Up next"):window.side==="lyrics"?"Lyrics":"Now playing"; font.pixelSize: 20; font.weight: Font.Medium; Layout.fillWidth: true }
+            SungText { objectName: "sidePanelTitle"; text: window.side==="queue"?(window.queueTab==="history"?"Recently played":"Up next"):window.side==="lyrics"?"Lyrics":"Now playing"; font.pixelSize: Theme.titleLarge; font.weight: Font.Medium; Layout.fillWidth: true }
             MButton { objectName: "revealPlayingButton"; text: "Playing"; tip: "Show playing song · Ctrl+J"; visible: window.side==="queue" && window.queueTab==="next"; enabled: app.currentIndex>=0; onClicked: window.revealPlaying() }
             MButton { objectName: "lyricSearchButton"; symbol: "search"; tip: "Find in lyrics"; visible: window.side==="lyrics"; enabled: !!app.lyrics; onClicked: {if(sideLoader.item)sideLoader.item.openSearch();} }
             MButton { objectName: "lyricTimingButton"; symbol: "settings"; tip: "Lyric timing · saved for this song"; visible: window.side==="lyrics" && !!app.current.id; onClicked: lyricTimingDialog.open() }
@@ -1613,7 +1672,7 @@ ApplicationWindow {
                         ColumnLayout {
                             Layout.fillWidth: true; spacing: 3
                             SungText { text: modelData.title; Layout.fillWidth: true; elide: Text.ElideRight }
-                            SungText { text: [modelData.duplicate?"Duplicate":"",modelData.missing?"Missing file":""].filter(Boolean).join(" · "); color: Theme.muted; font.pixelSize: 13 }
+                            SungText { text: [modelData.duplicate?"Duplicate":"",modelData.missing?"Missing file":""].filter(Boolean).join(" · "); color: Theme.muted; font.pixelSize: Theme.labelMedium }
                         }
                         MButton { text: "Locate…"; visible: modelData.missing; enabled: !app.importingLocal; onClicked: {window.menuItem=modelData;window.openFileDialog("locate");} }
                     }
@@ -1744,7 +1803,7 @@ ApplicationWindow {
                     Layout.fillWidth:true;Layout.minimumWidth:0; spacing:12
                     property bool hasMatches: settingsDialog.matches("Appearance theme system Noctalia light dark") || settingsDialog.matches("Appearance artwork accent color") || settingsDialog.matches("Accent color source palette") || settingsDialog.matches("Ambient artwork backdrop immersive now playing") || settingsDialog.matches("Backdrop follows the music audio") || settingsDialog.matches("Color scheme variant neutral tonal spot vibrant expressive content") || settingsDialog.matches("Contrast standard medium high accessibility") || settingsDialog.matches("Density compact comfortable spacing") || settingsDialog.matches("Pointer density precise mouse touch target") || settingsDialog.matches("Current view layout density grid list") || (!!app.current.id && settingsDialog.matches("Current artwork")) || settingsDialog.matches("Animated album artwork") || settingsDialog.matches("Online animated covers YouTube Apple Music") || settingsDialog.matches("Animations")
                     visible: settingsDialog.searchQuery.trim() ? hasMatches : settingsDialog.category===0
-                    SungText {text:"Appearance";font.pixelSize:20;font.weight:Font.Medium;Layout.bottomMargin:8}
+                    SungText {text:"Appearance";font.pixelSize:Theme.titleLarge;font.weight:Font.Medium;Layout.bottomMargin:8}
                     ColumnLayout {id:options0;objectName:"settingsRows0";Layout.fillWidth:true;Layout.minimumWidth:0;spacing:12
                 SungText { visible: settingsDialog.matches("Appearance theme system Noctalia light dark"); text: "Theme"; font.pixelSize: 16; font.weight: Font.Medium }
                 MSegmentedControl { visible: settingsDialog.matches("Appearance theme system Noctalia light dark"); accessibleName:"Theme"; options:[{key:"system",label:desktopTheme.available?"Noctalia":"System",name:"themeSystem"},{key:"light",label:"Light",name:"themeLight"},{key:"dark",label:"Dark",name:"themeDark"}]; value:app.theme; onChosen:value=>app.theme=value }
@@ -1805,7 +1864,7 @@ ApplicationWindow {
                     Layout.fillWidth:true;Layout.minimumWidth:0; spacing:12
                     property bool hasMatches: settingsDialog.matches("Autoplay similar songs") || settingsDialog.matches("Track notifications") || settingsDialog.matches("Volume step") || settingsDialog.matches("Playback speed rate") || settingsDialog.matches("Sleep timer") || settingsDialog.matches("Pause headphones audio output disconnects") || settingsDialog.matches("Audio output device speakers headphones") || settingsDialog.matches("Prepare next track") || settingsDialog.matches("Gapless playback join pause between songs") || settingsDialog.matches("Crossfade overlap songs fade") || settingsDialog.matches("Volume normalization loudness level ReplayGain") || settingsDialog.matches("Resume recordings over 20 minutes mixes sets position") || settingsDialog.matches("Find missing lyrics on LRCLIB") || settingsDialog.matches("Sleep timer fade out volume")
                     visible: settingsDialog.searchQuery.trim() ? hasMatches : settingsDialog.category===1
-                    SungText {text:"Playback";font.pixelSize:20;font.weight:Font.Medium;Layout.bottomMargin:8}
+                    SungText {text:"Playback";font.pixelSize:Theme.titleLarge;font.weight:Font.Medium;Layout.bottomMargin:8}
                     ColumnLayout {id:options1;objectName:"settingsRows1";Layout.fillWidth:true;Layout.minimumWidth:0;spacing:12
                 MSwitch { Layout.fillWidth:true;Layout.minimumWidth:0; visible: settingsDialog.matches("Autoplay similar songs"); text: "Autoplay similar songs"; checked: app.autoplay; onToggled: app.autoplay=checked }
                 MSwitch { Layout.fillWidth:true;Layout.minimumWidth:0; visible: settingsDialog.matches("Track notifications"); objectName: "trackNotificationsSwitch"; text: "Track notifications"; checked: app.trackNotifications; onToggled: app.trackNotifications=checked }
@@ -1844,7 +1903,7 @@ ApplicationWindow {
                     Layout.fillWidth:true;Layout.minimumWidth:0; spacing:12
                     property bool hasMatches: settingsDialog.matches("Music folders import manage") || settingsDialog.matches("Keyboard shortcuts keys help") || settingsDialog.matches("Quick actions commands playlists") || settingsDialog.matches("Update music folders automatically watch") || settingsDialog.matches("Type to jump in lists keyboard") || settingsDialog.matches("Start page Home local music server liked") || settingsDialog.matches("Customize Home sections order") || settingsDialog.matches("Listening sessions saved queues") || settingsDialog.matches("Listening statistics top artists albums time")
                     visible: settingsDialog.searchQuery.trim() ? hasMatches : settingsDialog.category===2
-                    SungText {text:"Library";font.pixelSize:20;font.weight:Font.Medium;Layout.bottomMargin:8}
+                    SungText {text:"Library";font.pixelSize:Theme.titleLarge;font.weight:Font.Medium;Layout.bottomMargin:8}
                     ColumnLayout {id:options2;objectName:"settingsRows2";Layout.fillWidth:true;Layout.minimumWidth:0;spacing:12
                 MSettingRow {opens:true;text:"Music folders";visible:settingsDialog.matches("Music folders import manage");onClicked:{settingsDialog.close();musicFoldersDialog.open();}}
                 MSettingRow {opens:true;objectName:"shortcutHelpButton";text:"Keyboard shortcuts";visible:settingsDialog.matches("Keyboard shortcuts keys help");onClicked:{settingsDialog.close();shortcutHelp.open()}}
@@ -1863,7 +1922,7 @@ ApplicationWindow {
                     Layout.fillWidth:true;Layout.minimumWidth:0; spacing:12
                     property bool hasMatches: settingsDialog.matches("Music server library") || settingsDialog.matches("YouTube cookies import replace remove sign in")
                     visible: settingsDialog.searchQuery.trim() ? hasMatches : settingsDialog.category===3
-                    SungText {text:"Connections";font.pixelSize:20;font.weight:Font.Medium;Layout.bottomMargin:8}
+                    SungText {text:"Connections";font.pixelSize:Theme.titleLarge;font.weight:Font.Medium;Layout.bottomMargin:8}
                     ColumnLayout {id:options3;objectName:"settingsRows3";Layout.fillWidth:true;Layout.minimumWidth:0;spacing:12
                 MSettingRow {opens:true;objectName:"musicServerButton";text:"Music server";visible:settingsDialog.matches("Music server library");onClicked:{settingsDialog.close();serverConnection.open()}}
                 SungText { visible: settingsDialog.matches("YouTube cookies import replace remove sign in"); text: "YouTube"; font.pixelSize: Theme.labelLarge; font.weight: Font.Medium; color: Theme.muted; Layout.topMargin: 12 }
@@ -1877,7 +1936,7 @@ ApplicationWindow {
                     Layout.fillWidth:true;Layout.minimumWidth:0; spacing:12
                     property bool hasMatches: settingsDialog.matches("Pause history this session privacy") || settingsDialog.matches("Clear artwork cache") || settingsDialog.matches("Clear history") || settingsDialog.matches("Export library backup") || settingsDialog.matches("Import library restore") || settingsDialog.matches("Sung version")
                     visible: settingsDialog.searchQuery.trim() ? hasMatches : settingsDialog.category===4
-                    SungText {text:"Privacy & data";font.pixelSize:20;font.weight:Font.Medium;Layout.bottomMargin:8}
+                    SungText {text:"Privacy & data";font.pixelSize:Theme.titleLarge;font.weight:Font.Medium;Layout.bottomMargin:8}
                     ColumnLayout {id:options4;objectName:"settingsRows4";Layout.fillWidth:true;Layout.minimumWidth:0;spacing:12
                 MSwitch { Layout.fillWidth:true;Layout.minimumWidth:0; visible: settingsDialog.matches("Pause history this session privacy"); objectName: "historyPauseSwitch"; text: "Pause history this session"; checked: app.historyPaused; onToggled: app.historyPaused=checked }
                 MSettingRow {objectName:"clearCacheButton";text:"Clear artwork cache";visible:settingsDialog.matches("Clear artwork cache");onClicked:app.clearCache()}
@@ -1934,7 +1993,7 @@ ApplicationWindow {
         anchors.bottom: parent.bottom; anchors.bottomMargin: 140; anchors.horizontalCenter: parent.horizontalCenter
         width: Math.min(window.width-120,errorText.implicitWidth+(app.canRetry?180:100)); height: Math.min(150,errorText.implicitHeight+32)
         radius: Theme.shapeLarge; color: Theme.containerText; visible: !!app.error; z: 50
-        SungText { id: errorText; anchors.fill: parent; anchors.margins: 16; anchors.rightMargin: app.canRetry?140:58; text: app.error; wrapMode: Text.Wrap; elide: Text.ElideRight; maximumLineCount: 5; color: Theme.primaryContainer; font.pixelSize: 13 }
+        SungText { id: errorText; anchors.fill: parent; anchors.margins: 16; anchors.rightMargin: app.canRetry?140:58; text: app.error; wrapMode: Text.Wrap; elide: Text.ElideRight; maximumLineCount: 5; color: Theme.primaryContainer; font.pixelSize: Theme.bodyMedium }
         MButton { anchors.right: parent.right; anchors.rightMargin: 48; anchors.verticalCenter: parent.verticalCenter; text: "Retry"; visible: app.canRetry; ink: Theme.primaryContainer; onClicked: app.retry() }
         MButton { anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter; symbol: "close"; ink: Theme.primaryContainer; tip: "Dismiss error"; onClicked: app.dismissError() }
     }

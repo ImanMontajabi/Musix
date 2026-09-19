@@ -6,12 +6,20 @@ Slider {
     readonly property bool handlesArrowKeys: true
     objectName: "seekBar"
     stepSize: volumeMode ? app.volumeStep/100 : 5000
-    implicitHeight: 40
+    // Material's expressive slider: a 16dp track, a handle that is a 4dp bar
+    // as tall as the touch target, and a 6dp gap held open on either side of
+    // it so the handle never sits on the position it is reporting.
+    implicitHeight: Theme.sliderHandleHeight.xsmall
+    // A host that gives the slider less room than Material's handle asks for,
+    // as the mini player does, gets the handle its room allows rather than one
+    // that hangs out of it.
+    readonly property real handleHeight: Math.min(Theme.sliderHandleHeight.xsmall, height)
     property bool volumeMode: false
-    property color inactiveColor:Theme.high
-    readonly property real thumbWidth: volumeMode ? 12 : 4
+    property color inactiveColor:Theme.secondaryContainer
+    readonly property real thumbWidth: Theme.sliderHandle
     readonly property real thumbCenter: visualPosition * (availableWidth - thumbWidth) + thumbWidth/2
-    readonly property real trackGap: volumeMode ? 0 : 6
+    readonly property real trackGap: Theme.sliderGap
+    readonly property real trackHeight: Theme.sliderTrack.xsmall
     wheelEnabled: volumeMode
     from: 0; to: volumeMode ? 1 : Math.max(1,app.duration)
     value: volumeMode ? app.volume : fineSeeking ? fineValue : app.position
@@ -68,9 +76,9 @@ Slider {
     background: Item {
         id: track
         x: s.leftPadding; y: s.topPadding+(s.availableHeight-height)/2
-        width: s.availableWidth; height: s.volumeMode ? 4 : 14
-        Rectangle { x: Math.min(parent.width,s.thumbCenter+s.thumbWidth/2+s.trackGap); width: parent.width-x; anchors.verticalCenter: parent.verticalCenter; height: 4; radius: Theme.shapeFull(4); color: s.inactiveColor }
-        Rectangle { visible: s.volumeMode; width: s.thumbCenter; height: 4; radius: Theme.shapeFull(4); color: Theme.primary }
+        width: s.availableWidth; height: s.trackHeight
+        Rectangle { objectName: "seekInactiveTrack"; x: Math.min(parent.width,s.thumbCenter+s.thumbWidth/2+s.trackGap); width: parent.width-x; height: parent.height; radius: Theme.shapeFull(height); color: s.enabled ? s.inactiveColor : Theme.sliderQuiet(Theme.disabledTrackOpacity) }
+        Rectangle { objectName: "seekActiveTrack"; visible: s.volumeMode; width: Math.max(0,s.thumbCenter-s.thumbWidth/2-s.trackGap); height: parent.height; radius: Theme.shapeFull(height); color: s.enabled ? Theme.primary : Theme.sliderQuiet(Theme.disabledContentOpacity) }
         Item {
             id: played; objectName: "playedWave"
             visible: !s.volumeMode
@@ -83,24 +91,41 @@ Slider {
                 Behavior on amplitude { NumberAnimation { duration: Theme.normal; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.effectsCurve } }
                 ShapePath {
                     strokeColor: Theme.primary; strokeWidth: 3; fillColor: "transparent"; capStyle: ShapePath.RoundCap
-                    PathPolyline { path: {if(s.volumeMode)return [];let points=[];for(let x=0;x<=wave.width+3;x+=3)points.push(Qt.point(x,7+wave.amplitude*Math.sin(x*Math.PI/14)));return points;} }
+                    PathPolyline { path: {if(s.volumeMode)return [];const mid=s.trackHeight/2;let points=[];for(let x=0;x<=wave.width+3;x+=3)points.push(Qt.point(x,mid+wave.amplitude*Math.sin(x*Math.PI/14)));return points;} }
                 }
                 // A render-thread transform moves static geometry; no per-frame JS painting.
                 XAnimator { target: wave; from: 0; to: -28; duration: 1400; loops: Animation.Infinite; running: !s.volumeMode && app.playing && app.motion && s.visible && played.width>0 && s.Window.window && s.Window.window.visible && s.Window.window.visibility!==Window.Minimized }
             }
         }
-        Rectangle { x: parent.width-4; y: (parent.height-4)/2; width: 4; height: 4; radius: Theme.shapeFull(4); color: Theme.muted; visible: !s.volumeMode && s.thumbCenter+s.thumbWidth/2+s.trackGap<parent.width-4 }
+        // Material marks where the track ends, so a position short of the end
+        // still says there is more of it.
+        Rectangle {
+            objectName: "seekStop"
+            x: parent.width-Theme.sliderStop-Theme.sliderGap; anchors.verticalCenter: parent.verticalCenter
+            width: Theme.sliderStop; height: Theme.sliderStop; radius: Theme.shapeFull(height)
+            color: s.enabled ? Theme.primary : Theme.sliderQuiet(Theme.disabledContentOpacity)
+            visible: s.thumbCenter+s.thumbWidth/2+s.trackGap < x
+        }
     }
-    handle: Rectangle {
-        x: s.leftPadding+s.visualPosition*(s.availableWidth-width)
+    handle: Item {
+        x: s.leftPadding+s.visualPosition*(s.availableWidth-Theme.sliderHandle)
         y: s.topPadding+(s.availableHeight-height)/2
-        width: s.volumeMode ? 12 : 4; height: s.volumeMode ? 12 : s.interacting ? 30 : 24
-        radius: width/2; color: Theme.primary
-        Behavior on height { enabled: app.motion; SpringAnimation { spring: 5; damping: 0.8; epsilon: 0.1 } }
+        width: Theme.sliderHandle; height: s.handleHeight
+        Rectangle {
+            objectName: "seekHandle"
+            anchors.centerIn: parent
+            // Material narrows the handle while it is held, so what is under
+            // it is not hidden by the thing setting it.
+            width: s.interacting ? Theme.sliderHandlePressed : Theme.sliderHandle
+            height: parent.height
+            radius: Theme.shapeFull(width)
+            color: s.enabled ? Theme.primary : Theme.sliderQuiet(Theme.disabledContentOpacity)
+            Behavior on width { enabled: app.motion; NumberAnimation { duration: Theme.springFastEffectsMs; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.springFastEffects } }
+        }
         Rectangle {
             objectName: "sliderFocusRing"
             anchors.centerIn: parent
-            width: parent.width+12; height: parent.height+12; radius: Theme.shapeSmall
+            width: parent.width+12; height: parent.height+4; radius: Theme.shapeSmall
             color: "transparent"; border.width: 2; border.color: Theme.primary
             visible: s.visualFocus
         }

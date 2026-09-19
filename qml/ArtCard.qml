@@ -5,6 +5,9 @@ Item {
     readonly property string albumCardId:track.id || track.browseId || ""
     property var track: ({})
     property var openHandler: null
+    // The corner the artwork takes. A card in a grid rounds at the large
+    // increased step; one in a carousel takes the step past it.
+    property real corner: Theme.shapeLargeIncreased
     // Material's carousel moves an item's visual at a different speed from its
     // container. -1 to 1, nought at rest. The shift is small and unclipped, so
     // the artwork keeps its rounded corners and its square.
@@ -16,7 +19,7 @@ Item {
     Item {
         id: art; width: parent.width; height: width
         transform: Translate { x: card.parallax*7 }
-        property real radius: (card.track.kind === "artist" || card.track.kind === "local-artist") ? Theme.shapeFull(width) : Theme.shapeLargeIncreased
+        property real radius: (card.track.kind === "artist" || card.track.kind === "local-artist") ? Theme.shapeFull(width) : card.corner
         // Artwork can be masked with a shape from Material's library; covers
         // keep their circle and their rounded square because a lobed edge only
         // reads as a portrait over photography, not over flat generated art.

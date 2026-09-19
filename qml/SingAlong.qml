@@ -165,6 +165,7 @@ Item {
         visible: root.ready && root.activeIndex<0
         SungText {
             objectName: "singAlongCue"
+            scaled: true
             anchors.horizontalCenter: parent.horizontalCenter
             text: app.lyricGapSeconds>0 ? "Lyrics in "+app.lyricGapSeconds+" s" : "♪"
             color: Theme.muted

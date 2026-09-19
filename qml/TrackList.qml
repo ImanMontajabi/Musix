@@ -6,6 +6,8 @@ import Sung.Native 1.0
 ListView {
     id: list
     property bool queueMode: false
+    // Material's segmented list style, which the panel lists are drawn in.
+    property bool segmented: queueMode
     property bool groupFolders: false
     property bool groupDiscs: false
     property bool groupReady:false
@@ -74,7 +76,7 @@ ListView {
     signal menuRequested(var item, int row, var anchor)
     signal removeSelected()
     signal addSelected()
-    clip: true; spacing: foldable?0:4; reuseItems: true; cacheBuffer: 80
+    clip: true; spacing: segmented?0:foldable?0:4; reuseItems: true; cacheBuffer: 80
     boundsBehavior: Flickable.StopAtBounds
     readonly property bool animateEdits: queueMode && app.motion && visible && Window.window && Window.window.visible && Window.window.visibility!==Window.Minimized
     onAnimateEditsChanged: if(!animateEdits){for(const child of contentItem.children)if(child.motionRaised!==undefined)child.motionRaised=false;}
@@ -171,6 +173,11 @@ ListView {
             Behavior on y { NumberAnimation { duration: app.motion?130:0; easing.type: Easing.OutCubic } }
         }
         track: entry; rowIndex: list.queueMode?index:app.collection.sourceIndex(index); queueMode: list.queueMode
+        // The queue is drawn as Material's segmented list: one run per group of
+        // songs, round where the run ends and nearly square inside it.
+        segmented: list.segmented
+        firstInRun: index===0 || ListView.section !== ListView.previousSection
+        lastInRun: index===list.count-1 || ListView.section !== ListView.nextSection
         selection: list.selection; selectionIndex: index; listOwner: list; dragHub: list.dragHub
         onClicked: list.activate(index,entry)
         onDismissRequested: if(list.queueMode)app.removeQueue(rowIndex)

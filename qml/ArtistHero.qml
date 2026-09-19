@@ -63,6 +63,8 @@ Item {
             spacing: 8
             SungText {
                 objectName: "artistHeroName"
+                // It travels between two roles as the band collapses.
+                scaled: true
                 Layout.fillWidth: true
                 text: app.title
                 // Display small while the band is open, title large once it has

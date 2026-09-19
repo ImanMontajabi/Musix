@@ -25,6 +25,15 @@ Item {
     // library is not the screen's primary action, and at 56dp the FAB outweighed
     // everything around it.
     readonly property real fabSize: 40
+    // Material's rail carries the FAB or extended FAB at its head, above the
+    // destinations. A FAB up there opens downward, and towards the content
+    // rather than away from it.
+    property bool downward: false
+    property bool leadingEdge: false
+    // An extended FAB says in words what the action is. Material's small
+    // extended FAB is 56dp with a 16dp corner, the label at title medium and
+    // 16dp of padding either side of it.
+    property bool extended: false
 
     implicitWidth: fab.width
     implicitHeight: fab.height
@@ -45,9 +54,12 @@ Item {
     Column {
         id: items
         objectName: "fabMenuItems"
-        anchors.right: fab.right
-        anchors.bottom: fab.top
+        anchors.right: root.leadingEdge ? undefined : fab.right
+        anchors.left: root.leadingEdge ? fab.left : undefined
+        anchors.bottom: root.downward ? undefined : fab.top
+        anchors.top: root.downward ? fab.bottom : undefined
         anchors.bottomMargin: 12
+        anchors.topMargin: 12
         spacing: 8
         visible: root.open || fadeOut.running
         Repeater {
@@ -108,7 +120,11 @@ Item {
     AbstractButton {
         id: fab
         objectName: "fab"
-        width: root.fabSize; height: root.fabSize
+        width: root.extended && !root.open
+                 ? Theme.extendedFabInset*2 + 24 + Theme.extendedFabGap + fabLabel.implicitWidth
+                 : root.extended ? Theme.extendedFabHeight : root.fabSize
+        height: root.extended ? Theme.extendedFabHeight : root.fabSize
+        Behavior on width { enabled: app.motion; NumberAnimation { duration: Theme.springFastSpatialMs; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.springFastSpatial } }
         hoverEnabled: true
         focusPolicy: Qt.StrongFocus
         Accessible.name: root.open ? "Close actions" : (root.label || "Actions")
@@ -118,7 +134,7 @@ Item {
             color: root.open ? Theme.high : Theme.primaryContainer
             // A small FAB rests at the medium shape step and morphs to full
             // when it becomes the menu's close button.
-            radius: root.open ? Theme.shapeFull(fab.height) : Theme.shapeMedium
+            radius: root.open ? Theme.shapeFull(fab.height) : root.extended ? Theme.shapeLarge : Theme.shapeMedium
             Behavior on radius { enabled: app.motion; NumberAnimation { duration: Theme.springFastSpatialMs; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.springFastSpatial } }
             Behavior on color { ColorAnimation { duration: Theme.springFastEffectsMs; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.springFastEffects } }
             MElevation { anchors.fill: parent; radius: parent.radius; level: 3 }
@@ -132,9 +148,21 @@ Item {
         // A control stretches its content item to fill it, so the glyph needs a
         // wrapper to keep the 24dp Material asks for inside a 56dp FAB.
         contentItem: Item {
+            SungText {
+                id: fabLabel
+                objectName: "fabLabel"
+                visible: root.extended && !root.open
+                text: root.label
+                font.pixelSize: Theme.titleMedium
+                labelRole: true
+                color: Theme.containerText
+                anchors.verticalCenter: parent.verticalCenter
+                x: Theme.extendedFabInset + 24 + Theme.extendedFabGap
+            }
             Icon {
                 objectName: "fabIcon"
-                anchors.centerIn: parent
+                anchors.verticalCenter: parent.verticalCenter
+                x: fabLabel.visible ? Theme.extendedFabInset : (parent.width-width)/2
                 name: root.open ? "close" : root.symbol
                 size: 24
                 ink: root.open ? Theme.text : Theme.containerText

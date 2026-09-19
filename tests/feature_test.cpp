@@ -18,6 +18,7 @@
 #include <QQuickItem>
 #include <QQuickWindow>
 #include <QFont>
+#include <QSet>
 #include <QTest>
 #include <qpa/qwindowsysteminterface.h>
 #include <functional>
@@ -40,6 +41,23 @@ QQuickItem *anyItem(QQuickItem *root, const QString &name) {
     if (auto found = anyItem(child, name))
       return found;
   return nullptr;
+}
+
+// Material's type scale is a closed set of roles. A size that is not one of
+// them carries no line height and no letter spacing of its own, so it is not a
+// style at all, only a number. A style sized by the window or by the reader
+// says so and is left alone.
+void collectOffScale(QQuickItem *root, const QSet<int> &sizes, QStringList &out) {
+  if (root->isVisible() && root->metaObject()->indexOfProperty("metricSize") >= 0 &&
+      !root->property("scaled").toBool()) {
+    const int size = root->property("font").value<QFont>().pixelSize();
+    if (size > 0 && !sizes.contains(size))
+      out.append(QString("%1 at %2px")
+                     .arg(root->objectName().isEmpty() ? QStringLiteral("text") : root->objectName())
+                     .arg(size));
+  }
+  for (auto child : root->childItems())
+    collectOffScale(child, sizes, out);
 }
 
 // A style laid out on an absolute line height has to leave room for its own
@@ -833,6 +851,17 @@ void runSingAlongTests(Backend *b, QQuickWindow *w) {
     c.check(line <= size * 2,
             "and no more than a line's worth of room");
   }
+  // The lyric views scale their own type, and say so; everything around them
+  // is still held to Material's roles.
+  QSet<int> scaleSizes;
+  for (const auto &role : c.evaluate("Object.keys(Theme.typeScale)").toStringList())
+    scaleSizes.insert(c.evaluate(QString("Theme.typeScale['%1'][0]").arg(role)).toInt());
+  QStringList offScale;
+  collectOffScale(w->contentItem(), scaleSizes, offScale);
+  c.check(offScale.isEmpty(),
+          offScale.isEmpty() ? QStringLiteral("every style here is set at one of Material's sizes")
+                             : QString("styles set at a size off the scale: %1").arg(offScale.join(", ")));
+
   // Nowhere else either: a line height read as a multiple collapses silently.
   QStringList cramped;
   collectCrampedText(w->contentItem(), cramped);
@@ -3380,6 +3409,236 @@ void runMaterialGrainTests(Backend *b, QQuickWindow *w) {
   c.finish();
 }
 
+// The controls Material redrew or added: the expressive slider, the segmented
+// list, the side sheet, the selection controls, the docked toolbar, the input
+// chip and the action at the head of the rail.
+void runMaterialControlsTests(Backend *b, QQuickWindow *w) {
+  Check c{b, w, qEnvironmentVariable("SUNG_TEST_OUTPUT")};
+  QDir().mkpath(c.directory + "/music/Night Ferry");
+  QWindowSystemInterface::handleFocusWindowChanged(w);
+  w->resize(1400, 900);
+  QTest::qWait(500);
+  b->setTheme("dark");
+  b->setMotion(true);
+  b->setVolume(0);
+  b->setAutoplay(false);
+  b->setWatchMusicFolders(false);
+  b->setOnlineArtwork(false);
+
+  for (int i = 1; i <= 4; ++i)
+    if (!encodeTrack(c, QString("%1/music/Night Ferry/%2.flac").arg(c.directory).arg(i),
+                     QString("Ferry %1").arg(i), "Night Ferry", "Marble Coast", i))
+      return c.finish();
+  b->importMusicFolder(QUrl::fromLocalFile(c.directory + "/music"));
+  c.check(c.until([&] { return !b->importingLocal(); }, 40000), "import the control fixture");
+  QMetaObject::invokeMethod(w, "chooseLibrary", Q_ARG(QVariant, QVariant("files")));
+  c.check(c.until([&] { return b->results()->count() == 4; }), "the library is listed");
+  QTest::qWait(500);
+
+  // Something has to be playing for the seek bar to be live: Material dims a
+  // disabled slider, and a dimmed track says nothing about its colour role.
+  b->enqueueItems(b->results()->rows);
+  b->playAt(0);
+  c.check(c.until([&] { return b->playing() && b->duration() > 0; }, 20000), "a song is playing");
+  QTest::qWait(400);
+
+  // --- The slider Material redrew ---
+  // The old slider was a rule with a dot on it. The expressive one is a track
+  // you can see, with a handle that is a bar and a gap held open around it.
+  c.check(c.evaluate("Theme.sliderTrack.xsmall").toInt() == 16 &&
+              c.evaluate("Theme.sliderHandle").toInt() == 4 &&
+              c.evaluate("Theme.sliderHandleHeight.xsmall").toInt() == 44 &&
+              c.evaluate("Theme.sliderGap").toInt() == 6,
+          "the slider is a 16dp track with a 4 by 44dp handle and a 6dp gap");
+  auto seek = shownItem(w->contentItem(), "seekBar");
+  c.check(seek, "the seek bar is on screen");
+  if (seek) {
+    auto inactive = anyItem(seek, "seekInactiveTrack");
+    auto handle = anyItem(seek, "seekHandle");
+    c.check(inactive && qAbs(inactive->height() - 16) < 0.5,
+            QString("its track is drawn at that height (%1)").arg(inactive ? inactive->height() : 0));
+    c.check(inactive && inactive->property("color").value<QColor>() == c.themeColor("secondaryContainer"),
+            "in the secondaryContainer Material names for it");
+    c.check(handle && qAbs(handle->width() - 4) < 0.5 && qAbs(handle->height() - 44) < 0.5,
+            QString("and its handle is the bar, not a dot (%1 by %2)")
+                .arg(handle ? handle->width() : 0).arg(handle ? handle->height() : 0));
+    auto stop = anyItem(seek, "seekStop");
+    c.check(stop && qAbs(stop->width() - 4) < 0.5, "the end of the track is marked");
+  }
+  c.shot("01-expressive-slider");
+
+  // --- A list item answers the pointer with its shape ---
+  c.check(c.evaluate("Theme.listRest").toInt() == 4 &&
+              c.evaluate("Theme.listHovered").toInt() == 12 &&
+              c.evaluate("Theme.listActive").toInt() == 16,
+          "an expressive list item rests at 4dp, rounds to 12 under the pointer and 16 when it is taken");
+  c.check(c.evaluate("Theme.listSegmentedGap").toInt() == 2,
+          "and a segmented run sets its items 2dp apart");
+
+  // --- The selection controls Material has and this did not ---
+  c.check(c.until([&] { return b->queue()->count() == 4; }), "the queue has something in it");
+  QMetaObject::invokeMethod(w, "activateSide", Q_ARG(QVariant, QVariant("queue")));
+  QTest::qWait(600);
+  auto sheet = shownItem(w->contentItem(), "sidePanel");
+  c.check(sheet, "the side sheet opens");
+  if (sheet) {
+    // Material keeps 24dp clear at a side sheet's edges and sets its headline
+    // apart from what it holds by 12.
+    c.check(c.evaluate("Theme.sideSheetPadding").toInt() == 24 &&
+                c.evaluate("Theme.sideSheetTopSpacing").toInt() == 12,
+            "a side sheet keeps 24dp clear with 12dp under its headline");
+    if (auto host = w->findChild<QQuickItem *>("sidePanelBody")) {
+      const double clear = host->mapToItem(sheet, QPointF(0, 0)).x();
+      c.check(qAbs(clear - 24) < 0.5 && qAbs(sheet->width() - host->width() - 48) < 0.5,
+              QString("and this one does (%1 clear)").arg(clear, 0, 'f', 0));
+    }
+    auto headline = shownItem(w->contentItem(), "sidePanelTitle");
+    c.check(headline && headline->property("font").value<QFont>().pixelSize() == 22,
+            "its headline takes the title large role");
+  }
+  // The queue is drawn as Material's segmented list.
+  // The song playing is picked out, so the shape of the run is read from the
+  // ones that are not: an item inside a run is nearly square at both ends, and
+  // the run is round where it stops.
+  auto middleRow = shownItem(w->contentItem(), "queueRow_1");
+  auto lastRow = shownItem(w->contentItem(), "queueRow_3");
+  c.check(middleRow && lastRow, "the queue has rows to look at");
+  if (middleRow && lastRow) {
+    auto middle = middleRow->property("background").value<QQuickItem *>();
+    auto last = lastRow->property("background").value<QQuickItem *>();
+    c.check(middle && qAbs(middle->property("topLeftRadius").toDouble() - 4) < 0.5,
+            "an item inside the run is nearly square where the one above it stops");
+    c.check(middle && qAbs(middle->property("bottomLeftRadius").toDouble() - 4) < 0.5,
+            "and where the one below it starts");
+    c.check(last && qAbs(last->property("bottomLeftRadius").toDouble() - 16) < 0.5,
+            "the run is round where it ends");
+    c.check(middle && qAbs(middleRow->height() - middle->height() - 2) < 0.5,
+            "and the items are set apart rather than divided by a rule");
+    // The song playing takes the shape Material gives a picked out item.
+    if (auto playing = shownItem(w->contentItem(), "queueRow_0"))
+      if (auto back = playing->property("background").value<QQuickItem *>())
+        c.check(qAbs(back->property("topLeftRadius").toDouble() - 16) < 0.5,
+                "while the one playing is round on every corner");
+  }
+  c.shot("02-segmented-list");
+  QMetaObject::invokeMethod(w, "activateSide", Q_ARG(QVariant, QVariant("")));
+  QTest::qWait(400);
+
+  // --- The checkbox in a list item's leading slot ---
+  auto row = shownItem(w->contentItem(), "trackRow_0");
+  c.check(row, "a track row to select");
+  if (row) {
+    const auto point = row->mapToScene(QPointF(30, row->height()/2)).toPoint();
+    QTest::mouseClick(w, Qt::LeftButton, Qt::NoModifier, point);
+    QTest::qWait(400);
+  }
+  auto box = shownItem(w->contentItem(), "rowCheckbox");
+  c.check(box, "the row carries a checkbox");
+  if (box) {
+    c.check(qAbs(box->width() - 48) < 0.5 && qAbs(box->height() - 48) < 0.5,
+            QString("its target is the 48dp Material asks for (%1)").arg(box->width()));
+    auto square = anyItem(box, "checkboxBox");
+    c.check(square && qAbs(square->width() - 18) < 0.5,
+            "the square inside it is 18dp");
+    c.check(square && qAbs(square->property("radius").toDouble() - 2) < 0.5,
+            "on a 2dp corner");
+    auto layer = anyItem(box, "checkboxStateLayer");
+    c.check(layer && qAbs(layer->width() - 40) < 0.5, "and its state layer is 40dp");
+    c.check(box->property("checked").toBool(), "the row it belongs to is selected");
+  }
+
+  // --- The docked toolbar that selection brings up ---
+  auto toolbar = shownItem(w->contentItem(), "selectionToolbar");
+  c.check(toolbar, "selecting docks a toolbar of what to do with it");
+  if (toolbar) {
+    c.check(qAbs(toolbar->height() - 64) < 0.5,
+            QString("64dp tall, as Material specifies (%1)").arg(toolbar->height()));
+    c.check(toolbar->property("color").value<QColor>() == c.themeColor("container"),
+            "on the surfaceContainer a standard toolbar takes");
+    c.check(qAbs(toolbar->property("radius").toDouble()) < 0.01,
+            "square, because it is docked rather than floating");
+    if (auto panel = shownItem(w->contentItem(), "contentColumn"))
+      c.check(toolbar->width() >= panel->width() + 2*c.evaluate("window.paneMargin").toDouble() - 1,
+              "and it runs the width of the surface it is docked to");
+  }
+  c.shot("03-docked-toolbar");
+  c.evaluate("window.selectedView().selection.clear()");
+  QTest::qWait(300);
+
+  // --- The input chip a typed filter stands in ---
+  b->collection()->setProperty("query", "ferry");
+  c.check(c.until([&] { return b->collection()->property("query").toString() == "ferry"; }),
+          "a filter is typed");
+  w->setProperty("collectionTools", false);
+  QTest::qWait(400);
+  auto chip = shownItem(w->contentItem(), "collectionFilterChip");
+  c.check(chip, "the filter stands as a chip once the row it was typed in is folded away");
+  if (chip) {
+    c.check(chip->property("variant").toString() == "input", "an input chip, which is what it is");
+    auto container = chip->property("background").value<QQuickItem *>();
+    c.check(container && qAbs(container->height() - 32) < 0.5,
+            QString("32dp, as Material draws a chip (%1)").arg(container ? container->height() : 0));
+    auto remove = anyItem(chip, "chipRemove");
+    c.check(remove && remove->isVisible(), "and it carries the means to take the filter back out");
+    c.shot("04-input-chip");
+    QMetaObject::invokeMethod(remove, "clicked");
+    QTest::qWait(400);
+    c.check(b->collection()->property("query").toString().isEmpty(),
+            "pressing that clears the filter");
+  }
+
+  // --- The action at the head of the rail ---
+  QMetaObject::invokeMethod(w, "chooseLibrary", Q_ARG(QVariant, QVariant("local-albums")));
+  QTest::qWait(600);
+  auto slot = shownItem(w->contentItem(), "railFabSlot");
+  c.check(slot, "the rail carries the surface's primary action");
+  auto fab = shownItem(w->contentItem(), "libraryFab");
+  c.check(fab && slot && fab->parentItem() == slot, "and the action sits in it");
+  if (auto rail = shownItem(w->contentItem(), "navigationRail")) {
+    auto menu = shownItem(w->contentItem(), "navigationMenuButton");
+    auto home = shownItem(w->contentItem(), "nav_home");
+    c.check(menu && fab && home && menu->y() < fab->mapToItem(rail, QPointF(0,0)).y() &&
+                fab->mapToItem(rail, QPointF(0,0)).y() < home->y(),
+            "between the menu and the destinations, where Material puts it");
+    // Opening the rail turns the action into an extended FAB.
+    if (!rail->property("expanded").toBool())
+      c.click("navigationMenuButton");
+    c.check(c.until([&] { return rail->property("expanded").toBool(); }), "the rail opens");
+    QTest::qWait(600);
+    c.check(fab && fab->property("extended").toBool(),
+            "and the action says in words what it does");
+    auto label = fab ? anyItem(fab, "fabLabel") : nullptr;
+    c.check(label && label->isVisible() && !label->property("text").toString().isEmpty(),
+            "which is what an extended FAB is");
+    c.check(rail->implicitWidth() <= rail->width() + 1,
+            QString("the rail still keeps its width (%1 wide, wants %2)")
+                .arg(rail->width()).arg(rail->implicitWidth()));
+    c.shot("05-rail-extended-fab");
+    c.click("navigationMenuButton");
+    QTest::qWait(400);
+  }
+
+  // --- The radio button a choice of one is made with ---
+  if (auto picker = w->findChild<QObject *>("outputPicker"))
+    QMetaObject::invokeMethod(picker, "open");
+  QTest::qWait(600);
+  auto radio = shownItem(w->contentItem(), "outputRadio_0");
+  c.check(radio, "the audio output list offers its options as radio buttons");
+  if (radio) {
+    c.check(qAbs(radio->width() - 48) < 0.5, "at the 48dp target");
+    auto ring = anyItem(radio, "radioRing");
+    c.check(ring && qAbs(ring->width() - 20) < 0.5, "around a 20dp ring");
+    c.check(c.evaluate("Theme.radioSize").toInt() == 20 &&
+                c.evaluate("Theme.selectionStateLayer").toInt() == 40,
+            "which is what Material publishes for one");
+    c.shot("06-radio-buttons");
+  }
+
+  b->stop();
+  b->clearQueue();
+  c.finish();
+}
+
 // Material's type scale as a whole style rather than a size, the app bar that
 // says when content is under it, the button variants that were missing, the
 // scrim as a role, and the list a detail was opened from staying beside it.
@@ -3442,6 +3701,18 @@ void runMaterialScaleTests(Backend *b, QQuickWindow *w) {
     c.check(font.letterSpacing() > 0,
             QString("and carries real letter spacing (%1)").arg(font.letterSpacing(), 0, 'f', 2));
   }
+  // Every style on screen is one of Material's roles, not a number near one.
+  QSet<int> scaleSizes;
+  for (const auto &role : c.evaluate("Object.keys(Theme.typeScale)").toStringList())
+    scaleSizes.insert(c.evaluate(QString("Theme.typeScale['%1'][0]").arg(role)).toInt());
+  c.check(scaleSizes.size() >= 9,
+          QString("Material publishes %1 sizes to choose from").arg(scaleSizes.size()));
+  QStringList offScale;
+  collectOffScale(w->contentItem(), scaleSizes, offScale);
+  c.check(offScale.isEmpty(),
+          offScale.isEmpty() ? QStringLiteral("every style is set at one of them")
+                             : QString("styles set at a size off the scale: %1").arg(offScale.join(", ")));
+
   // A role's line height is absolute, so it has to clear its own glyphs.
   QStringList cramped;
   collectCrampedText(w->contentItem(), cramped);

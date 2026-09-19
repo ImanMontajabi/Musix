@@ -45,7 +45,7 @@ Item {
             onClicked: lyricPane.jumpMatch(index)
             background: Rectangle { radius: Theme.shapeMedium; color: parent.ListView.isCurrentItem?Theme.high:"transparent" }
             SungText { font.features: {"tnum": 1}; anchors.right: parent.right; anchors.rightMargin: 12; anchors.verticalCenter: parent.verticalCenter; visible: modelData.start>=0; text: app.formatTime(Math.max(0,modelData.start-app.lyricOffset)); color: Theme.muted; font.pixelSize: 12 }
-            contentItem: MatchText { id: matchText; sourceText: modelData.text; query: lyricSearch.text; leftPadding: 12; rightPadding: modelData.start>=0?64:12; topPadding: 12; bottomPadding: 12; wrapMode: Text.Wrap; font.pixelSize: 18; color: Theme.text }
+            contentItem: MatchText { id: matchText; sourceText: modelData.text; query: lyricSearch.text; leftPadding: 12; rightPadding: modelData.start>=0?64:12; topPadding: 12; bottomPadding: 12; wrapMode: Text.Wrap; font.pixelSize: Theme.bodyLarge; color: Theme.text }
         }
         SungText { anchors.centerIn: parent; visible: lyricPane.matches.length===0; text: "No matches"; color: Theme.muted }
     }
@@ -101,6 +101,7 @@ Item {
                 text: lyricLine.modelData.text || "…"
                 leftPadding: 8; rightPadding: 8; topPadding: 10; bottomPadding: 10
                 // Reserve the active size so emphasis never reflows adjacent lines.
+                scaled: true
                 font.pixelSize: lyricPane.expanded ? Math.max(24,Math.min(app.lyricTextSize*1.68,width/14*app.lyricTextSize/25)) : app.lyricTextSize; font.weight: Font.Medium
                 wrapMode: Text.Wrap; elide: Text.ElideNone; lineSpacing: 1.25
                 color: Theme.primary
@@ -115,6 +116,6 @@ Item {
     }
     Timer { id: resumeFollow; interval: 8000; onTriggered: lyricPane.following=true }
     MButton { anchors.bottom: parent.bottom; anchors.horizontalCenter: parent.horizontalCenter; text: "Follow lyrics"; filled: true; visible: liveLyrics.visible && !lyricPane.following; onClicked: {lyricPane.following=true;resumeFollow.stop();} }
-    ScrollView { id: lyricsScroll; anchors.fill: parent; anchors.topMargin: searchControls.height; visible: !app.lyricsBusy && app.lyricLines.length===0 && !(lyricPane.searchOpen && lyricSearch.text.length>0); contentWidth: availableWidth; clip: true; SungText { width: lyricsScroll.availableWidth; text: app.lyrics || "Lyrics unavailable"; wrapMode: Text.Wrap; elide: Text.ElideNone; font.pixelSize: lyricPane.expanded ? app.lyricTextSize*1.12 : app.lyricTextSize*0.84; lineSpacing: 1.55; color: app.lyrics?Theme.text:Theme.muted } }
+    ScrollView { id: lyricsScroll; anchors.fill: parent; anchors.topMargin: searchControls.height; visible: !app.lyricsBusy && app.lyricLines.length===0 && !(lyricPane.searchOpen && lyricSearch.text.length>0); contentWidth: availableWidth; clip: true; SungText { width: lyricsScroll.availableWidth; text: app.lyrics || "Lyrics unavailable"; scaled: true; wrapMode: Text.Wrap; elide: Text.ElideNone; font.pixelSize: lyricPane.expanded ? app.lyricTextSize*1.12 : app.lyricTextSize*0.84; lineSpacing: 1.55; color: app.lyrics?Theme.text:Theme.muted } }
     MButton { anchors.horizontalCenter: parent.horizontalCenter; anchors.bottom: parent.bottom; text: "Try again"; tonal: true; visible: !app.lyrics && !app.lyricsBusy && !lyricPane.searchOpen && app.currentIndex>=0; onClicked: app.reloadLyrics() }
 }

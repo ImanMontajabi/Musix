@@ -80,6 +80,86 @@ QtObject {
     readonly property real opticalCentering: 0.11
     function opticalShift(startRadius,endRadius) { return opticalCentering*(startRadius-endRadius) }
 
+    // --- Sliders -------------------------------------------------------------
+    // Material's expressive slider is a track you can see rather than a rule
+    // with a dot on it: a 16dp track at the extra small size, a handle that is
+    // a 4dp bar the height of the touch target, and a gap held open around the
+    // handle on both sides. The larger sizes are the same anatomy at a bigger
+    // track; only the track and the handle grow.
+    readonly property var sliderTrack: ({xsmall:16, small:24, medium:40, large:56, xlarge:96})
+    readonly property var sliderHandleHeight: ({xsmall:44, small:44, medium:52, large:68, xlarge:108})
+    readonly property int sliderHandle: 4
+    // Material narrows the handle while it is held, so the value under it is
+    // not hidden by the thing setting it.
+    readonly property int sliderHandlePressed: 2
+    readonly property int sliderGap: 6
+    readonly property int sliderStop: 4
+    // A disabled slider goes quiet rather than fading as a whole: the track it
+    // has covered and the handle drop to 38 percent of onSurface, and the
+    // track it has not to 12.
+    readonly property real disabledTrackOpacity: 0.12
+    function sliderQuiet(amount) { return Qt.rgba(text.r,text.g,text.b,amount) }
+
+    // --- Lists ---------------------------------------------------------------
+    // An expressive list item carries a shape that answers the pointer: it
+    // rests nearly square, rounds as the pointer arrives, and rounds further
+    // while it is pressed or holds focus.
+    readonly property int listRest: shapeExtraSmall
+    readonly property int listHovered: shapeMedium
+    readonly property int listActive: shapeLarge
+    // A segmented run is drawn as one group: the outer corners of the run are
+    // the full step, the corners inside it are the resting one, and the items
+    // are set apart rather than divided by a rule.
+    readonly property int listSegmentedGap: 2
+
+    // --- App bars ------------------------------------------------------------
+    // Material's flexible app bars hug what is in them, so a bar with a
+    // subtitle is taller than one without. The headline and the subtitle each
+    // take a type role from the size.
+    readonly property var appBarHeight: ({small:64, medium:112, large:120})
+    readonly property var appBarHeightSubtitled: ({small:64, medium:136, large:152})
+    readonly property var appBarTitle: ({small:titleLarge, medium:headlineMedium, large:displaySmall})
+    readonly property var appBarSubtitle: ({small:labelMedium, medium:labelLarge, large:titleMedium})
+
+    // --- Sheets --------------------------------------------------------------
+    // Material's side sheet: a pane holding a headline and a close button over
+    // its content, with this much room kept clear at its edges. Its width is
+    // the supporting pane layout's, because this one is laid beside the page
+    // rather than anchored over it.
+    readonly property int sideSheetPadding: 24
+    readonly property int sideSheetTopSpacing: 12
+
+    // --- Toolbars ------------------------------------------------------------
+    // Material replaced the bottom app bar with a docked toolbar: the same
+    // 64dp strip on a container, with its items spaced between a floor and a
+    // ceiling rather than spread to the edges.
+    readonly property int toolbarHeight: 64
+    readonly property int toolbarInset: 16
+    readonly property int toolbarSpacingMin: 4
+    readonly property int toolbarSpacingMax: 32
+
+    // --- Selection controls --------------------------------------------------
+    // A checkbox is a small square with a large target; a radio is a ring.
+    // Both carry a state layer wider than the control and narrower than the
+    // target, which is what the pointer lights up.
+    readonly property int checkboxSize: 18
+    readonly property int checkboxCorner: 2
+    readonly property int radioSize: 20
+    readonly property int selectionStateLayer: 40
+    readonly property int selectionTarget: 48
+
+    // --- Chips ---------------------------------------------------------------
+    readonly property int chipHeight: 32
+    readonly property int chipIcon: 18
+    readonly property int chipAvatar: 24
+
+    // --- Extended floating action button -------------------------------------
+    // Material's small extended FAB, which it now recommends in place of the
+    // one that used to be the only size.
+    readonly property int extendedFabHeight: 56
+    readonly property int extendedFabInset: 16
+    readonly property int extendedFabGap: 8
+
     // --- Motion --------------------------------------------------------------
     // Material replaced easing and duration with springs. Qt Quick animates on
     // curves, and the specification publishes the curve each spring converts to

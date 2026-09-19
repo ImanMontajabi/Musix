@@ -21,6 +21,13 @@ ItemDelegate {
     property point pressPoint
     property int pressModifiers: 0
     property bool queueMode: false
+    // Material's segmented list style: a run drawn as one group, its items set
+    // apart rather than divided by a rule, round at the ends of the run and
+    // nearly square inside it.
+    property bool segmented: false
+    property bool firstInRun: true
+    property bool lastInRun: true
+    readonly property bool pointerOver: pointer.containsMouse
     // Material's swipe to dismiss. A queue row can be pushed aside to drop it,
     // revealing the action behind it as it goes; past a third of the row the
     // release commits. Reordering still owns any drag that is mostly vertical.
@@ -56,10 +63,34 @@ ItemDelegate {
     }
     NumberAnimation { id: swipeReturn; target: row; property: "swipe"; to: 0; duration: Theme.springFastEffectsMs }
     background: Rectangle {
+        id: rowContainer
         transform: Translate { x: row.swipe }
-        radius: Theme.shapeLarge; color: row.selected ? Theme.primaryContainer : row.motionRaised ? Theme.container : row.active ? Theme.high : row.hovered ? Theme.container : "transparent"
+        // A segmented run sets its items apart rather than dividing them.
+        y: row.segmented ? Theme.listSegmentedGap/2 : 0
+        height: row.height - (row.segmented ? Theme.listSegmentedGap : 0)
+        // Material's expressive list item answers the pointer with its shape as
+        // well as its colour: it rests nearly square, rounds as the pointer
+        // arrives, and rounds fully while it is pressed, focused, carried or
+        // picked out. In a segmented run the corners inside the run keep the
+        // resting step and only the ends of the run are round.
+        readonly property int stateCorner: row.dragging || row.motionRaised || row.down || row.keyboardCurrent ? Theme.listActive
+                                         : row.selected || row.active ? Theme.listActive
+                                         : row.hovered || row.pointerOver ? Theme.listHovered
+                                         : Theme.listRest
+        // Outside a run, or in any state but rest, the item is one shape. At
+        // rest inside a run only the ends of the run are round.
+        readonly property bool wholeShape: !row.segmented || stateCorner !== Theme.listRest
+        topLeftRadius: wholeShape ? stateCorner : row.firstInRun ? Theme.listActive : Theme.listRest
+        topRightRadius: topLeftRadius
+        bottomLeftRadius: wholeShape ? stateCorner : row.lastInRun ? Theme.listActive : Theme.listRest
+        bottomRightRadius: bottomLeftRadius
+        color: row.selected ? Theme.primaryContainer : row.motionRaised ? Theme.container : row.active ? Theme.high : row.hovered ? Theme.container : row.segmented ? Theme.container : "transparent"
         border.width: row.keyboardCurrent ? 2 : 0; border.color: Theme.primary
         Behavior on color { ColorAnimation { duration: Theme.fast; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.fastEffectsCurve } }
+        Behavior on topLeftRadius { enabled: app.motion; NumberAnimation { duration: Theme.springFastEffectsMs; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.springFastEffects } }
+        Behavior on bottomLeftRadius { enabled: app.motion; NumberAnimation { duration: Theme.springFastEffectsMs; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.springFastEffects } }
+        // A row being carried is lifted, not only tinted.
+        MElevation { anchors.fill: parent; radius: parent.topLeftRadius; level: row.motionRaised || row.dragging ? 4 : 0 }
         // Material gives a dragged control its own state layer, heavier than
         // the one a press leaves, so a row being carried reads as held.
         Rectangle {
@@ -102,9 +133,20 @@ ItemDelegate {
             Layout.preferredWidth: row.queueMode?(app.compactDensity?36:48):Theme.rowArtwork; Layout.preferredHeight: Layout.preferredWidth
             Icon { anchors.centerIn: parent; name: "shuffle"; size: 24; ink: Theme.primary; visible: row.track.kind==="smart" }
             Artwork { visible: row.track.kind!=="smart"; anchors.fill: parent; url: row.track.art || ""; radius: Theme.shapeSmall; pixels: 112 }
-            Rectangle { anchors.centerIn: parent; width: 28; height: 28; radius: Theme.shapeSmall; visible: opacity>0; opacity: row.selectionVisible?1:0; color: row.selected?Theme.primary:Theme.container; border.width: row.selected?0:2; border.color: Theme.muted
+            // Material puts a selection control in a list item's leading slot,
+            // and for a list you can take several rows from that is a checkbox.
+            MCheckbox {
+                objectName: "rowCheckbox"
+                anchors.centerIn: parent
+                visible: opacity>0
+                opacity: row.selectionVisible?1:0
+                checked: row.selected
+                // The row owns the gesture: a press on its leading edge is
+                // what selects it, and has been since before there was a box.
+                enabled: false
+                presentational: true
+                Accessible.ignored: true
                 Behavior on opacity { NumberAnimation { duration: app.motion?Theme.fast:0; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.fastEffectsCurve } }
-                Icon { anchors.centerIn: parent; name: "check"; size: 20; ink: Theme.primaryText; visible: row.selected }
             }
         }
         ColumnLayout {

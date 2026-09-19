@@ -11,6 +11,11 @@ Text {
     property bool labelRole: false
     // The role this style is, for the sizes that more than one role shares.
     property string typeRole: ""
+    // A style whose size is set by the window or by the reader, rather than
+    // chosen from Material's scale, says so. Everything else is held to the
+    // scale, because a size that is not a role carries no line height or
+    // letter spacing of its own either.
+    property bool scaled: false
     font.family: Theme.fontFamily
     font.variableAxes: ({"wdth": label.emphasized ? Theme.emphasizedWidth : Theme.regularWidth})
     color: Theme.text
@@ -22,7 +27,7 @@ Text {
     // the first while reading the second re-enters itself. The size is
     // assigned across instead, which settles where a binding would loop.
     property real metricSize: 14
-    onFontChanged: if (metricSize !== font.pixelSize) metricSize = font.pixelSize
+    onFontChanged: if (metricSize !== label.font.pixelSize) metricSize = label.font.pixelSize
     Component.onCompleted: metricSize = font.pixelSize
     font.letterSpacing: Theme.trackingFor(metricSize, labelRole, typeRole)
     // A style that wants its own line height states it as a multiple of the

@@ -364,6 +364,12 @@ void runTourCapture(Backend *b, QQuickWindow *w) {
   c.check(c.until([&] { return !b->pins().isEmpty(); }), "the collection is pinned");
   auto rail = shownItem(w->contentItem(), "navigationRail");
   c.check(rail, "the navigation rail is on screen");
+  // Material puts the surface's primary action at the head of the rail, so the
+  // rail has to stay the width it says it is with that action in it.
+  if (auto slot = w->findChild<QQuickItem *>("railFabSlot"))
+    c.check(rail && rail->implicitWidth() <= rail->width() + 1,
+            QString("the rail keeps its width with the action in it (%1 wide, wants %2)")
+                .arg(rail ? rail->width() : 0).arg(rail ? rail->implicitWidth() : 0));
   if (rail && !rail->property("expanded").toBool())
     c.click("navigationMenuButton");
   c.check(c.until([&] { return rail && rail->property("expanded").toBool(); }), "the rail expands");
