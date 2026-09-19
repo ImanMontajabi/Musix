@@ -33,19 +33,60 @@ Dialog {
     padding: 24
     anchors.centerIn: parent
     background: Rectangle {
-        color: Theme.container; radius: dialog.fullScreen ? 0 : Theme.shapeExtraLarge
+        color: Theme.high; radius: dialog.fullScreen ? 0 : Theme.shapeExtraLarge
         MElevation { anchors.fill: parent; radius: parent.radius; level: dialog.fullScreen ? 0 : 3 }
     }
+    // Material gives a basic dialog an optional icon, and centres the headline
+    // under it when there is one. It is for a prompt that has to be read before
+    // it is answered, which is usually one that cannot be undone.
+    property string symbol: ""
     header: Item {
-        implicitHeight: Math.max(72, titleLabel.implicitHeight + 48)
-        SungText { id: titleLabel; objectName: "dialogTitle"; anchors.verticalCenter: parent.verticalCenter; x: 24; width: parent.width-48; text: dialog.title; font.pixelSize: Theme.headlineSmall; emphasized: true; wrapMode: Text.Wrap; maximumLineCount: 2 }
+        // A full-screen dialog is headed by a 56dp bar carrying the close
+        // affordance and the headline beside it, ruled off from the content.
+        implicitHeight: dialog.fullScreen ? 56
+                      : Math.max(72, titleLabel.implicitHeight + 48 + (dialogIcon.visible ? 40 : 0))
+        MButton {
+            id: closeAffordance
+            objectName: "dialogClose"
+            visible: dialog.fullScreen
+            symbol: "close"; tip: "Close"
+            x: 8; anchors.verticalCenter: parent.verticalCenter
+            onClicked: dialog.reject()
+        }
+        Icon {
+            id: dialogIcon
+            objectName: "dialogIcon"
+            visible: !dialog.fullScreen && dialog.symbol.length > 0
+            name: dialog.symbol; size: 24; ink: Theme.primary
+            anchors.horizontalCenter: parent.horizontalCenter
+            y: 24
+        }
+        SungText {
+            id: titleLabel; heading: true; objectName: "dialogTitle"
+            x: dialog.fullScreen ? closeAffordance.x+closeAffordance.width+8 : 24
+            width: parent.width-x-24
+            y: dialogIcon.visible ? dialogIcon.y+dialogIcon.height+16
+                                  : (parent.height-implicitHeight)/2
+            horizontalAlignment: dialogIcon.visible ? Text.AlignHCenter : Text.AlignLeft
+            text: dialog.title; font.pixelSize: Theme.headlineSmall; emphasized: true
+            wrapMode: Text.Wrap; maximumLineCount: 2
+        }
+        Rectangle {
+            objectName: "dialogHeaderDivider"
+            visible: dialog.fullScreen
+            anchors.bottom: parent.bottom; anchors.left: parent.left; anchors.right: parent.right
+            height: 1; color: Theme.outline
+        }
     }
     footer: DialogButtonBox {
         visible: dialog.standardButtons !== Dialog.NoButton
         standardButtons: dialog.standardButtons
         alignment: Qt.AlignRight
         buttonLayout: DialogButtonBox.AndroidLayout
-        padding: 24; spacing: 8
+        // Material's full-screen dialog puts its actions on a 56dp bar at the
+        // bottom edge; a floating one keeps the 24dp inset it sits in.
+        implicitHeight: dialog.fullScreen ? 56 : contentHeight+48
+        padding: dialog.fullScreen ? 8 : 24; spacing: 8
         background: Item {
             Rectangle {
                 objectName: "dialogScrollDivider"

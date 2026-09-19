@@ -2,8 +2,9 @@ Sung uses Google Material Symbols, licensed under Apache-2.0.
 The license is provided in licenses/MaterialSymbols-LICENSE.txt.
 Icons originate from https://github.com/google/material-design-icons.
 Icons use the official Material Symbols Rounded SVG assets at the 20px, 24px
-and 40px optical sizes, FILL=1, with the FILL=0 forms for the navigation
-destinations that are not current.
+and 40px optical sizes, FILL=1, with the FILL=0 forms for the symbols that
+report a state: the navigation destinations, the liked song and the pinned
+collection.
 Spun application code is not incorporated into Sung.
 
 Visual references: Google Material Design 3 and Spun.

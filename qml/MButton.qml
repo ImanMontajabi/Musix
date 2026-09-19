@@ -142,7 +142,11 @@ AbstractButton {
             Item {
                 width: control.sizedIcon; height: control.sizedIcon; visible: control.symbol.length > 0 || control.busy
                 anchors.verticalCenter: parent.verticalCenter
-                Icon { anchors.centerIn: parent; size: control.sizedIcon; visible: !control.busy && !playbackGlyph.active; name: control.confirmed?"check":control.symbol; ink: control.ink }
+                Icon { anchors.centerIn: parent; size: control.sizedIcon; besideText: control.text.length ? control.labelSize : 0; visible: !control.busy && !playbackGlyph.active; name: control.confirmed?"check":control.symbol; ink: control.ink
+                    // Material's fill axis carries a state: a symbol that has
+                    // an outlined form is drawn outlined until the control
+                    // reporting it is on.
+                    fill: control.selected ? 1 : 0 }
                 Loader {id:playbackGlyph;anchors.centerIn:parent;active:control.morphPlayback && !control.busy && !control.confirmed && (control.symbol==="play" || control.symbol==="pause");sourceComponent:PlaybackGlyph {paused:control.symbol==="pause";ink:control.ink}}
                 Loader {
                     anchors.fill: parent; active: control.busy
@@ -155,6 +159,7 @@ AbstractButton {
             objectName: "buttonTrailingIcon"
             visible: control.trailingSymbol.length > 0
             anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter
+            besideText: control.text.length ? control.labelSize : 0
             name: control.trailingSymbol; ink: control.ink; Accessible.ignored: true
         }
     }

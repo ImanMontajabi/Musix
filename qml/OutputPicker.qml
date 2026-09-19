@@ -13,7 +13,7 @@ Popup {
     enter:Transition {NumberAnimation {property:"opacity";from:0;to:1;duration:Theme.enterDuration}}
     exit:Transition {NumberAnimation {property:"opacity";to:0;duration:Theme.exitDuration}}
     contentItem:ColumnLayout {spacing:8
-        SungText {text:"Audio output";font.pixelSize:Theme.titleMedium;font.weight:Font.Medium;Layout.fillWidth:true}
+        SungText {heading:true;text:"Audio output";font.pixelSize:Theme.titleMedium;font.weight:Font.Medium;Layout.fillWidth:true}
         ListView {id:devices;objectName:"outputDevices";Layout.fillWidth:true;Layout.fillHeight:true;clip:true;spacing:4;model:popup.visible?app.audioDevices:[]
             ScrollBar.vertical:MScrollBar {}
             Keys.onReturnPressed: {const device=app.audioDevices[currentIndex];if(device){app.audioDeviceId=device.id;popup.close();}}

@@ -13,7 +13,7 @@ Menu {
         ScrollBar.vertical: MScrollBar { objectName: "menuScrollBar" }
     }
     background: Rectangle {
-        color: Theme.high; radius: Theme.shapeLargeIncreased; border.color: Theme.outline
+        color: Theme.container; radius: Theme.shapeLargeIncreased; border.color: Theme.outline
         MElevation { anchors.fill: parent; radius: parent.radius; level: 2 }
     }
     enter: Transition { NumberAnimation { property: "opacity"; from: 0; to: 1; duration: Theme.enterDuration; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.fastEffectsCurve } }

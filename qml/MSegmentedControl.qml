@@ -32,7 +32,11 @@ Item {
     implicitWidth: segmentWidth * options.length
     implicitHeight: 48
     Layout.minimumHeight: implicitHeight
-    Layout.minimumWidth: implicitWidth
+    // A segment's label elides when it does not fit, so the control can be
+    // squeezed rather than pushing the column it sits in wider than the space
+    // that column was given. It will not shrink past a touch target per
+    // segment, which is the floor Material puts under one.
+    Layout.minimumWidth: Math.min(implicitWidth, Math.max(1, options.length)*Math.max(40, Theme.minimumTarget))
     Accessible.role: Accessible.Grouping
     Accessible.name: accessibleName
     FontMetrics { id: metrics; font.family: Theme.fontFamily; font.pixelSize: Theme.labelLarge; font.weight: Font.Medium }

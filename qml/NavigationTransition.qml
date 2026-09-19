@@ -10,6 +10,10 @@ import QtQuick
 // leaves towards the side it came from and the incoming one arrives from the
 // other, travelling 30dp.
 //
+// Opening a detail out of a list is neither of those: the two screens sit at
+// consecutive levels of one hierarchy, so Material slides them horizontally
+// while fading, and the direction says which way you went.
+//
 // The content only swaps once the outgoing half has finished, which is why the
 // caller hands over the navigation itself rather than performing it first.
 QtObject {
@@ -36,6 +40,10 @@ QtObject {
     function fadeThrough(action) { begin(action,0) }
     // Peers along a line. `forward` is the direction of travel through them.
     function sharedAxisX(action,forward) { begin(action,forward?axisTravel:-axisTravel) }
+    // Consecutive levels of a hierarchy: opening a detail, and coming back out
+    // of it. Material moves these horizontally with a fade rather than fading
+    // them through each other, because the two screens are related.
+    function forwardBackward(action,forward) { begin(action,forward?axisTravel:-axisTravel) }
 
     function begin(action,distance) {
         if(!target || !app.motion) { settle(); if(action)action(); navigated(); return }

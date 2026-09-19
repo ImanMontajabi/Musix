@@ -187,13 +187,27 @@ ApplicationWindow {
     function cancelAlbumFlight(){albumSettle.stop();albumTimeout.stop();albumFlight.stop();albumFlying=false;albumReturning=false;albumFly.url="";}
     function openCollection(item,source){
         cancelAlbumFlight();
-        if(app.motion && window.uiActive && source && item.art && ["album","local-album"].indexOf(item.kind)>=0){
+        // Material's container transform carries a card into the page it opens,
+        // and it is the shape that carries it: the cover keeps its own corner
+        // at the start and takes the detail's at the end. Any collection with a
+        // cover can make that move, not only an album.
+        if(app.motion && window.uiActive && source && item.art
+           && ["album","local-album","artist","local-artist","playlist","local-playlist"].indexOf(item.kind)>=0){
             const at=source.mapToItem(window.contentItem,0,0);
-            albumFly.x=at.x;albumFly.y=at.y;albumFly.width=source.width;albumFly.height=source.height;albumFly.radius=20;albumFly.url=item.art;albumFlying=true;
+            albumFly.x=at.x;albumFly.y=at.y;albumFly.width=source.width;albumFly.height=source.height;
+            albumFly.radius=source.radius!==undefined?source.radius:20;
+            albumFly.shape=source.shape!==undefined?source.shape:"";
+            albumFly.url=item.art;albumFlying=true;
         }
         albumOriginView=app.viewKey;albumOriginId=item.id || item.browseId || "";
-        albumOpening=true;app.open(item);albumOpening=false;albumFlightView=app.viewKey;
-        if(albumFlying){albumTimeout.restart();albumSettle.restart();}
+        const step=function(){
+            albumOpening=true;app.open(item);albumOpening=false;albumFlightView=app.viewKey;
+            if(albumFlying){albumTimeout.restart();albumSettle.restart();}
+        }
+        // A cover that flies carries the relationship on its own; without one
+        // the move is Material's forward step through the hierarchy.
+        if(albumFlying)step()
+        else destinationTransition.forwardBackward(step,true)
     }
     function findAlbumCard(root){
         if(root.albumCardId!==undefined && root.albumCardId===albumOriginId && root.visible){
@@ -206,12 +220,16 @@ ApplicationWindow {
     function navigateBack(){
         const canReturn=app.motion && window.uiActive && app.viewKey===albumFlightView && albumOriginId && collectionArtwork.visible;
         cancelAlbumFlight();
-        if(canReturn){const at=collectionArtwork.mapToItem(window.contentItem,0,0);albumFly.x=at.x;albumFly.y=at.y;albumFly.width=collectionArtwork.width;albumFly.height=collectionArtwork.height;albumFly.radius=collectionArtwork.radius;albumFly.url=app.cover;albumFlying=true;albumReturning=true;}
-        albumOpening=true;app.back();albumOpening=false;
-        if(immersiveReturnView && app.viewKey===immersiveReturnView){
-            immersiveReturnView="";cancelAlbumFlight();if(!immersive)toggleImmersive();return;
+        if(canReturn){const at=collectionArtwork.mapToItem(window.contentItem,0,0);albumFly.x=at.x;albumFly.y=at.y;albumFly.width=collectionArtwork.width;albumFly.height=collectionArtwork.height;albumFly.radius=collectionArtwork.radius;albumFly.shape=collectionArtwork.shape;albumFly.url=app.cover;albumFlying=true;albumReturning=true;}
+        const step=function(){
+            albumOpening=true;app.back();albumOpening=false;
+            if(immersiveReturnView && app.viewKey===immersiveReturnView){
+                immersiveReturnView="";cancelAlbumFlight();if(!immersive)toggleImmersive();return;
+            }
+            if(albumFlying){albumTimeout.restart();albumSettle.restart();}
         }
-        if(albumFlying){albumTimeout.restart();albumSettle.restart();}
+        if(albumFlying || immersiveReturnView)step()
+        else destinationTransition.forwardBackward(step,false)
     }
     Timer {id:albumTimeout;interval:4000;onTriggered:window.cancelAlbumFlight()}
     Timer {id:albumSettle;interval:48;onTriggered:{
@@ -220,7 +238,7 @@ ApplicationWindow {
             if(app.viewKey!==window.albumOriginView){window.cancelAlbumFlight();return;}
             const card=window.findAlbumCard(content);
             if(!card){window.cancelAlbumFlight();return;}
-            const at=card.mapToItem(window.contentItem,0,0);albumFly.endX=at.x;albumFly.endY=at.y;albumFly.endSize=card.width;albumFly.endRadius=20;albumFlight.start();return;
+            const at=card.mapToItem(window.contentItem,0,0);albumFly.endX=at.x;albumFly.endY=at.y;albumFly.endSize=card.width;albumFly.endRadius=card.corner!==undefined?card.corner:20;albumFlight.start();return;
         }
         if(app.viewKey!==window.albumFlightView || !collectionArtwork.visible || !app.cover || !app.albumInfo.summary){window.cancelAlbumFlight();return;}
         const at=collectionArtwork.mapToItem(window.contentItem,0,0);
@@ -478,6 +496,8 @@ ApplicationWindow {
         ColumnLayout {
             id: navigationRail
             objectName: "navigationRail"
+            Accessible.role: Accessible.Pane
+            Accessible.name: "Navigation"
             // M3 places the expanded rail beside body content, so it only opens
             // where there is room for it; narrower windows stay collapsed.
             visible: !window.compactWindow
@@ -763,6 +783,8 @@ ApplicationWindow {
                 }
                 Rectangle {
                     id: content
+                    Accessible.role: Accessible.Pane
+                    Accessible.name: window.title || "Content"
                     readonly property real headerCollapse: tracks.visible ? Math.max(0,Math.min(1,(tracks.contentY-tracks.originY)/160)) : 0
                     readonly property bool compactHeader: headerCollapse>0.7
                     property real headerExtent: (app.albumInfo.summary?Math.min(156,window.height*0.19):76)*(1-headerCollapse)+40*headerCollapse
@@ -839,7 +861,7 @@ ApplicationWindow {
                             }
                             ColumnLayout {
                                 Layout.fillWidth: true; spacing: 6
-                            SungText { text: window.serverDisconnected ? "Music server" : window.destination==="library"&&window.libraryTab==="playlists"&&!window.localPlaylist ? "Playlists" : app.title; objectName: "collectionHeaderTitle"; emphasized: true; scaled: true; font.pixelSize: app.page==="home"?Theme.displaySmall:Theme.headlineMedium-(Theme.headlineMedium-Theme.titleLarge)*content.headerCollapse; Behavior on font.pixelSize { NumberAnimation { duration: app.motion?Theme.normal:0; easing.type: Easing.OutCubic } } Layout.fillWidth: true; wrapMode: Text.Wrap; maximumLineCount: 2 }
+                            SungText {heading: true; text: window.serverDisconnected ? "Music server" : window.destination==="library"&&window.libraryTab==="playlists"&&!window.localPlaylist ? "Playlists" : app.title; objectName: "collectionHeaderTitle"; emphasized: true; scaled: true; font.pixelSize: app.page==="home"?Theme.displaySmall:Theme.headlineMedium-(Theme.headlineMedium-Theme.titleLarge)*content.headerCollapse; Behavior on font.pixelSize { NumberAnimation { duration: app.motion?Theme.normal:0; easing.type: Easing.OutCubic } } Layout.fillWidth: true; wrapMode: Text.Wrap; maximumLineCount: 2 }
                                 SungText { objectName: "albumArtist"; visible: !!app.albumInfo.artist;opacity:1-content.headerCollapse;Layout.maximumHeight:implicitHeight*(1-content.headerCollapse);clip:true; Layout.fillWidth: true; text: app.albumInfo.artist || ""; font.pixelSize: 16; color: Theme.muted; maximumLineCount: 2; wrapMode: Text.Wrap }
                                 SungText { objectName: "albumSummary"; visible: !!app.albumInfo.summary;opacity:1-content.headerCollapse;Layout.maximumHeight:implicitHeight*(1-content.headerCollapse);clip:true; Layout.fillWidth: true; text: app.albumInfo.summary || ""; font.pixelSize: Theme.appBarSubtitle.medium; color: Theme.muted; wrapMode: Text.Wrap }
                             }
@@ -1087,7 +1109,7 @@ ApplicationWindow {
                                     width: shelves.width; height: implicitHeight; spacing: 12
                                     RowLayout {
                                         Layout.fillWidth: true
-                                        SungText { text: modelData.title; font.pixelSize: 22; font.weight: Font.Medium; Layout.fillWidth: true }
+                                        SungText { heading: true; text: modelData.title; font.pixelSize: Theme.titleLarge; font.weight: Font.Medium; Layout.fillWidth: true }
                                         MButton { symbol: "back"; tip: "Previous covers"; enabled: !shelf.atXBeginning; implicitWidth: 40; implicitHeight: 40; onClicked: shelf.flick(1300,0) }
                                         MButton { symbol: "chevron"; tip: "More covers"; enabled: !shelf.atXEnd; implicitWidth: 40; implicitHeight: 40; onClicked: shelf.flick(-1300,0) }
                                     }
@@ -1211,6 +1233,8 @@ ApplicationWindow {
                 }
                 Rectangle {
                     id: sidePanel; objectName: "sidePanel"
+                    Accessible.role: Accessible.Pane
+                    Accessible.name: "Supporting pane"
                     Layout.fillWidth: false
                     readonly property real chosenWidth: geometry.panelWidth>0 ? geometry.panelWidth : contentRow.supportingWidth
                     property real revealWidth: window.side && !window.sheetMode ? Math.max(320,Math.min(chosenWidth,window.width-560)) : 0
@@ -1238,6 +1262,9 @@ ApplicationWindow {
                 }
             }
             Rectangle {
+                objectName: "playbackBar"
+                Accessible.role: Accessible.Pane
+                Accessible.name: "Playback"
                 Layout.fillWidth: true; Layout.preferredHeight: 112; color: window.washed(Theme.container); radius: Theme.shapeExtraLarge
                 RowLayout {
                     anchors.fill: parent; anchors.leftMargin: 16; anchors.rightMargin: 16; spacing: 16
@@ -1448,7 +1475,7 @@ ApplicationWindow {
         spacing: Theme.sideSheetTopSpacing
         RowLayout {
             Layout.fillWidth: true
-            SungText { objectName: "sidePanelTitle"; text: window.side==="queue"?(window.queueTab==="history"?"Recently played":"Up next"):window.side==="lyrics"?"Lyrics":"Now playing"; font.pixelSize: Theme.titleLarge; font.weight: Font.Medium; Layout.fillWidth: true }
+            SungText {heading: true; objectName: "sidePanelTitle"; text: window.side==="queue"?(window.queueTab==="history"?"Recently played":"Up next"):window.side==="lyrics"?"Lyrics":"Now playing"; font.pixelSize: Theme.titleLarge; font.weight: Font.Medium; Layout.fillWidth: true }
             MButton { objectName: "revealPlayingButton"; text: "Playing"; tip: "Show playing song · Ctrl+J"; visible: window.side==="queue" && window.queueTab==="next"; enabled: app.currentIndex>=0; onClicked: window.revealPlaying() }
             MButton { objectName: "lyricSearchButton"; symbol: "search"; tip: "Find in lyrics"; visible: window.side==="lyrics"; enabled: !!app.lyrics; onClicked: {if(sideLoader.item)sideLoader.item.openSearch();} }
             MButton { objectName: "lyricTimingButton"; symbol: "settings"; tip: "Lyric timing · saved for this song"; visible: window.side==="lyrics" && !!app.current.id; onClicked: lyricTimingDialog.open() }
@@ -1714,7 +1741,10 @@ ApplicationWindow {
         }
     }
     MDialog {
-        id: deletePlaylistDialog; objectName: "deletePlaylistDialog"; anchors.centerIn: parent; width: 380; modal: true; title: "Delete playlist?"; standardButtons: Dialog.Yes | Dialog.No; onOpened: {standardButton(Dialog.Yes).text="Delete";standardButton(Dialog.No).text="Cancel";}
+        // A prompt that cannot be undone takes Material's dialog icon, which
+        // centres the headline under it so the question is read before it is
+        // answered.
+        id: deletePlaylistDialog; objectName: "deletePlaylistDialog"; anchors.centerIn: parent; width: 380; modal: true; symbol: "trash"; title: "Delete playlist?"; standardButtons: Dialog.Yes | Dialog.No; onOpened: {standardButton(Dialog.Yes).text="Delete";standardButton(Dialog.No).text="Cancel";}
         palette.windowText: Theme.text; palette.buttonText: Theme.text
         onAccepted: {app.deletePlaylist(window.editPlaylistId);window.localPlaylist="";}
     }
@@ -1803,10 +1833,10 @@ ApplicationWindow {
                     Layout.fillWidth:true;Layout.minimumWidth:0; spacing:12
                     property bool hasMatches: settingsDialog.matches("Appearance theme system Noctalia light dark") || settingsDialog.matches("Appearance artwork accent color") || settingsDialog.matches("Accent color source palette") || settingsDialog.matches("Ambient artwork backdrop immersive now playing") || settingsDialog.matches("Backdrop follows the music audio") || settingsDialog.matches("Color scheme variant neutral tonal spot vibrant expressive content") || settingsDialog.matches("Contrast standard medium high accessibility") || settingsDialog.matches("Density compact comfortable spacing") || settingsDialog.matches("Pointer density precise mouse touch target") || settingsDialog.matches("Current view layout density grid list") || (!!app.current.id && settingsDialog.matches("Current artwork")) || settingsDialog.matches("Animated album artwork") || settingsDialog.matches("Online animated covers YouTube Apple Music") || settingsDialog.matches("Animations")
                     visible: settingsDialog.searchQuery.trim() ? hasMatches : settingsDialog.category===0
-                    SungText {text:"Appearance";font.pixelSize:Theme.titleLarge;font.weight:Font.Medium;Layout.bottomMargin:8}
+                    SungText {heading: true;text:"Appearance";font.pixelSize:Theme.titleLarge;font.weight:Font.Medium;Layout.bottomMargin:8}
                     ColumnLayout {id:options0;objectName:"settingsRows0";Layout.fillWidth:true;Layout.minimumWidth:0;spacing:12
                 SungText { visible: settingsDialog.matches("Appearance theme system Noctalia light dark"); text: "Theme"; font.pixelSize: 16; font.weight: Font.Medium }
-                MSegmentedControl { visible: settingsDialog.matches("Appearance theme system Noctalia light dark"); accessibleName:"Theme"; options:[{key:"system",label:desktopTheme.available?"Noctalia":"System",name:"themeSystem"},{key:"light",label:"Light",name:"themeLight"},{key:"dark",label:"Dark",name:"themeDark"}]; value:app.theme; onChosen:value=>app.theme=value }
+                MSegmentedControl {Layout.fillWidth:true;Layout.minimumWidth:0; visible: settingsDialog.matches("Appearance theme system Noctalia light dark"); accessibleName:"Theme"; options:[{key:"system",label:desktopTheme.available?"Noctalia":"System",name:"themeSystem"},{key:"light",label:"Light",name:"themeLight"},{key:"dark",label:"Dark",name:"themeDark"}]; value:app.theme; onChosen:value=>app.theme=value }
 
                 MSwitch { Layout.fillWidth:true;Layout.minimumWidth:0; objectName:"artworkAccentSwitch"; text:"Use artwork accent"; checked:app.artworkAccent; onToggled:app.artworkAccent=checked; visible:settingsDialog.matches("Appearance artwork accent color") }
                 SungText {text:"Accent color";visible:settingsDialog.matches("Accent color source palette");font.pixelSize:Theme.bodyLarge;font.weight:Font.Medium;Layout.topMargin:4}
@@ -1817,7 +1847,7 @@ ApplicationWindow {
                 // its scheme variants, which is what decides how much of the
                 // cover the interface takes on.
                 SungText {text:"Color scheme";visible:settingsDialog.matches("Color scheme variant neutral tonal spot vibrant expressive content");font.pixelSize:Theme.bodyLarge;font.weight:Font.Medium;Layout.topMargin:4}
-                MSegmentedControl {
+                MSegmentedControl {Layout.fillWidth:true;Layout.minimumWidth:0;
                     objectName:"colorVariantControl"
                     visible:settingsDialog.matches("Color scheme variant neutral tonal spot vibrant expressive content")
                     accessibleName:"Color scheme"
@@ -1829,7 +1859,7 @@ ApplicationWindow {
                     value:app.colorVariant; onChosen:value=>app.colorVariant=value
                 }
                 SungText {text:"Contrast";visible:settingsDialog.matches("Contrast standard medium high accessibility");font.pixelSize:Theme.bodyLarge;font.weight:Font.Medium;Layout.topMargin:4}
-                MSegmentedControl {
+                MSegmentedControl {Layout.fillWidth:true;Layout.minimumWidth:0;
                     objectName:"contrastControl"
                     visible:settingsDialog.matches("Contrast standard medium high accessibility")
                     accessibleName:"Contrast"
@@ -1839,12 +1869,12 @@ ApplicationWindow {
                     value:app.colorContrast; onChosen:value=>app.colorContrast=value
                 }
                 SungText {text:"Density";visible:settingsDialog.matches("Density compact comfortable spacing");font.pixelSize:Theme.bodyLarge;font.weight:Font.Medium}
-                MSegmentedControl {visible:settingsDialog.matches("Density compact comfortable spacing");accessibleName:"Density";options:[{key:false,label:"Comfortable",name:"densityComfortable"},{key:true,label:"Compact",name:"densityCompact"}];value:app.compactDensity;onChosen:value=>app.compactDensity=value}
+                MSegmentedControl {Layout.fillWidth:true;Layout.minimumWidth:0;visible:settingsDialog.matches("Density compact comfortable spacing");accessibleName:"Density";options:[{key:false,label:"Comfortable",name:"densityComfortable"},{key:true,label:"Compact",name:"densityCompact"}];value:app.compactDensity;onChosen:value=>app.compactDensity=value}
                 // Material draws its controls tighter when a precision pointer
                 // is driving them, because the 48dp minimum is a rule about
                 // disambiguating touches.
                 SungText {text:"Pointer";visible:settingsDialog.matches("Pointer density precise mouse touch target");font.pixelSize:Theme.bodyLarge;font.weight:Font.Medium;Layout.topMargin:4}
-                MSegmentedControl {
+                MSegmentedControl {Layout.fillWidth:true;Layout.minimumWidth:0;
                     objectName:"pointerControl"
                     visible:settingsDialog.matches("Pointer density precise mouse touch target")
                     accessibleName:"Pointer"
@@ -1864,7 +1894,7 @@ ApplicationWindow {
                     Layout.fillWidth:true;Layout.minimumWidth:0; spacing:12
                     property bool hasMatches: settingsDialog.matches("Autoplay similar songs") || settingsDialog.matches("Track notifications") || settingsDialog.matches("Volume step") || settingsDialog.matches("Playback speed rate") || settingsDialog.matches("Sleep timer") || settingsDialog.matches("Pause headphones audio output disconnects") || settingsDialog.matches("Audio output device speakers headphones") || settingsDialog.matches("Prepare next track") || settingsDialog.matches("Gapless playback join pause between songs") || settingsDialog.matches("Crossfade overlap songs fade") || settingsDialog.matches("Volume normalization loudness level ReplayGain") || settingsDialog.matches("Resume recordings over 20 minutes mixes sets position") || settingsDialog.matches("Find missing lyrics on LRCLIB") || settingsDialog.matches("Sleep timer fade out volume")
                     visible: settingsDialog.searchQuery.trim() ? hasMatches : settingsDialog.category===1
-                    SungText {text:"Playback";font.pixelSize:Theme.titleLarge;font.weight:Font.Medium;Layout.bottomMargin:8}
+                    SungText {heading: true;text:"Playback";font.pixelSize:Theme.titleLarge;font.weight:Font.Medium;Layout.bottomMargin:8}
                     ColumnLayout {id:options1;objectName:"settingsRows1";Layout.fillWidth:true;Layout.minimumWidth:0;spacing:12
                 MSwitch { Layout.fillWidth:true;Layout.minimumWidth:0; visible: settingsDialog.matches("Autoplay similar songs"); text: "Autoplay similar songs"; checked: app.autoplay; onToggled: app.autoplay=checked }
                 MSwitch { Layout.fillWidth:true;Layout.minimumWidth:0; visible: settingsDialog.matches("Track notifications"); objectName: "trackNotificationsSwitch"; text: "Track notifications"; checked: app.trackNotifications; onToggled: app.trackNotifications=checked }
@@ -1903,7 +1933,7 @@ ApplicationWindow {
                     Layout.fillWidth:true;Layout.minimumWidth:0; spacing:12
                     property bool hasMatches: settingsDialog.matches("Music folders import manage") || settingsDialog.matches("Keyboard shortcuts keys help") || settingsDialog.matches("Quick actions commands playlists") || settingsDialog.matches("Update music folders automatically watch") || settingsDialog.matches("Type to jump in lists keyboard") || settingsDialog.matches("Start page Home local music server liked") || settingsDialog.matches("Customize Home sections order") || settingsDialog.matches("Listening sessions saved queues") || settingsDialog.matches("Listening statistics top artists albums time")
                     visible: settingsDialog.searchQuery.trim() ? hasMatches : settingsDialog.category===2
-                    SungText {text:"Library";font.pixelSize:Theme.titleLarge;font.weight:Font.Medium;Layout.bottomMargin:8}
+                    SungText {heading: true;text:"Library";font.pixelSize:Theme.titleLarge;font.weight:Font.Medium;Layout.bottomMargin:8}
                     ColumnLayout {id:options2;objectName:"settingsRows2";Layout.fillWidth:true;Layout.minimumWidth:0;spacing:12
                 MSettingRow {opens:true;text:"Music folders";visible:settingsDialog.matches("Music folders import manage");onClicked:{settingsDialog.close();musicFoldersDialog.open();}}
                 MSettingRow {opens:true;objectName:"shortcutHelpButton";text:"Keyboard shortcuts";visible:settingsDialog.matches("Keyboard shortcuts keys help");onClicked:{settingsDialog.close();shortcutHelp.open()}}
@@ -1911,7 +1941,7 @@ ApplicationWindow {
                 MSwitch { Layout.fillWidth:true;Layout.minimumWidth:0; text: "Update music folders automatically"; visible: settingsDialog.matches("Update music folders automatically watch"); checked: app.watchMusicFolders; onToggled: app.watchMusicFolders=checked }
                 MSwitch { Layout.fillWidth:true;Layout.minimumWidth:0; objectName:"typeAheadSwitch"; text: "Type to jump in lists"; visible: settingsDialog.matches("Type to jump in lists keyboard"); checked: app.typeAheadJump; onToggled: app.typeAheadJump=checked }
                 SungText {text:"Start page";visible:settingsDialog.matches("Start page Home local music server liked");font.pixelSize:Theme.bodyLarge;font.weight:Font.Medium}
-                MSegmentedControl {visible:settingsDialog.matches("Start page Home local music server liked");accessibleName:"Start page"; options:[{key:"home",label:"Home",name:"startPage_home"},{key:"files",label:"Local",name:"startPage_files"},{key:"server",label:"Server",name:"startPage_server"},{key:"favorites",label:"Liked",name:"startPage_favorites"}];value:app.startPage;onChosen:value=>app.startPage=value}
+                MSegmentedControl {Layout.fillWidth:true;Layout.minimumWidth:0;visible:settingsDialog.matches("Start page Home local music server liked");accessibleName:"Start page"; options:[{key:"home",label:"Home",name:"startPage_home"},{key:"files",label:"Local",name:"startPage_files"},{key:"server",label:"Server",name:"startPage_server"},{key:"favorites",label:"Liked",name:"startPage_favorites"}];value:app.startPage;onChosen:value=>app.startPage=value}
                 MSettingRow {opens:true;text:"Customize Home";visible:settingsDialog.matches("Customize Home sections order");onClicked:{settingsDialog.close();app.home();homeEditor.open();}}
                 MSettingRow {opens:true;objectName:"sessionsButton";text:"Listening sessions";visible:settingsDialog.matches("Listening sessions saved queues");onClicked:{settingsDialog.close();sessionsDialog.open();}}
                 MSettingRow {opens:true;objectName:"listeningStatsButton";text:"Listening statistics";visible:settingsDialog.matches("Listening statistics top artists albums time");onClicked:{settingsDialog.close();statsDialog.open();}}
@@ -1922,7 +1952,7 @@ ApplicationWindow {
                     Layout.fillWidth:true;Layout.minimumWidth:0; spacing:12
                     property bool hasMatches: settingsDialog.matches("Music server library") || settingsDialog.matches("YouTube cookies import replace remove sign in")
                     visible: settingsDialog.searchQuery.trim() ? hasMatches : settingsDialog.category===3
-                    SungText {text:"Connections";font.pixelSize:Theme.titleLarge;font.weight:Font.Medium;Layout.bottomMargin:8}
+                    SungText {heading: true;text:"Connections";font.pixelSize:Theme.titleLarge;font.weight:Font.Medium;Layout.bottomMargin:8}
                     ColumnLayout {id:options3;objectName:"settingsRows3";Layout.fillWidth:true;Layout.minimumWidth:0;spacing:12
                 MSettingRow {opens:true;objectName:"musicServerButton";text:"Music server";visible:settingsDialog.matches("Music server library");onClicked:{settingsDialog.close();serverConnection.open()}}
                 SungText { visible: settingsDialog.matches("YouTube cookies import replace remove sign in"); text: "YouTube"; font.pixelSize: Theme.labelLarge; font.weight: Font.Medium; color: Theme.muted; Layout.topMargin: 12 }
@@ -1936,7 +1966,7 @@ ApplicationWindow {
                     Layout.fillWidth:true;Layout.minimumWidth:0; spacing:12
                     property bool hasMatches: settingsDialog.matches("Pause history this session privacy") || settingsDialog.matches("Clear artwork cache") || settingsDialog.matches("Clear history") || settingsDialog.matches("Export library backup") || settingsDialog.matches("Import library restore") || settingsDialog.matches("Sung version")
                     visible: settingsDialog.searchQuery.trim() ? hasMatches : settingsDialog.category===4
-                    SungText {text:"Privacy & data";font.pixelSize:Theme.titleLarge;font.weight:Font.Medium;Layout.bottomMargin:8}
+                    SungText {heading: true;text:"Privacy & data";font.pixelSize:Theme.titleLarge;font.weight:Font.Medium;Layout.bottomMargin:8}
                     ColumnLayout {id:options4;objectName:"settingsRows4";Layout.fillWidth:true;Layout.minimumWidth:0;spacing:12
                 MSwitch { Layout.fillWidth:true;Layout.minimumWidth:0; visible: settingsDialog.matches("Pause history this session privacy"); objectName: "historyPauseSwitch"; text: "Pause history this session"; checked: app.historyPaused; onToggled: app.historyPaused=checked }
                 MSettingRow {objectName:"clearCacheButton";text:"Clear artwork cache";visible:settingsDialog.matches("Clear artwork cache");onClicked:app.clearCache()}
@@ -2005,11 +2035,19 @@ ApplicationWindow {
         anchors.bottom: parent.bottom; anchors.bottomMargin: 140; anchors.horizontalCenter: parent.horizontalCenter; z: 40
         id: toastBar; objectName: "toastBar"
         width: Math.min(window.width-48,720,toastLabel.implicitWidth+(window.toastHasUndo?168:40))
-        height: toastLabel.lineCount>1 ? 68 : 48
+        // Material brings a component in by expanding it away from the edge it
+        // sits against rather than by scaling it, because scale reads as a
+        // change of elevation. A snackbar sits at the bottom, so it grows
+        // upwards, and what it holds is clipped by the frame on its way in.
+        readonly property real restingHeight: toastLabel.lineCount>1 ? 68 : 48
+        readonly property bool shown: window.toastPending && !app.error && !window.modalOpen
+        height: shown ? restingHeight : 0
+        clip: true
+        Behavior on height { enabled: app.motion; NumberAnimation { duration: Theme.springFastSpatialMs; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.springFastSpatial } }
         radius: Theme.shapeExtraSmall; color: Theme.inverseSurface
         readonly property real shoveFade: 1-Math.min(0.95, Math.abs(toastShove.x)/(width/2))
-        opacity: (window.toastPending && !app.error && !window.modalOpen ? 1 : 0)*shoveFade
-        visible: window.toastPending && !app.error && !window.modalOpen
+        opacity: (shown ? 1 : 0)*shoveFade
+        visible: height > 1
         Accessible.role: Accessible.AlertMessage; Accessible.name: window.toastText
         transform: Translate { id: toastShove }
         MElevation { anchors.fill: parent; radius: parent.radius; level: 3 }
@@ -2026,9 +2064,9 @@ ApplicationWindow {
         NumberAnimation { id: toastReturn; target: toastShove; property: "x"; to: 0; duration: Theme.springFastEffectsMs }
         onVisibleChanged: if(!visible) toastShove.x = 0
         Behavior on opacity { NumberAnimation { duration: Theme.fast; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.fastEffectsCurve } }
-        MButton { id: toastUndo; objectName: "toastUndo"; anchors.right: toastDismiss.left; anchors.verticalCenter: parent.verticalCenter; text: "Undo"; ink: Theme.inversePrimary; visible: window.toastHasUndo; onClicked: app.undo() }
-        MButton { id: toastDismiss; objectName: "toastDismiss"; anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter; symbol: "close"; tip: "Dismiss notification"; ink: Theme.inverseSurfaceText; visible: window.toastHasUndo; onClicked: window.toastPending=false }
-        SungText { id: toastLabel; anchors.verticalCenter: parent.verticalCenter; anchors.left: parent.left; anchors.leftMargin: 16; anchors.right: parent.right; anchors.rightMargin: window.toastHasUndo?148:16; wrapMode: Text.Wrap; maximumLineCount: 2; text: window.toastText; font.pixelSize: Theme.bodyMedium; color: Theme.inverseSurfaceText }
+        MButton { id: toastUndo; objectName: "toastUndo"; anchors.right: toastDismiss.left; anchors.bottom: parent.bottom; anchors.bottomMargin: (toastBar.restingHeight-height)/2; text: "Undo"; ink: Theme.inversePrimary; visible: window.toastHasUndo; onClicked: app.undo() }
+        MButton { id: toastDismiss; objectName: "toastDismiss"; anchors.right: parent.right; anchors.bottom: parent.bottom; anchors.bottomMargin: (toastBar.restingHeight-height)/2; symbol: "close"; tip: "Dismiss notification"; ink: Theme.inverseSurfaceText; visible: window.toastHasUndo; onClicked: window.toastPending=false }
+        SungText { id: toastLabel; anchors.bottom: parent.bottom; anchors.bottomMargin: (toastBar.restingHeight-height)/2; anchors.left: parent.left; anchors.leftMargin: 16; anchors.right: parent.right; anchors.rightMargin: window.toastHasUndo?148:16; wrapMode: Text.Wrap; maximumLineCount: 2; text: window.toastText; font.pixelSize: Theme.bodyMedium; color: Theme.inverseSurfaceText }
     }
     Timer { id: toastTimer; interval: 5000; running: window.toastPending && !window.toastHasUndo && !app.error && !window.modalOpen && !toastHover.hovered && !toastUndo.activeFocus && !toastDismiss.activeFocus; onTriggered: window.toastPending=false }
     Connections { target: app; function onToast(message){window.toastPending=false;window.toastText=message;window.toastPending=true;} function onTrackChanged(){if(window.coverFlying)window.cancelCoverFlight();if(window.side==="lyrics" || window.compactMode || window.immersive)app.fetchLyrics();}

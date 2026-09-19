@@ -22,7 +22,7 @@ RowLayout {
         exit:Transition {NumberAnimation {property:"opacity";to:0;duration:Theme.exitDuration}}
         ColumnLayout {anchors.fill:parent;spacing:8
             RowLayout {Layout.fillWidth:true
-                SungText {text:"Volume";Layout.fillWidth:true;font.pixelSize:Theme.titleMedium}
+                SungText {heading:true;text:"Volume";Layout.fillWidth:true;font.pixelSize:Theme.titleMedium}
                 MTextField {id:percent;objectName:"volumePercent";Layout.preferredWidth:72;implicitHeight:40;topPadding:10;bottomPadding:10;maximumLength:3;validator:IntValidator {bottom:0;top:100} inputMethodHints:Qt.ImhDigitsOnly;Accessible.name:"Volume percent";onAccepted:popup.apply()}
                 SungText {text:"%";color:Theme.muted}
             }

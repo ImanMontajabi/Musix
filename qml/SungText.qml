@@ -11,6 +11,12 @@ Text {
     property bool labelRole: false
     // The role this style is, for the sizes that more than one role shares.
     property string typeRole: ""
+    // What assistive technology navigates a screen by is its headings, so a
+    // style that names a section says that it is one rather than only looking
+    // like one. Material asks for a heading hierarchy, not for headings that
+    // are merely larger.
+    property bool heading: false
+    Accessible.role: heading ? Accessible.Heading : Accessible.StaticText
     // A style whose size is set by the window or by the reader, rather than
     // chosen from Material's scale, says so. Everything else is held to the
     // scale, because a size that is not a role carries no line height or

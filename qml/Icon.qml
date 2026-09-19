@@ -10,7 +10,13 @@ Item {
     // rather than swapped, which is what the axis is for. Symbols with no
     // outlined form of their own simply stay as they are.
     property real fill: 1
-    readonly property bool hasOutline: ["home","library"].indexOf(name)>=0
+    // A symbol set beside text sits on the text's baseline rather than on its
+    // centre line, which Material puts at about 11.5% of the text size below
+    // centre. A symbol on its own is centred as usual, so this is the size of
+    // the text it stands next to, or zero when it stands alone.
+    property real besideText: 0
+    anchors.verticalCenterOffset: besideText > 0 ? Math.round(besideText*0.115) : 0
+    readonly property bool hasOutline: ["home","library","heart","pin"].indexOf(name)>=0
     implicitWidth: size
     implicitHeight: size
     width: size

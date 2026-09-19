@@ -18,6 +18,7 @@
 #include <QQuickItem>
 #include <QQuickWindow>
 #include <QFont>
+#include <QQmlProperty>
 #include <QSet>
 #include <QTest>
 #include <qpa/qwindowsysteminterface.h>
@@ -41,6 +42,22 @@ QQuickItem *anyItem(QQuickItem *root, const QString &name) {
     if (auto found = anyItem(child, name))
       return found;
   return nullptr;
+}
+
+// How far past a container's right edge anything inside it is drawn. A row
+// that will not shrink takes its neighbours out with it, so the worst offender
+// is worth naming.
+void collectOverflow(QQuickItem *root, QQuickItem *within, double &worstBy, QString &worstName) {
+  if (root->isVisible() && root->width() > 1) {
+    const double right = root->mapToItem(within, QPointF(root->width(), 0)).x();
+    const double past = right - within->width();
+    if (past > worstBy) {
+      worstBy = past;
+      worstName = root->objectName().isEmpty() ? QStringLiteral("a row") : root->objectName();
+    }
+  }
+  for (auto child : root->childItems())
+    collectOverflow(child, within, worstBy, worstName);
 }
 
 // Material's type scale is a closed set of roles. A size that is not one of
@@ -3405,6 +3422,326 @@ void runMaterialGrainTests(Backend *b, QQuickWindow *w) {
   w->resize(1400, 900);
   QTest::qWait(600);
   c.shot("07-restored");
+  b->clearQueue();
+  c.finish();
+}
+
+// The patterns rather than the parts: the transition Material names for moving
+// through a hierarchy, the symbol axes that carry a state, the containers a
+// menu and a dialog sit on, and the structure assistive technology reads.
+void runMaterialAnatomyTests(Backend *b, QQuickWindow *w) {
+  Check c{b, w, qEnvironmentVariable("SUNG_TEST_OUTPUT")};
+  QDir().mkpath(c.directory + "/music/Night Ferry");
+  QWindowSystemInterface::handleFocusWindowChanged(w);
+  w->resize(1400, 900);
+  QTest::qWait(500);
+  b->setTheme("dark");
+  b->setMotion(true);
+  b->setVolume(0);
+  b->setAutoplay(false);
+  b->setWatchMusicFolders(false);
+  b->setOnlineArtwork(false);
+
+  for (int i = 1; i <= 3; ++i)
+    if (!encodeTrack(c, QString("%1/music/Night Ferry/%2.flac").arg(c.directory).arg(i),
+                     QString("Ferry %1").arg(i), "Night Ferry", "Marble Coast", i))
+      return c.finish();
+  b->importMusicFolder(QUrl::fromLocalFile(c.directory + "/music"));
+  c.check(c.until([&] { return !b->importingLocal(); }, 40000), "import the anatomy fixture");
+  QMetaObject::invokeMethod(w, "chooseLibrary", Q_ARG(QVariant, QVariant("files")));
+  c.check(c.until([&] { return b->results()->count() == 3; }), "the library is listed");
+  QTest::qWait(500);
+
+  // --- Material names six transitions and this had three of them ---
+  // Fading through is for destinations that have nothing to do with each
+  // other. Two screens at consecutive levels of one hierarchy slide instead,
+  // and the direction says which way through it you went.
+  c.check(c.evaluate("typeof destinationTransition.forwardBackward === 'function'").toBool(),
+          "there is a transition for moving through a hierarchy");
+  c.check(c.evaluate("typeof destinationTransition.fadeThrough === 'function'").toBool() &&
+              c.evaluate("typeof tabTransition.sharedAxisX === 'function'").toBool(),
+          "alongside the ones for destinations and for peers");
+  c.check(c.evaluate("destinationTransition.axisTravel").toDouble() > 0,
+          "and it travels horizontally rather than in place");
+
+  // --- The symbol axes that carry a state ---
+  QMetaObject::invokeMethod(w, "chooseLibrary", Q_ARG(QVariant, QVariant("local-albums")));
+  QTest::qWait(700);
+  auto pinnable = shownItem(w->contentItem(), "artCardPin");
+  if (!pinnable)
+    pinnable = shownItem(w->contentItem(), "artistHeroPin");
+  c.check(c.evaluate("['home','library','heart','pin'].length").toInt() == 4,
+          "four symbols carry an outlined form");
+  {
+    // A symbol with an outlined form is drawn outlined until what it reports
+    // is on. Material calls that the fill axis, and it is what a navigation
+    // destination and a liked song have in common.
+    QQmlComponent iconSource(qmlEngine(w), QUrl("qrc:/qml/Icon.qml"));
+    QScopedPointer<QObject> made(iconSource.create(qmlContext(w)));
+    auto glyph = qobject_cast<QQuickItem *>(made.data());
+    c.check(glyph, "a symbol can be made to try the axis on");
+    if (glyph) {
+      for (const auto *name : {"heart", "pin", "home", "library"}) {
+        glyph->setProperty("name", QString::fromLatin1(name));
+        c.check(glyph->property("hasOutline").toBool(),
+                QString("%1 has one").arg(name));
+      }
+      glyph->setProperty("name", QString("play"));
+      c.check(!glyph->property("hasOutline").toBool(),
+              "and a symbol with no outlined form of its own stays as it is");
+      // The outlined drawing has to exist, not only be asked for.
+      glyph->setParentItem(w->contentItem());
+      glyph->setProperty("name", QString("heart"));
+      glyph->setProperty("fill", 0.0);
+      QTest::qWait(300);
+      auto outline = anyItem(glyph, "iconOutline");
+      c.check(outline && outline->isVisible(), "the outlined heart is the one drawn while it is off");
+      c.check(outline && outline->property("status").toInt() == 1,
+              "and its drawing is one the application ships");
+      glyph->setVisible(false);
+      glyph->setParentItem(nullptr);
+    }
+  }
+
+  // --- A skeleton's pulse travels rather than flashing ---
+  {
+    QQmlComponent skeletonSource(qmlEngine(w), QUrl("qrc:/qml/CatalogSkeleton.qml"));
+    QScopedPointer<QObject> made(skeletonSource.create(qmlContext(w)));
+    auto skeleton = qobject_cast<QQuickItem *>(made.data());
+    c.check(skeleton, "a skeleton can be made to watch");
+    if (skeleton) {
+      skeleton->setParentItem(w->contentItem());
+      skeleton->setWidth(600);
+      skeleton->setHeight(600);
+      skeleton->setProperty("loading", true);
+      QTest::qWait(500);
+      // Material starts the pulse at the top left and moves it to the bottom
+      // right, so two blocks at different places are never at the same point
+      // in it.
+      const double near = skeleton->property("wave").toDouble();
+      c.check(c.until([&] { return qAbs(skeleton->property("wave").toDouble() - near) > 0.2; }, 2000),
+              "its pulse runs");
+      double first = 0, last = 0;
+      if (auto shapes = skeleton->childItems().value(0)) {
+        const auto blocks = shapes->childItems();
+        if (blocks.size() >= 2) {
+          first = blocks.first()->opacity();
+          last = blocks.last()->opacity();
+        }
+      }
+      c.check(qAbs(first - last) > 0.01,
+              QString("and reaches one place before another (%1 against %2)")
+                  .arg(first, 0, 'f', 2).arg(last, 0, 'f', 2));
+      skeleton->setProperty("loading", false);
+      skeleton->setVisible(false);
+      skeleton->setParentItem(nullptr);
+    }
+  }
+
+  // --- A symbol beside text sits on its baseline ---
+  QMetaObject::invokeMethod(w, "chooseLibrary", Q_ARG(QVariant, QVariant("files")));
+  QTest::qWait(600);
+  {
+    QQmlComponent buttonSource(qmlEngine(w), QUrl("qrc:/qml/MButton.qml"));
+    QScopedPointer<QObject> made(buttonSource.create(qmlContext(w)));
+    auto labelled = qobject_cast<QQuickItem *>(made.data());
+    c.check(labelled, "a button with both a symbol and a label to measure");
+    if (labelled) {
+      labelled->setParentItem(w->contentItem());
+      labelled->setProperty("text", QString("Play"));
+      labelled->setProperty("symbol", QString("play"));
+      QTest::qWait(200);
+      auto inner = anyItem(labelled, "materialIcon");
+      c.check(inner && inner->property("besideText").toDouble() > 0,
+              "a symbol next to a label knows the size of the label");
+      double shift = 0;
+      if (inner)
+        if (auto anchors = qvariant_cast<QObject *>(inner->property("anchors")))
+          shift = anchors->property("verticalCenterOffset").toDouble();
+      c.check(shift >= 1 && shift <= 3,
+              QString("and is set below the centre line by Material's tenth (%1px)").arg(shift, 0, 'f', 0));
+      // A symbol standing on its own is centred as usual.
+      labelled->setProperty("text", QString());
+      QTest::qWait(200);
+      c.check(inner && inner->property("besideText").toDouble() == 0,
+              "a symbol standing on its own is centred");
+      labelled->setVisible(false);
+      labelled->setParentItem(nullptr);
+    }
+  }
+
+  // --- The containers Material puts a menu and a dialog on ---
+  c.check(c.evaluate("Theme.container").value<QColor>() == c.themeColor("container"),
+          "the theme publishes surfaceContainer");
+  // A dialog is a popup rather than an item, so it is reached as the object
+  // it is.
+  if (auto dialog = w->findChild<QObject *>("settingsDialog")) {
+    QMetaObject::invokeMethod(dialog, "open");
+    QTest::qWait(700);
+    auto frame = dialog->property("background").value<QQuickItem *>();
+    c.check(frame && frame->property("color").value<QColor>() == c.themeColor("high"),
+            "a dialog sits on surfaceContainerHigh, a step above the page");
+    // Nothing in a settings section may push the column wider than the space
+    // the column was given: a control that refuses to shrink drags every row
+    // beside it out past the edge, where they are clipped.
+    if (auto scroll = w->findChild<QQuickItem *>("settingsScroll")) {
+      if (auto rows = w->findChild<QQuickItem *>("settingsOptions")) {
+        // The way it went wrong: one row that wanted more width than the column
+        // had dragged every row beside it out past the edge, because a row that
+        // does not fill the column is laid out at the width it asks for and the
+        // rest are laid out to match it.
+        if (auto wide = w->findChild<QQuickItem *>("colorVariantControl")) {
+          const auto original = wide->property("options");
+          QVariantList longer;
+          for (const auto *label : {"Neutral scheme", "Tonal spot scheme", "Vibrant scheme",
+                                    "Expressive scheme", "Content scheme"}) {
+            QVariantMap option; option["key"] = QString::fromLatin1(label);
+            option["label"] = QString::fromLatin1(label); longer.append(option);
+          }
+          wide->setProperty("options", longer);
+          QTest::qWait(500);
+          c.check(wide->implicitWidth() > rows->width(),
+                  QString("a row can want more width than the column has (%1 of %2)")
+                      .arg(wide->implicitWidth(), 0, 'f', 0).arg(rows->width()));
+          c.check(qAbs(wide->width() - rows->width()) < 1,
+                  QString("and is given the column's width rather than its own (%1)")
+                      .arg(wide->width(), 0, 'f', 0));
+          if (auto sw = w->findChild<QQuickItem *>("ambientBackdropSwitch"))
+            c.check(qAbs(sw->width() - rows->width()) < 1,
+                    QString("so the rows beside it are not dragged out with it (%1 of %2)")
+                        .arg(sw->width(), 0, 'f', 0).arg(rows->width()));
+          double spill = 0; QString culprit;
+          collectOverflow(rows, scroll, spill, culprit);
+          c.check(spill <= 1,
+                  spill <= 1 ? QStringLiteral("and nothing is drawn past the edge")
+                             : QString("%1 runs %2px past the edge").arg(culprit).arg(spill, 0, 'f', 0));
+          wide->setProperty("options", original);
+          QTest::qWait(400);
+        }
+        double overflow = 0;
+        QString worst;
+        collectOverflow(rows, scroll, overflow, worst);
+        c.check(overflow <= 1,
+                overflow <= 1 ? QStringLiteral("every settings row fits the width it is given")
+                              : QString("%1 runs %2px past the edge")
+                                    .arg(worst).arg(overflow, 0, 'f', 0));
+        // And still fits when the column is narrower than the longest row in
+        // it, which is what a wider typeface or a smaller window does.
+        dialog->setProperty("width", 700);
+        QTest::qWait(500);
+        overflow = 0; worst.clear();
+        collectOverflow(rows, scroll, overflow, worst);
+        c.check(overflow <= 1,
+                overflow <= 1
+                    ? QString("and still fits when the column is squeezed to %1").arg(rows->width())
+                    : QString("squeezed to %1, %2 runs %3px past the edge")
+                          .arg(rows->width()).arg(worst).arg(overflow, 0, 'f', 0));
+        c.shotNow("01b-settings-squeezed");
+        dialog->setProperty("width", 880);
+        QTest::qWait(400);
+      }
+    }
+    c.shot("01-dialog-container");
+    QMetaObject::invokeMethod(dialog, "close");
+    QTest::qWait(400);
+  }
+
+  // The control that was doing it: a segmented button asked for its whole
+  // natural width as a minimum, so a column holding one could not be narrower
+  // than its longest row of labels.
+  {
+    QQmlComponent groupSource(qmlEngine(w), QUrl("qrc:/qml/MSegmentedControl.qml"));
+    QScopedPointer<QObject> made(groupSource.create(qmlContext(w)));
+    auto group = qobject_cast<QQuickItem *>(made.data());
+    c.check(group, "a segmented control can be made to squeeze");
+    if (group) {
+      group->setParentItem(w->contentItem());
+      QVariantList options;
+      for (const auto *label : {"Neutral", "Tonal spot", "Vibrant", "Expressive", "Content"}) {
+        QVariantMap option;
+        option["key"] = QString::fromLatin1(label);
+        option["label"] = QString::fromLatin1(label);
+        options.append(option);
+      }
+      group->setProperty("options", options);
+      QTest::qWait(200);
+      const double natural = group->implicitWidth();
+      const double floorWidth =
+          QQmlProperty::read(group, "Layout.minimumWidth", qmlContext(group)).toDouble();
+      c.check(natural > 0 && floorWidth > 0, "it asks for a natural width and a floor");
+      c.check(floorWidth < natural,
+              QString("and the floor is under it rather than equal to it (%1 of %2)")
+                  .arg(floorWidth, 0, 'f', 0).arg(natural, 0, 'f', 0));
+      c.check(floorWidth <= 5*48 + 1,
+              QString("no more than a touch target per segment (%1)").arg(floorWidth, 0, 'f', 0));
+      group->setVisible(false);
+      group->setParentItem(nullptr);
+    }
+  }
+
+  // --- A prompt that cannot be undone is asked with an icon ---
+  if (auto del = w->findChild<QObject *>("deletePlaylistDialog")) {
+    QMetaObject::invokeMethod(del, "open");
+    QTest::qWait(700);
+    auto header = del->property("header").value<QQuickItem *>();
+    auto icon = header ? anyItem(header, "dialogIcon") : nullptr;
+    auto title = header ? anyItem(header, "dialogTitle") : nullptr;
+    c.check(icon && icon->isVisible(), "the delete prompt carries Material's dialog icon");
+    c.check(title && title->property("horizontalAlignment").toInt() == Qt::AlignHCenter,
+            "and the headline is centred under it, as Material centres it with one");
+    c.shot("02-dialog-icon");
+    QMetaObject::invokeMethod(del, "close");
+    QTest::qWait(400);
+  }
+
+  // --- The structure assistive technology reads ---
+  QStringList missing;
+  for (const auto *name : {"navigationRail", "sidePanel", "playbackBar"})
+    if (auto pane = w->findChild<QQuickItem *>(name)) {
+      if (QQmlProperty::read(pane, "Accessible.name", qmlContext(pane)).toString().isEmpty())
+        missing.append(name);
+    } else {
+      missing.append(QString("%1 (not found)").arg(name));
+    }
+  c.check(missing.isEmpty(),
+          missing.isEmpty() ? QStringLiteral("the large blocks of the layout are named")
+                            : QString("unnamed regions: %1").arg(missing.join(", ")));
+  if (auto headline = shownItem(w->contentItem(), "collectionHeaderTitle"))
+    c.check(headline->property("heading").toBool(),
+            "the page's headline says it is a heading rather than only looking like one");
+  if (auto dialogTitle = w->findChild<QQuickItem *>("dialogTitle"))
+    c.check(dialogTitle->property("heading").toBool(), "and so does a dialog's");
+
+  // --- The tab indicator Material draws ---
+  auto indicator = shownItem(w->contentItem(), "tabIndicator");
+  c.check(indicator, "the tabs mark the one that is current");
+  if (indicator) {
+    c.check(qAbs(indicator->height() - 3) < 0.5 || qAbs(indicator->height() - 2) < 0.5,
+            QString("at Material's height (%1)").arg(indicator->height()));
+    c.check(indicator->property("bottomLeftRadius").toDouble() == 0,
+            "square where it meets the divider");
+    c.check(indicator->property("topLeftRadius").toDouble() > 0,
+            "and round at the top, which is the 3,3,0,0 shape Material gives it");
+    c.check(indicator->width() >= 24,
+            QString("never shorter than 24dp (%1)").arg(indicator->width()));
+  }
+  c.shot("03-tab-indicator");
+
+  // --- The snackbar grows away from the edge it sits against ---
+  b->toast("Anatomy");
+  QTest::qWait(60);
+  auto toast = w->findChild<QQuickItem *>("toastBar");
+  c.check(toast, "a snackbar is raised");
+  if (toast) {
+    const double partway = toast->height();
+    c.check(c.until([&] { return toast->height() > partway + 4; }, 2000) || partway > 40,
+            QString("and expands rather than appearing whole (%1px at first)").arg(partway, 0, 'f', 0));
+    c.check(c.until([&] { return toast->height() > 40; }, 2000), "settling at its own height");
+    c.check(toast->clip(), "with what it holds clipped by the frame on its way in");
+    c.shot("04-snackbar");
+  }
+
+  b->stop();
   b->clearQueue();
   c.finish();
 }

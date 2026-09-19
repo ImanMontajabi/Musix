@@ -52,6 +52,7 @@ AbstractButton {
         opacity: control.dimmed ? Theme.disabledContentOpacity : 1
         Icon {
             x: 12; size: Theme.chipIcon; anchors.verticalCenter: parent.verticalCenter
+            besideText: Theme.labelLarge
             name: control.symbol.length ? control.symbol : "check"
             visible: control.leads
             ink: control.selected ? Theme.containerText : Theme.text

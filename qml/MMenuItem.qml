@@ -27,7 +27,8 @@ MenuItem {
         size: 20; ink: control.enabled ? Theme.text : Theme.muted
         visible: control.hasLeading
         x: control.mirrored ? control.width-width-control.rightPadding : control.leftPadding
-        y: (control.height-height)/2
+        // Set on the label's baseline rather than the row's centre line.
+        y: (control.height-height)/2 + Math.round(Theme.labelLarge*0.115)
     }
     contentItem: Item {
         SungText {

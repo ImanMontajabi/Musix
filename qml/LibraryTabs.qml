@@ -128,9 +128,14 @@ Flickable {
                     anchors.bottom: parent.bottom; anchors.horizontalCenter: parent.horizontalCenter
                     // A primary tab's indicator sits under its label only; a
                     // secondary tab uses the simpler full-width rule.
-                    width: tabs.secondary ? tab.width : label.implicitWidth
-                    height: tabs.secondary ? 2 : 3
-                    radius: Theme.shapeFull(height); color: Theme.primary
+                    width: tabs.secondary ? tab.width
+                                          : Math.max(24, label.implicitWidth-2*Theme.tabIndicatorInset)
+                    height: tabs.secondary ? Theme.tabIndicatorSecondary : Theme.tabIndicatorPrimary
+                    // It sits on the divider, so it rounds at the top and stays
+                    // square where the two meet.
+                    topLeftRadius: height; topRightRadius: height
+                    bottomLeftRadius: 0; bottomRightRadius: 0
+                    color: Theme.primary
                     opacity: tab.selected ? 1 : 0
                     Behavior on opacity { NumberAnimation { duration: Theme.fast; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.fastEffectsCurve } }
                 }
