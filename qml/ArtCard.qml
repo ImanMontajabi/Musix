@@ -34,7 +34,7 @@ Item {
         anchors.fill: art
         Accessible.name: card.track.title || "Open collection"
         onClicked: {if(card.openHandler)card.openHandler(card.track,art);else app.open(card.track);}
-        background: Rectangle { radius: art.radius; border.width: openCard.activeFocus?3:0; border.color: Theme.primary; color: "transparent"; opacity: 1; Behavior on opacity { NumberAnimation { duration: Theme.fast; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.fastEffectsCurve } } }
+        background: Rectangle { radius: art.radius; border.width: openCard.activeFocus?3:0; border.color: Theme.focusRing; color: "transparent"; opacity: 1; Behavior on opacity { NumberAnimation { duration: Theme.fast; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.fastEffectsCurve } } }
     }
     MButton { id: cardAction; objectName: "cardAction"; anchors.right: art.right; anchors.bottom: art.bottom; anchors.margins: 10; busy: card.loadingCover; symbol: card.playableCover ? "play" : "chevron"; tip: (card.playableCover ? "Play " : "Open ") + (card.track.title || ""); filled: true; opacity: hover.hovered || openCard.activeFocus || cardAction.activeFocus || card.loadingCover ? 1 : 0; visible: opacity>0; Behavior on opacity { NumberAnimation { duration: Theme.fast; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.fastEffectsCurve } } onClicked: {if(card.playableCover)app.playCover(card.track);else app.open(card.track);} }
     MButton {

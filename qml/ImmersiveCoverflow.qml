@@ -90,7 +90,7 @@ ColumnLayout {
                     radius: Math.max(10,cellItem.coverSize*0.12)+4
                     color: "transparent"
                     border.width: parent.visualFocus ? 2 : cellItem.playing ? 2 : 0
-                    border.color: Theme.primary
+                    border.color: Theme.focusRing
                 }
             }
         }

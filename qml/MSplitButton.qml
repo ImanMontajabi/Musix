@@ -22,24 +22,35 @@ Item {
     property bool menuOpen: false
     signal clicked()
 
-    readonly property real unit: 48
+    // Material's small split button: a 40dp container inside the 48dp target
+    // it keeps, 2dp between the halves, 16dp before the label and 12dp after
+    // it, and 13dp either side of a 22dp chevron.
+    readonly property real unit: 40
+    readonly property real target: Math.max(Theme.minimumTarget, unit)
+    readonly property real leadingSpace: 16
+    readonly property real trailingSpace: 12
+    readonly property real chevronSpace: 13
+    readonly property real chevronSize: 22
     readonly property real outer: Theme.shapeFull(unit)
     // The facing corners sit at the bottom of the scale, so the seam reads as
     // one control divided rather than two controls placed side by side.
     readonly property real inner: Theme.shapeExtraSmall
     implicitWidth: pair.implicitWidth
-    implicitHeight: unit
+    implicitHeight: target
 
     Row {
         id: pair
-        anchors.fill: parent
+        anchors.horizontalCenter: parent.horizontalCenter
+        anchors.verticalCenter: parent.verticalCenter
+        height: control.unit
         spacing: 2
 
     AbstractButton {
         id: action
         objectName: "splitButtonAction"
         height: control.unit
-        implicitWidth: label.implicitWidth + (control.symbol.length ? 32 : 0) + 32
+        implicitWidth: label.implicitWidth + (control.symbol.length ? 32 : 0)
+                       + control.leadingSpace + control.trailingSpace
         hoverEnabled: true
         focusPolicy: Qt.StrongFocus
         text: control.text
@@ -92,7 +103,7 @@ Item {
     AbstractButton {
         id: reveal
         objectName: "splitButtonMenu"
-        width: control.unit; height: control.unit
+        width: control.chevronSpace*2 + control.chevronSize; height: control.unit
         hoverEnabled: true
         focusPolicy: Qt.StrongFocus
         Accessible.name: "More options for " + control.text

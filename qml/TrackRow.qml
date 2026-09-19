@@ -103,7 +103,7 @@ ItemDelegate {
         bottomLeftRadius: wholeShape ? stateCorner : row.lastInRun ? Theme.listActive : Theme.listRest
         bottomRightRadius: bottomLeftRadius
         color: row.selected ? Theme.primaryContainer : row.motionRaised ? Theme.container : row.active ? Theme.high : row.hovered ? Theme.container : row.segmented ? Theme.container : "transparent"
-        border.width: row.keyboardCurrent ? 2 : 0; border.color: Theme.primary
+        border.width: row.keyboardCurrent ? 2 : 0; border.color: Theme.focusRing
         Behavior on color { ColorAnimation { duration: Theme.fast; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.fastEffectsCurve } }
         Behavior on topLeftRadius { enabled: app.motion; NumberAnimation { duration: Theme.springFastEffectsMs; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.springFastEffects } }
         Behavior on bottomLeftRadius { enabled: app.motion; NumberAnimation { duration: Theme.springFastEffectsMs; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.springFastEffects } }

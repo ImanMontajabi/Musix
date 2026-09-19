@@ -69,7 +69,7 @@ Rectangle {
                              : "transparent"
                         Behavior on color { ColorAnimation { duration: Theme.springFastEffectsMs; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.springFastEffects } }
                         border.width: destination.visualFocus ? 2 : 0
-                        border.color: Theme.primary
+                        border.color: Theme.focusRing
                         Icon {
                             id: glyph
                             anchors.centerIn: parent

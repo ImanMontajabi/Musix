@@ -139,7 +139,7 @@ AbstractButton {
         // The ring sits outside the button, so optical roundness adds the gap
         // between them rather than repeating the button's own radius.
         radius: Theme.shapeInside(Theme.shapeFull(Math.min(width, height)), -3); color: "transparent"
-        border.width: 2; border.color: Theme.primary
+        border.width: 2; border.color: Theme.focusRing
         visible: control.visualFocus
     }
     contentItem: Item {

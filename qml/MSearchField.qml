@@ -18,7 +18,7 @@ TextField {
     Accessible.name: placeholderText
     background: Rectangle {
         radius: height / 2; color: Theme.high
-        border.width: field.activeFocus ? 2 : 0; border.color: Theme.primary
+        border.width: field.activeFocus ? 2 : 0; border.color: Theme.focusRing
     }
     Icon { name: "search"; size: 24; x: 16; anchors.verticalCenter: parent.verticalCenter; ink: Theme.muted; Accessible.ignored: true }
     MButton {

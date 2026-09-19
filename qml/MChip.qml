@@ -44,7 +44,7 @@ AbstractButton {
         }
         Rectangle {
             anchors.fill: parent; anchors.margins: -3; radius: Theme.shapeMedium
-            color: "transparent"; border.width: 2; border.color: Theme.primary
+            color: "transparent"; border.width: 2; border.color: Theme.focusRing
             visible: control.visualFocus
         }
     }

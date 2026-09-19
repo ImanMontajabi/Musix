@@ -96,7 +96,9 @@ Item {
                 bottomLeftRadius: topLeftRadius
                 topRightRadius: button.trailing ? outer : inner
                 bottomRightRadius: topRightRadius
-                color: button.selected ? Theme.primaryContainer : "transparent"
+                // Material selects a segment with the secondary container, not
+                // the primary one: it marks a choice rather than an action.
+                color: button.selected ? Theme.secondaryContainer : "transparent"
                 border.width: 1; border.color: Theme.controlOutline
                 Behavior on color { ColorAnimation { duration: Theme.fast; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.fastEffectsCurve } }
                 Behavior on topLeftRadius { enabled: app.motion; SpringAnimation { spring: 5; damping: 0.8; mass: 0.8 } }
@@ -105,7 +107,7 @@ Item {
                     anchors.fill: parent
                     topLeftRadius: parent.topLeftRadius; bottomLeftRadius: parent.bottomLeftRadius
                     topRightRadius: parent.topRightRadius; bottomRightRadius: parent.bottomRightRadius
-                    color: button.selected ? Theme.containerText : Theme.text
+                    color: button.selected ? Theme.secondaryContainerText : Theme.text
                     opacity: button.down || button.visualFocus ? Theme.pressedOpacity : button.hovered ? Theme.hoverOpacity : 0
                     Behavior on opacity { NumberAnimation { duration: Theme.fast; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.fastEffectsCurve } }
                 }
@@ -118,13 +120,13 @@ Item {
                     x: (parent.width-width)/2 + Theme.opticalShift(button.leading && !button.selected ? Theme.shapeFull(40) : Theme.shapeSmall,
                                                                    button.trailing && !button.selected ? Theme.shapeFull(40) : Theme.shapeSmall)
                     spacing: 8
-                    Icon { name: "check"; size: 18; visible: button.selected; ink: Theme.containerText; anchors.verticalCenter: parent.verticalCenter }
-                    SungText { text: button.text; font.pixelSize: Theme.labelLarge; font.weight: Font.Medium; color: button.selected ? Theme.containerText : Theme.text; elide: Text.ElideRight; width: Math.min(implicitWidth, button.width-(button.selected?42:24)) }
+                    Icon { name: "check"; size: 18; visible: button.selected; ink: Theme.secondaryContainerText; anchors.verticalCenter: parent.verticalCenter }
+                    SungText { text: button.text; font.pixelSize: Theme.labelLarge; font.weight: Font.Medium; color: button.selected ? Theme.secondaryContainerText : Theme.text; elide: Text.ElideRight; width: Math.min(implicitWidth, button.width-(button.selected?42:24)) }
                 }
             }
             Rectangle {
                 anchors.fill: parent; anchors.margins: 2; radius: Theme.shapeSmall
-                color: "transparent"; border.width: 2; border.color: Theme.primary; visible: button.visualFocus
+                color: "transparent"; border.width: 2; border.color: Theme.focusRing; visible: button.visualFocus
             }
         }
     }

@@ -39,7 +39,7 @@ Flow {
                 border.color: Theme.controlOutline
                 Rectangle {
                     anchors.fill: parent; anchors.margins: -4; radius: Theme.shapeExtraLarge
-                    color: "transparent"; border.width: 2; border.color: Theme.primary
+                    color: "transparent"; border.width: 2; border.color: Theme.focusRing
                     visible: swatch.visualFocus
                 }
                 Rectangle {

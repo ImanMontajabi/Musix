@@ -223,7 +223,7 @@ ListView {
         }
     }
     Rectangle {
-        parent: list; anchors.fill: parent; z: 9; radius: Theme.shapeLarge; color: "transparent"; border.color: Theme.primary; border.width: 2
+        parent: list; anchors.fill: parent; z: 9; radius: Theme.shapeLarge; color: "transparent"; border.color: Theme.focusRing; border.width: 2
         visible: drop.containsDrag
     }
     Rectangle {

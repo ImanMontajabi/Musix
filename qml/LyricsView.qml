@@ -95,7 +95,7 @@ Item {
             ToolTip.delay: 700
             ToolTip.text: app.formatTime(Math.max(0,modelData.start-app.lyricOffset))
             onClicked: { app.seekLyric(modelData.start);lyricPane.following=true;resumeFollow.stop(); }
-            background: Rectangle { radius: Theme.shapeMedium; color: lyricLine.hovered ? Theme.high : "transparent"; border.width: lyricLine.visualFocus?2:0; border.color: Theme.primary }
+            background: Rectangle { radius: Theme.shapeMedium; color: lyricLine.hovered ? Theme.high : "transparent"; border.width: lyricLine.visualFocus?2:0; border.color: Theme.focusRing }
             contentItem: SungText {
                 id: lyricLabel; objectName: "lyricLabel"
                 text: lyricLine.modelData.text || "…"

@@ -284,6 +284,11 @@ QtObject {
     function trackingFor(size,label,named,emphasized) {
         return typeScale[typeRole(size,label,named)][emphasized ? 3 : 2]
     }
+    // The ring a keyboard leaves around whatever it has reached. Material draws
+    // it in secondary rather than primary, so it still reads as a ring when it
+    // lands on something already painted in the accent.
+    readonly property color focusRing: secondary
+
     // Material's four state layers, and what it does to a disabled control: the
     // container drops to a tenth of onSurface and the content to 38% of
     // onSurfaceVariant, rather than the whole control fading together.
@@ -299,6 +304,7 @@ QtObject {
     readonly property color surface: followDesktop ? desktopTheme.colors.surface : role("surfaceContainerLow", dark ? "#201a18" : "#fff1ec")
     readonly property color container: followDesktop ? desktopTheme.colors.container : role("surfaceContainer", dark ? "#2b2320" : "#f6e5de")
     readonly property color high: followDesktop ? desktopTheme.colors.high : role("surfaceContainerHigh", dark ? "#382c28" : "#efddd5")
+    readonly property color highest: role("surfaceContainerHighest", dark ? "#433733" : "#e9d8d0")
     readonly property color text: followDesktop ? desktopTheme.colors.text : role("onSurface", dark ? "#f5ded5" : "#281912")
     readonly property color muted: followDesktop ? desktopTheme.colors.muted : role("onSurfaceVariant", dark ? "#d5bfb5" : "#705c53")
     readonly property color outline: followDesktop ? desktopTheme.colors.outline : role("outlineVariant", dark ? "#57443b" : "#dcc5b9")

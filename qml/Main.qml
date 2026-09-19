@@ -53,6 +53,14 @@ ApplicationWindow {
     property bool wasMaximized: false
     property bool geometryReady: false
     property var homeSections: {app.sections;app.pins;app.homeOrder;app.hiddenHomeSections;return app.homeSections();}
+    // Whether this page has something other than a list of songs to show: the
+    // shelves themselves, or the prompt that offers them back once they have
+    // all been hidden. It is not the same question as whether the catalogue
+    // returned sections. The feed also carries the pinned row, and asking the
+    // catalogue put the list's empty state on top of the pins whenever the
+    // catalogue came back with nothing, which is what an offline home is.
+    readonly property bool feedShowing: homeSections.length>0
+                                      || (app.page==="home" && app.homeSections(true).length>0)
     // Home has no cover of its own, so it borrows one: the playing track when
     // there is one, otherwise the first artwork its shelves have loaded.
     readonly property string homeArtwork: {
@@ -63,7 +71,7 @@ ApplicationWindow {
         }
         return "";
     }
-    property bool hasSongCollection: app.sections.length===0 && app.results.count>0 && !!(app.results.get(0).videoId || app.results.get(0).localPath || app.results.get(0).serverSong)
+    property bool hasSongCollection: !window.feedShowing && app.results.count>0 && !!(app.results.get(0).videoId || app.results.get(0).localPath || app.results.get(0).serverSong)
     property var bulkView: null
     property var batchItems: []
     property var menuItem: ({})
@@ -602,7 +610,7 @@ ApplicationWindow {
                     // Material's search bar sits on surfaceContainerHigh whether
                     // or not it holds focus; the focus ring does the rest.
                     color: Theme.high; radius: Theme.shapeExtraLarge
-                    border.width: searchField.activeFocus?2:0; border.color: Theme.primary
+                    border.width: searchField.activeFocus?2:0; border.color: Theme.focusRing
                     Behavior on color { ColorAnimation { duration: Theme.fast; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.fastEffectsCurve } }
                     RowLayout {
                         anchors.fill: parent; anchors.leftMargin: 18; anchors.rightMargin: 8; spacing: 12
@@ -961,7 +969,7 @@ ApplicationWindow {
                             // An artist's hero owns these actions while it is
                             // open; the row takes them back as it collapses, so
                             // exactly one Play is ever on screen.
-                            visible: tracks.selection.count===0 && app.results.count>0 && app.sections.length===0 && !(window.destination==="library" && window.libraryTab==="playlists" && !window.localPlaylist) && !!(app.results.get(0).videoId || app.results.get(0).localPath || app.results.get(0).serverSong) && (!window.artistPage || content.compactHeader)
+                            visible: tracks.selection.count===0 && app.results.count>0 && !window.feedShowing && !(window.destination==="library" && window.libraryTab==="playlists" && !window.localPlaylist) && !!(app.results.get(0).videoId || app.results.get(0).localPath || app.results.get(0).serverSong) && (!window.artistPage || content.compactHeader)
                             Layout.fillWidth: true; spacing: 10
                             MSplitButton {
                                 objectName: "collectionPlay"
@@ -1099,7 +1107,7 @@ ApplicationWindow {
                             }
                             CatalogSkeleton { anchors.fill: parent; loading: app.busy && app.results.count===0 && window.homeSections.length===0; cards: app.page==="home" || app.page==="artist" }
                             ListView {
-                                id: shelves; anchors.fill: parent
+                                id: shelves; objectName: "homeShelves"; anchors.fill: parent
                                 visible: window.homeSections.length>0 && !(window.destination==="library"&&window.libraryTab==="playlists")
                                 clip: true; spacing: window.paneGutter+2; reuseItems: true; cacheBuffer: 0
                                 model: window.homeSections; boundsBehavior: Flickable.StopAtBounds
@@ -1139,7 +1147,7 @@ ApplicationWindow {
                             TrackList {
                                 id: tracks; groupDiscs: !!app.albumInfo.multipleDiscs && app.collection.sortKey==="original"; objectName: "tracksView"; anchors.fill: parent; clip: true
                                 bottomMargin: libraryFab.visible ? libraryFab.height+24 : 0
-                                visible: !localGroups.visible && app.sections.length===0 && !(window.destination==="library"&&window.libraryTab==="playlists"&&!window.localPlaylist)
+                                visible: !localGroups.visible && !window.feedShowing && !(window.destination==="library"&&window.libraryTab==="playlists"&&!window.localPlaylist)
                                 groupFolders: app.page==="library" && app.libraryId==="files" && app.collection.sortKey==="folder"
                                 model: app.collection; reuseItems: true; cacheBuffer: 100; boundsBehavior: Flickable.StopAtBounds
                                 queueMode: false; reorderEnabled: (window.editableLocal || app.serverPlaylistEditable) && app.collection.sortKey==="original" && !app.collection.query
@@ -1188,8 +1196,8 @@ ApplicationWindow {
                                     required property var modelData; width: localPlaylists.width; height:app.viewCompactDensity?64:76; radius: Theme.shapeLarge; color: Theme.container
                                     RowLayout {
                                         anchors.fill: parent; anchors.margins: 12; spacing: 12
-                                        AbstractButton { Layout.preferredWidth: 48; Layout.preferredHeight: 48; focusPolicy: Qt.StrongFocus; Accessible.name: "Open "+modelData.title; contentItem: PlaylistCover { artworks: modelData.artworks || [] } background: Rectangle { color: "transparent"; radius: Theme.shapeMedium; border.width: parent.activeFocus?2:0; border.color: Theme.primary } onClicked: {window.localPlaylist=modelData.id;app.openPlaylist(modelData.id);} }
-                                        AbstractButton { Layout.fillWidth: true; Layout.fillHeight: true; focusPolicy: Qt.StrongFocus; Accessible.name: modelData.title; background: Rectangle { color: "transparent"; radius: Theme.shapeSmall; border.width: parent.activeFocus?2:0; border.color: Theme.primary } onClicked: {window.localPlaylist=modelData.id;app.openPlaylist(modelData.id);} contentItem: Column { spacing: 4; SungText { text: modelData.title; font.pixelSize: 16; width: parent.width } SungText { text: modelData.smart?"Smart playlist":window.countText(modelData.count); color: Theme.muted; font.pixelSize: 12 } } }
+                                        AbstractButton { Layout.preferredWidth: 48; Layout.preferredHeight: 48; focusPolicy: Qt.StrongFocus; Accessible.name: "Open "+modelData.title; contentItem: PlaylistCover { artworks: modelData.artworks || [] } background: Rectangle { color: "transparent"; radius: Theme.shapeMedium; border.width: parent.activeFocus?2:0; border.color: Theme.focusRing } onClicked: {window.localPlaylist=modelData.id;app.openPlaylist(modelData.id);} }
+                                        AbstractButton { Layout.fillWidth: true; Layout.fillHeight: true; focusPolicy: Qt.StrongFocus; Accessible.name: modelData.title; background: Rectangle { color: "transparent"; radius: Theme.shapeSmall; border.width: parent.activeFocus?2:0; border.color: Theme.focusRing } onClicked: {window.localPlaylist=modelData.id;app.openPlaylist(modelData.id);} contentItem: Column { spacing: 4; SungText { text: modelData.title; font.pixelSize: 16; width: parent.width } SungText { text: modelData.smart?"Smart playlist":window.countText(modelData.count); color: Theme.muted; font.pixelSize: 12 } } }
                                         MButton { symbol: "more"; tip: "Playlist actions"; onClicked: {window.editPlaylistId=modelData.id;playlistName.text=modelData.title;playlistActions.popup(this,width-playlistActions.width,height+4);} }
                                     }
                                 }
@@ -1270,12 +1278,12 @@ ApplicationWindow {
                     anchors.fill: parent; anchors.leftMargin: 16; anchors.rightMargin: 16; spacing: 16
                     AbstractButton { id: nowButton; objectName: "nowButton"; Layout.preferredWidth: 64; Layout.preferredHeight: 64; enabled: app.currentIndex>=0; focusPolicy: Qt.StrongFocus; Accessible.name: "Now playing"; onClicked: window.activateSide("now")
                         contentItem: Artwork { id: nowArtwork; url: app.current.art || ""; motionUrl: app.currentMotionArt; crossfade:true; radius: Theme.shapeMedium; pixels: 150; fit:app.currentArtworkFit; opacity: window.coverFlying?0:1 }
-                        background: Rectangle { anchors.fill: parent; anchors.margins: -3; color: "transparent"; radius: Theme.shapeLarge; border.width: parent.activeFocus?2:0; border.color: Theme.primary }
+                        background: Rectangle { anchors.fill: parent; anchors.margins: -3; color: "transparent"; radius: Theme.shapeLarge; border.width: parent.activeFocus?2:0; border.color: Theme.focusRing }
                     }
                     ColumnLayout {
                         Layout.preferredWidth: Math.max(100,Math.min(220,window.width*0.17)); spacing: 6; opacity: nowPresentation.fade*window.coverDetailsOpacity; transform: Translate { x: nowPresentation.offset }
-                        AbstractButton { Layout.fillWidth: true; implicitHeight: 24; focusPolicy: Qt.StrongFocus; enabled: app.currentIndex>=0; Accessible.name: "Now playing: " + (app.current.title || "Nothing playing"); onClicked: window.activateSide("now"); contentItem: MatchText { revealFocused: parent.activeFocus; sourceText: nowPresentation.shown.title || "Nothing playing"; font.pixelSize: Theme.titleMedium; font.weight: Font.DemiBold } background: Rectangle { color: "transparent"; radius: Theme.shapeExtraSmall; border.width: parent.activeFocus?1:0; border.color: Theme.primary } }
-                        AbstractButton { Layout.fillWidth: true; implicitHeight: 24; focusPolicy: Qt.StrongFocus; enabled: !!app.current.artistId; Accessible.name: "Go to " + (app.current.artist || "artist"); onClicked: app.open(window.relatedItem(app.current,"artist")); contentItem: MatchText { revealFocused: parent.activeFocus; sourceText: nowPresentation.shown.artist || ""; color: Theme.muted; font.pixelSize: Theme.bodyMedium } background: Rectangle { color: "transparent"; radius: Theme.shapeExtraSmall; border.width: parent.activeFocus?1:0; border.color: Theme.primary } }
+                        AbstractButton { Layout.fillWidth: true; implicitHeight: 24; focusPolicy: Qt.StrongFocus; enabled: app.currentIndex>=0; Accessible.name: "Now playing: " + (app.current.title || "Nothing playing"); onClicked: window.activateSide("now"); contentItem: MatchText { revealFocused: parent.activeFocus; sourceText: nowPresentation.shown.title || "Nothing playing"; font.pixelSize: Theme.titleMedium; font.weight: Font.DemiBold } background: Rectangle { color: "transparent"; radius: Theme.shapeExtraSmall; border.width: parent.activeFocus?1:0; border.color: Theme.focusRing } }
+                        AbstractButton { Layout.fillWidth: true; implicitHeight: 24; focusPolicy: Qt.StrongFocus; enabled: !!app.current.artistId; Accessible.name: "Go to " + (app.current.artist || "artist"); onClicked: app.open(window.relatedItem(app.current,"artist")); contentItem: MatchText { revealFocused: parent.activeFocus; sourceText: nowPresentation.shown.artist || ""; color: Theme.muted; font.pixelSize: Theme.bodyMedium } background: Rectangle { color: "transparent"; radius: Theme.shapeExtraSmall; border.width: parent.activeFocus?1:0; border.color: Theme.focusRing } }
                     }
                     MButton { symbol: "heart"; tip: app.liked?"Unlike":"Like"; toggle: true; selected: app.liked; enabled: app.currentIndex>=0; visible: window.width>=1050; onClicked: app.toggleLike(app.current) }
                     ColumnLayout {
@@ -1527,7 +1535,7 @@ ApplicationWindow {
                     }
                 }
             }
-            MDivider { objectName: "drawerDivider"; visible: app.pins.length>0; Layout.fillWidth: true; Layout.topMargin: 4 }
+            MDivider { objectName: "drawerDivider"; inset: 16; visible: app.pins.length>0; Layout.fillWidth: true; Layout.topMargin: 4 }
             SungText { visible: app.pins.length>0; text: "Pinned"; color: Theme.muted; font.pixelSize: Theme.labelMedium; labelRole: true; Layout.leftMargin: 16 }
             Repeater {
                 model: app.pins.slice(0,6)
@@ -1719,7 +1727,7 @@ ApplicationWindow {
         id: playlistDialog; objectName: "playlistDialog"; initialFocus: playlistName; acceptText: window.playlistAction==="rename" ? "Save" : "Create"; anchors.centerIn: parent; width: 380; modal: true; acceptEnabled: playlistName.text.trim().length>0; title: window.playlistAction==="rename"?"Rename playlist":"New playlist"
         palette.windowText: Theme.text; palette.text: Theme.text; palette.buttonText: Theme.text
         standardButtons: Dialog.Save | Dialog.Cancel
-        MTextField { id: playlistName; objectName: "playlistName"; width: parent.width; label: "Playlist name"; maximumLength: 120; onAccepted: if(playlistDialog.acceptEnabled)playlistDialog.accept() }
+        MTextField { id: playlistName; objectName: "playlistName"; variant: "filled"; width: parent.width; label: "Playlist name"; maximumLength: 120; onAccepted: if(playlistDialog.acceptEnabled)playlistDialog.accept() }
         onOpened: playlistName.forceActiveFocus()
         onAccepted: { if(window.playlistAction==="queue")app.saveQueue(playlistName.text);else if(window.playlistAction==="rename")app.renamePlaylist(window.editPlaylistId,playlistName.text);else {const id=app.createPlaylist(playlistName.text);if(id&&window.playlistAction==="add"){if(window.batchItems.length)app.addItemsToPlaylist(id,window.batchItems);else app.addToPlaylist(id,window.menuItem);}} }
     }

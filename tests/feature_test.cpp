@@ -1889,8 +1889,14 @@ void runMaterialComponentTests(Backend *b, QQuickWindow *w) {
             "the facing corners match each other across the seam");
     c.check(actionInner < actionOuter && revealInner < revealOuter,
             "and are smaller than the outer corners");
-    c.check(qAbs(actionOuter - 24) < 0.01 && qAbs(revealOuter - 24) < 0.01,
-            "the outer corners are full for a 48dp control");
+    // Material's small split button is a 40dp container that keeps the 48dp
+    // target around it, so the outer corners are full for the container
+    // rather than for the room it is given.
+    const double container = action->height();
+    c.check(qAbs(container - 40) < 0.01 && split->height() >= container,
+            "a 40dp container inside the target kept around it");
+    c.check(qAbs(actionOuter - container/2) < 0.01 && qAbs(revealOuter - container/2) < 0.01,
+            "the outer corners are full for that container");
     c.check(qAbs(reveal->x() - (action->x() + action->width())) < 4,
             "the halves sit together rather than apart");
     // The two halves do different things.
@@ -2922,6 +2928,58 @@ void runMaterialSizingTests(Backend *b, QQuickWindow *w) {
                  - role.emphasizedTrack) < 0.001,
             QString("and %1 emphasized").arg(role.emphasizedTrack));
   }
+
+  // --- The ring a keyboard leaves ---
+  // Material draws the focus indicator in secondary. In primary it would be
+  // the same colour as whatever it lands on that is already accented.
+  c.check(c.evaluate("Theme.focusRing").value<QColor>() == c.themeColor("secondary"),
+          "the focus ring takes the secondary role");
+  c.check(c.evaluate("Theme.focusRing").value<QColor>() != c.themeColor("primary"),
+          "which is not the role the thing it rings is painted in");
+  {
+    QQmlComponent buttonSource(qmlEngine(w), QUrl("qrc:/qml/MButton.qml"));
+    QScopedPointer<QObject> made(buttonSource.create(qmlContext(w)));
+    auto sample = qobject_cast<QQuickItem *>(made.data());
+    if (sample) {
+      sample->setParentItem(w->contentItem());
+      sample->setProperty("symbol", QString("play"));
+      sample->forceActiveFocus(Qt::TabFocusReason);
+      QTest::qWait(200);
+      auto ring = anyItem(sample, "buttonFocusRing");
+      if (ring)
+        c.check(ring->property("border").value<QObject *>()->property("color").value<QColor>() ==
+                    c.themeColor("secondary"),
+                "and a focused button draws it");
+      sample->setVisible(false);
+      sample->setParentItem(nullptr);
+    }
+  }
+
+  // --- The split button's published measurements ---
+  if (auto split = shownItem(w->contentItem(), "collectionPlay")) {
+    c.check(qAbs(split->property("unit").toDouble() - 40) < 0.5,
+            QString("a split button's container is 40dp tall (%1)")
+                .arg(split->property("unit").toDouble(), 0, 'f', 0));
+    c.check(split->height() >= 47.5,
+            QString("inside the target it keeps (%1)").arg(split->height(), 0, 'f', 0));
+    if (auto chevron = anyItem(split, "splitButtonMenu"))
+      c.check(qAbs(chevron->width() - 48) < 0.5,
+              QString("and the half that opens the menu is 13dp either side of a 22dp "
+                      "chevron (%1 across)").arg(chevron->width(), 0, 'f', 0));
+  }
+
+  // --- The indicator behind the destination you are on ---
+  if (auto destination = shownItem(w->contentItem(), "nav_library"))
+    if (auto pill = anyItem(destination, "navigationIndicator"))
+      c.check(qAbs(pill->width() - 56) < 0.5 && qAbs(pill->height() - 32) < 0.5,
+              QString("the active indicator is 56 by 32 (%1 by %2)")
+                  .arg(pill->width(), 0, 'f', 0).arg(pill->height(), 0, 'f', 0));
+
+  // --- A rule inside a list starts where the labels start ---
+  if (auto drawerRule = w->findChild<QQuickItem *>("drawerDivider"))
+    c.check(qAbs(drawerRule->property("inset").toDouble() - 16) < 0.5,
+            QString("a list is ruled off 16dp in from both ends (%1)")
+                .arg(drawerRule->property("inset").toDouble(), 0, 'f', 0));
 
   // --- The shape library ---
   const auto names = c.evaluate("app.shapeNames()").toStringList();
@@ -3963,6 +4021,56 @@ void runMaterialAnatomyTests(Backend *b, QQuickWindow *w) {
     c.shot("04-snackbar");
   }
 
+  // --- A pinned row is a feed, so nothing draws an empty state over it ---
+  // The catalogue's own sections and the feed are not the same list: the feed
+  // also carries the pinned row. Asking the catalogue whether to show a list
+  // of songs put the empty state on top of the pins whenever the feed itself
+  // came back empty, which is what an offline home page looks like.
+  {
+    const auto playlist = b->createPlaylist("Anatomy");
+    c.check(!playlist.isEmpty(), "a collection to pin");
+    b->openPlaylist(playlist);
+    c.check(c.until([&] { return !b->busy() && !b->collectionItem().isEmpty(); }, 8000),
+            "which can be opened");
+    b->togglePin(b->collectionItem());
+    c.check(c.until([&] { return !b->pins().isEmpty(); }), "and pinned");
+    b->home();
+    QTest::qWait(900);
+    c.check(c.evaluate("window.homeSections.length").toInt() > b->sections().size(),
+            "the feed carries a row the catalogue does not");
+    c.check(c.evaluate("window.feedShowing").toBool(), "so the feed is what the page shows");
+    auto empty = w->findChild<QQuickItem *>("collectionEmptyState");
+    c.check(empty && !empty->isVisible(), "and no empty state is drawn over it");
+    c.shot("05-pinned-feed");
+    // The offline case, which is the one that went wrong: the catalogue offers
+    // nothing and the pinned row is the whole feed. Driving the property the
+    // page reads reaches it without taking the fixture offline.
+    c.evaluate("window.homeSections = [{title:'Pinned', items:[]}]");
+    QTest::qWait(400);
+    c.check(c.evaluate("window.feedShowing").toBool(),
+            "a feed of nothing but pins is still a feed");
+    c.check(empty && !empty->isVisible(),
+            "so the list of songs stands down rather than reporting itself empty");
+    // The two never share the page: whichever is showing, the other stands
+    // down. That is the property the old predicate broke.
+    auto shelves = w->findChild<QQuickItem *>("homeShelves");
+    c.check(!(shelves && shelves->isVisible() && empty && empty->isVisible()),
+            "the shelves and the empty state are never both on the page");
+    // And the discriminating case, reached where the catalogue has nothing to
+    // say: a feed with a row in it puts the list of songs away. Asking the
+    // catalogue instead of the feed leaves the list up, which is the fault.
+    b->library("files");
+    c.check(c.until([&] { return !b->busy(); }, 8000) && b->sections().isEmpty(),
+            "a page the catalogue offers no sections for");
+    QTest::qWait(400);
+    c.evaluate("window.homeSections = [{title:'Pinned', items:[]}]");
+    QTest::qWait(400);
+    c.check(c.evaluate("window.feedShowing").toBool(),
+            "a feed with a row in it is a feed, whatever the catalogue says");
+    auto songs = w->findChild<QQuickItem *>("tracksView");
+    c.check(songs && !songs->isVisible(), "so the list of songs stands down for it");
+  }
+
   b->stop();
   b->clearQueue();
   c.finish();
@@ -4174,6 +4282,54 @@ void runMaterialControlsTests(Backend *b, QQuickWindow *w) {
                 .arg(rail->width()).arg(rail->implicitWidth()));
     c.shot("05-rail-extended-fab");
     c.click("navigationMenuButton");
+    QTest::qWait(400);
+  }
+
+  // --- A segment marks a choice, so it takes the secondary container ---
+  if (auto dialog = w->findChild<QObject *>("settingsDialog")) {
+    QMetaObject::invokeMethod(dialog, "open");
+    QTest::qWait(700);
+    c.click("themeDark");
+    QTest::qWait(400);
+    auto chosen = shownItem(w->contentItem(), "themeDark");
+    c.check(chosen && chosen->property("selected").toBool(), "a segment can be chosen");
+    if (chosen)
+      if (auto shape = anyItem(chosen, "segmentBackground")) {
+        c.check(shape->property("color").value<QColor>() == c.themeColor("secondaryContainer"),
+                "and is filled with the secondary container Material marks it in");
+        c.shot("07-segmented-choice");
+      }
+    QMetaObject::invokeMethod(dialog, "close");
+    QTest::qWait(400);
+  }
+
+  // --- The filled text field ---
+  // Material reaches for the filled container where a field is the thing on
+  // the surface rather than one of several, which a naming dialog is.
+  w->setProperty("playlistAction", QString("create"));
+  if (auto naming = w->findChild<QObject *>("playlistDialog")) {
+    QMetaObject::invokeMethod(naming, "open");
+    QTest::qWait(700);
+    auto field = shownItem(w->contentItem(), "playlistName");
+    c.check(field && field->property("filled").toBool(), "the naming field is a filled one");
+    if (field) {
+      auto shape = field->property("background").value<QQuickItem *>();
+      c.check(shape && shape->property("color").value<QColor>() == c.themeColor("highest"),
+              "on the highest surface container");
+      c.check(shape && qAbs(shape->property("topLeftRadius").toDouble() - 4) < 0.5 &&
+                  qAbs(shape->property("bottomLeftRadius").toDouble()) < 0.5,
+              "rounded where it is open and square where it is ruled off");
+      auto indicator = shape ? anyItem(shape, "fieldIndicator") : nullptr;
+      c.check(indicator && indicator->isVisible(), "with an active indicator under it");
+      field->forceActiveFocus(Qt::TabFocusReason);
+      QTest::qWait(300);
+      c.check(indicator && qAbs(indicator->height() - 2) < 0.1 &&
+                  indicator->property("color").value<QColor>() == c.themeColor("primary"),
+              QString("that thickens and takes the accent on focus (%1dp)")
+                  .arg(indicator ? indicator->height() : 0, 0, 'f', 0));
+      c.shot("08-filled-field");
+    }
+    QMetaObject::invokeMethod(naming, "close");
     QTest::qWait(400);
   }
 

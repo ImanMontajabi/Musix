@@ -67,7 +67,7 @@ Slider {
             objectName: "sliderFocusRing"
             anchors.centerIn: parent
             width: parent.width+12; height: parent.height+4; radius: Theme.shapeSmall
-            color: "transparent"; border.width: 2; border.color: Theme.primary
+            color: "transparent"; border.width: 2; border.color: Theme.focusRing
             visible: slider.visualFocus
         }
     }

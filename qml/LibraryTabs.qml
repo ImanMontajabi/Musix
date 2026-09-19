@@ -120,7 +120,7 @@ Flickable {
                 Rectangle {
                     objectName: "tabFocusRing"
                     anchors.fill: parent; anchors.margins: 2; anchors.bottomMargin: 6; radius: Theme.shapeSmall
-                    color: "transparent"; border.width: 2; border.color: Theme.primary
+                    color: "transparent"; border.width: 2; border.color: Theme.focusRing
                     visible: tab.visualFocus
                 }
                 Rectangle {

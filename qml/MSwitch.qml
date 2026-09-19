@@ -23,7 +23,7 @@ Switch {
         Behavior on color { ColorAnimation { duration: Theme.fast; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.fastEffectsCurve } }
         Rectangle {
             anchors.fill: parent; anchors.margins: -4; radius: Theme.shapeLargeIncreased
-            color: "transparent"; border.width: 2; border.color: Theme.primary
+            color: "transparent"; border.width: 2; border.color: Theme.focusRing
             visible: control.visualFocus
         }
         Rectangle {
