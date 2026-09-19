@@ -78,7 +78,7 @@ Item {
         text: control.label
         font.pixelSize: Theme.labelMedium
         color: field.activeFocus || control.open ? Theme.primary : Theme.muted
-        Rectangle { anchors.fill: parent; anchors.leftMargin: -4; anchors.rightMargin: -4; color: Theme.surface; z: -1 }
+        Rectangle { anchors.fill: parent; anchors.leftMargin: -4; anchors.rightMargin: -4; color: Theme.surfaceLow; z: -1 }
     }
 
     MMenu {

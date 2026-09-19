@@ -53,7 +53,7 @@ Item {
     Rectangle {
         objectName: "bottomSheetSurface"
         anchors.fill: parent
-        color: Theme.surface
+        color: Theme.surfaceLow
         topLeftRadius: Theme.shapeExtraLarge
         topRightRadius: Theme.shapeExtraLarge
         MElevation { anchors.fill: parent; radius: Theme.shapeExtraLarge; level: 1 }

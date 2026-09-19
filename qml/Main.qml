@@ -681,7 +681,9 @@ ApplicationWindow {
                         exit: Transition { NumberAnimation { property: "opacity"; to: 0; duration: app.motion?Theme.fast:0; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.fastEffectsCurve } }
                         onClosed: searchField.dismissed=true
                         background: Rectangle {
-                            radius: Theme.shapeLargeIncreased; color: Theme.high; border.width: 1; border.color: Theme.outlineVariant
+                            // Material's docked search view is the extra large
+                            // corner, not the step below it.
+                            radius: Theme.shapeExtraLarge; color: Theme.high; border.width: 1; border.color: Theme.outlineVariant
                             MElevation { anchors.fill: parent; radius: parent.radius; level: 3 }
                         }
                         contentItem: ListView {
@@ -767,7 +769,7 @@ ApplicationWindow {
                     visible: Layout.preferredWidth > 1
                     clip: true
                     radius: Theme.shapeExtraLarge
-                    color: window.washed(Theme.surface)
+                    color: window.washed(Theme.surfaceLow)
                     Behavior on Layout.preferredWidth { enabled: app.motion; NumberAnimation { duration: Theme.springSpatialMs; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.springSpatial } }
                     ColumnLayout {
                         anchors.fill: parent; anchors.margins: 16; spacing: 12
@@ -808,7 +810,7 @@ ApplicationWindow {
                     Behavior on headerExtent {enabled:!tracks.moving;NumberAnimation {duration:app.motion?120:0;easing.type:Easing.OutCubic}}
                     visible: true
                     Layout.fillWidth: true; Layout.fillHeight: true
-                    radius: Theme.shapeExtraLarge; color: window.washed(Theme.surface); clip: true
+                    radius: Theme.shapeExtraLarge; color: window.washed(Theme.surfaceLow); clip: true
                     Rectangle {
                         objectName: "searchScrim"
                         anchors.fill: parent; radius: parent.radius; z: 40
@@ -822,7 +824,7 @@ ApplicationWindow {
                         // The window wash already carries this cover; repeating
                         // it inside the panel would only double the scrim.
                         url: app.page==="home" && !window.windowWashed ? window.homeArtwork : ""
-                        scrim: Theme.surface; dim: 0.88; corner: parent.radius
+                        scrim: Theme.surfaceLow; dim: 0.88; corner: parent.radius
                     }
                     // Material moves an app bar from the plain surface to a
                     // container, and lifts it two levels, as soon as content
@@ -1256,7 +1258,7 @@ ApplicationWindow {
                     readonly property real chosenWidth: geometry.panelWidth>0 ? geometry.panelWidth : contentRow.supportingWidth
                     property real revealWidth: window.side && !window.sheetMode ? Math.max(320,Math.min(chosenWidth,window.width-560)) : 0
                     Layout.preferredWidth: Math.max(0,revealWidth)
-                    Layout.fillHeight: true; radius: Theme.shapeExtraLarge; color: window.washed(Theme.surface)
+                    Layout.fillHeight: true; radius: Theme.shapeExtraLarge; color: window.washed(Theme.surfaceLow)
                     visible: Layout.preferredWidth>1; clip: true
                     Rectangle {
                         objectName: "searchScrimPanel"
@@ -1270,7 +1272,7 @@ ApplicationWindow {
                     AmbientBackdrop {
                         objectName: "nowBackdrop"; anchors.fill: parent
                         url: window.side==="now" ? (app.current.art || "") : ""
-                        scrim: Theme.surface; dim: 0.86; corner: parent.radius
+                        scrim: Theme.surfaceLow; dim: 0.86; corner: parent.radius
                     }
                     // The panel's contents live once and move between here and
                     // the bottom sheet, so a narrow window changes where the
@@ -1827,7 +1829,9 @@ ApplicationWindow {
             onClicked:settingsCategoryMenu.popup(this,0,height+4)
             MMenu {id:settingsCategoryMenu;objectName:"settingsCategoryMenu";segmented:true;width:settingsCategoryPicker.width
                 Repeater {model:settingsDialog.categories
-                    MMenuItem {required property string modelData;required property int index;text:modelData;onTriggered:{settingsDialog.category=index;settingsDialog.searchQuery="";settingsScrollView.contentItem.contentY=0;}}
+                    // A segmented menu is a choice between peers, so it has to
+                    // say which peer you are on. This one never did.
+                    MMenuItem {required property string modelData;required property int index;text:modelData;checkable:true;checked:settingsDialog.category===index;onTriggered:{settingsDialog.category=index;settingsDialog.searchQuery="";settingsScrollView.contentItem.contentY=0;}}
                 }
             }
         }

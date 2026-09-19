@@ -113,7 +113,10 @@ ListView {
                 visible:list.foldable
                 Layout.preferredWidth:32;Layout.preferredHeight:32
                 radius:Theme.shapeFull(height)
-                color:list.folded[heading.section]?"transparent":Theme.container
+                // Material's expandable list gives the control a container in
+                // both states: the surface while the group is closed, the
+                // surface container while it is open.
+                color:list.folded[heading.section]?Theme.surface:Theme.container
                 Behavior on color {ColorAnimation {duration:Theme.fast;easing.type:Easing.BezierSpline;easing.bezierCurve:Theme.fastEffectsCurve}}
                 Icon {anchors.centerIn:parent;name:"chevron";size:18;rotation:list.folded[heading.section]?0:90;Behavior on rotation {NumberAnimation {duration:app.motion?180:0}}}
                 TapHandler {onTapped:list.toggleGroup(heading.section)}
@@ -235,7 +238,7 @@ ListView {
     Rectangle {
         objectName: "dropZone"
         parent: list; z: 10; width: list.width
-        height: 2*list.dropParting; radius: Theme.listActive; color: Theme.surface
+        height: 2*list.dropParting; radius: Theme.listActive; color: Theme.surfaceLow
         visible: drop.containsDrag && drop.before>=0
         y: {const item=list.itemAtIndex(drop.before);return Math.max(0,Math.min(list.height-height,(item?item.y-list.contentY:list.contentHeight-list.contentY)-list.dropParting));}
     }

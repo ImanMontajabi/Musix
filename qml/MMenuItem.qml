@@ -21,8 +21,16 @@ MenuItem {
     // A vibrant menu takes the tertiary container, for a menu opened over
     // something a surface would disappear into.
     property bool vibrant: false
+    // Material's menu marks a chosen item with the tertiary container, not the
+    // secondary one that marks a chosen anything else, and a vibrant menu,
+    // already tertiary, deepens to the tertiary role itself.
     readonly property color ink: !control.enabled ? Theme.muted
-                               : control.vibrant ? Theme.tertiaryContainerText : Theme.text
+                               : control.vibrant ? (control.checked ? Theme.tertiaryText : Theme.tertiaryContainerText)
+                               : control.checked ? Theme.tertiaryContainerText : Theme.text
+    // The leading icon is the variant ink until the item is chosen, when it
+    // takes the ink of the container it has been given.
+    readonly property color leadingInk: !control.enabled ? Theme.muted
+                                      : control.vibrant || control.checked ? ink : Theme.muted
 
     readonly property bool showsTick: checkable && checked
     readonly property bool hasLeading: showsTick || symbol.length > 0
@@ -35,7 +43,7 @@ MenuItem {
     indicator: Icon {
         objectName: "menuItemLeading"
         name: control.showsTick ? "check" : control.symbol
-        size: 20; ink: control.ink
+        size: 20; ink: control.leadingInk
         visible: control.hasLeading
         x: control.mirrored ? control.width-width-control.rightPadding : control.leftPadding
         // Set on the label's baseline rather than the row's centre line.
@@ -74,12 +82,15 @@ MenuItem {
             y: 1; height: parent.height-2
             width: parent.width
             readonly property bool taken: control.down || control.visualFocus || control.highlighted || control.checked
-            topLeftRadius: taken ? Theme.shapeMedium : control.firstInRun ? Theme.shapeMedium : Theme.shapeExtraSmall
+            // The item under the pointer takes the shape Material publishes
+            // for it, and so do the ends of the run; the corners inside the
+            // run are the small step.
+            topLeftRadius: taken || control.firstInRun ? Theme.menuItemTaken : Theme.shapeSmall
             topRightRadius: topLeftRadius
-            bottomLeftRadius: taken ? Theme.shapeMedium : control.lastInRun ? Theme.shapeMedium : Theme.shapeExtraSmall
+            bottomLeftRadius: taken || control.lastInRun ? Theme.menuItemTaken : Theme.shapeSmall
             bottomRightRadius: bottomLeftRadius
-            color: control.checked ? (control.vibrant ? Theme.tertiary : Theme.secondaryContainer)
-                                   : (control.vibrant ? Theme.tertiaryContainer : Theme.container)
+            color: control.checked ? (control.vibrant ? Theme.tertiary : Theme.tertiaryContainer)
+                                   : (control.vibrant ? Theme.tertiaryContainer : Theme.surfaceLow)
             Behavior on color { ColorAnimation { duration: Theme.fast; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.fastEffectsCurve } }
         }
         Rectangle {

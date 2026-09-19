@@ -35,6 +35,12 @@ QQuickItem *shownItem(QQuickItem *root, const QString &name) {
       return found;
   return nullptr;
 }
+void collectItems(QQuickItem *root, const QString &name, QList<QQuickItem *> &found) {
+  if (root->objectName() == name)
+    found << root;
+  for (auto child : root->childItems())
+    collectItems(child, name, found);
+}
 QQuickItem *anyItem(QQuickItem *root, const QString &name) {
   if (root->objectName() == name)
     return root;
@@ -273,8 +279,12 @@ void runDynamicColorTests(Backend *b, QQuickWindow *w) {
             QString("%1 carries the source hue").arg(pair.first));
   }
   // The surface ladder still climbs away from the background in a dark theme.
-  c.check(m3::toneOf(greenBackground) < m3::toneOf(greenSurface) &&
-              m3::toneOf(greenSurface) < m3::toneOf(greenContainer) &&
+  // Material puts the surface at the same tone as the background, and the
+  // container ladder climbs away from the pair of them.
+  c.check(m3::toneOf(greenBackground) == m3::toneOf(greenSurface),
+          "the surface starts where the background does");
+  c.check(m3::toneOf(greenSurface) < m3::toneOf(c.themeColor("surfaceLow")) &&
+              m3::toneOf(c.themeColor("surfaceLow")) < m3::toneOf(greenContainer) &&
               m3::toneOf(greenContainer) < m3::toneOf(c.themeColor("high")),
           "dark surfaces lighten as they stack");
   c.shot("02-green-source-dark");
@@ -2342,6 +2352,12 @@ void runMaterialDetailTests(Backend *b, QQuickWindow *w) {
   QTest::qWait(400);
   auto box = anyItem(w->contentItem(), "searchField");
   auto view = w->findChild<QObject *>("searchSuggestions");
+  // Material's docked search view is the extra large corner. It was a step
+  // below, which made it read as a menu rather than as a view.
+  if (auto viewShape = view ? view->property("background").value<QQuickItem *>() : nullptr)
+    c.check(qAbs(viewShape->property("radius").toDouble() - 28) < 0.5,
+            QString("the search view is the extra large corner (%1)")
+                .arg(viewShape->property("radius").toDouble(), 0, 'f', 0));
   auto scrim = anyItem(w->contentItem(), "searchScrim");
   c.check(box && view && scrim, "focusing search opens its view over the page");
   if (box && view && scrim) {
@@ -3253,8 +3269,8 @@ void runMaterialSizingTests(Backend *b, QQuickWindow *w) {
     c.check(surface && surface->property("topLeftRadius").toDouble() == 28 &&
                 surface->property("bottomLeftRadius").toDouble() == 0,
             "rounded on the top corners only, as Material draws a sheet");
-    c.check(surface && surface->property("color").value<QColor>() == c.themeColor("surface"),
-            "on the surface a sheet belongs on");
+    c.check(surface && surface->property("color").value<QColor>() == c.themeColor("surfaceLow"),
+            "on the low surface container a sheet belongs on");
     auto handle = anyItem(sheet, "bottomSheetHandle");
     c.check(handle && handle->isVisible(), "with a drag handle to take hold of");
     // The queue still works from in there.
@@ -3570,7 +3586,22 @@ void runMaterialSchemeTests(Backend *b, QQuickWindow *w) {
     c.check(filled == c.themeColor("highest"), "a filled card takes the highest container");
     c.check(c.themeColor("highest") != c.themeColor("high"),
             "which is a step above the one it used to take");
+    // Material's surface is the tone a page starts from, and the container
+    // ladder is measured against it. The app had been reading the first step
+    // of that ladder under the name of the role, so the role itself, which the
+    // scheme computes, was never used by anything.
+    c.check(c.themeColor("surface") != c.themeColor("surfaceLow"),
+            "the surface and the container above it are two colours");
+    c.check(c.themeColor("surface") == c.evaluate("Theme.roles['surface']").value<QColor>(),
+            "and the surface is the role of that name rather than a step of the ladder");
+    card->setProperty("variant", QString("elevated"));
+    QTest::qWait(150);
+    c.check(card->property("color").value<QColor>() == c.themeColor("surfaceLow"),
+            "an elevated card is the low container it casts its shadow from");
     card->setProperty("variant", QString("outlined"));
+    QTest::qWait(150);
+    c.check(card->property("color").value<QColor>() == c.themeColor("surface"),
+            "and an outlined one is the surface, told apart by its boundary");
     QTest::qWait(150);
     c.check(card->property("color").value<QColor>() != filled &&
                 card->property("border").value<QObject *>()->property("width").toInt() == 1,
@@ -3715,7 +3746,7 @@ void runMaterialGrainTests(Backend *b, QQuickWindow *w) {
             "the state layer stays off, so the container reads as itself");
     auto zone = anyItem(queue, "dropZone");
     c.check(zone && zone->isVisible(), "the place it will land is drawn");
-    c.check(zone && zone->property("color").value<QColor>() == c.themeColor("surface"),
+    c.check(zone && zone->property("color").value<QColor>() == c.themeColor("surfaceLow"),
             "in the surface container a step below the list");
     c.shotNow("03-carried");
     QTest::mouseRelease(w, Qt::LeftButton, Qt::NoModifier, from + QPoint(0, 40));
@@ -3890,8 +3921,13 @@ void runMaterialEmphasisTests(Backend *b, QQuickWindow *w) {
     const auto point = expander->mapToScene(expander->boundingRect().center()).toPoint();
     QTest::mouseClick(w, Qt::LeftButton, Qt::NoModifier, point);
     QTest::qWait(500);
-    c.check(expander->property("color").value<QColor>().alpha() == 0,
-            "and empties once it is shut");
+    // Material's expandable list gives the control a container either way:
+    // the surface while the group is shut, a step up while it is open. It used
+    // to disappear entirely, which left the chevron floating on the heading.
+    c.check(expander->property("color").value<QColor>() == c.themeColor("surface"),
+            "and drops to the surface once it is shut, rather than vanishing");
+    c.check(c.themeColor("surface") != c.themeColor("container"),
+            "which is a container, not nothing");
     c.shot("04-group-expander");
     QTest::mouseClick(w, Qt::LeftButton, Qt::NoModifier, point);
     QTest::qWait(400);
@@ -3912,16 +3948,41 @@ void runMaterialEmphasisTests(Backend *b, QQuickWindow *w) {
             "the settings categories open as a segmented menu");
     if (menu) {
       auto frame = menu->property("background").value<QQuickItem *>();
-      c.check(frame && frame->property("color").value<QColor>() == c.themeColor("surface"),
-              "on the group container Material puts under a run");
+      c.check(frame && frame->property("color").value<QColor>() == c.themeColor("surfaceLow"),
+              "on the low surface container Material puts under a run");
+      c.check(frame && qAbs(frame->property("radius").toDouble() - 16) < 0.5,
+              QString("at the large corner (%1)")
+                  .arg(frame ? frame->property("radius").toDouble() : 0, 0, 'f', 0));
       // Every menu item owns one of these, so it has to be the open menu's.
       auto list = menu->property("contentItem").value<QQuickItem *>();
       auto item = list ? anyItem(list, "menuItemContainer") : nullptr;
       c.check(item && item->isVisible(), "and each item carries a container of its own");
       if (item)
-        c.check(qAbs(item->property("topLeftRadius").toDouble() - 12) < 0.5,
-                QString("with the run's end rounded (%1)")
+        c.check(qAbs(item->property("topLeftRadius").toDouble() - 24) < 0.5,
+                QString("with the run's end at the shape Material gives a taken item (%1)")
                     .arg(item->property("topLeftRadius").toDouble(), 0, 'f', 0));
+      // Material marks a chosen menu item with the tertiary container, not the
+      // secondary one it marks a chosen anything else with. A menu is a list
+      // of things you might do, and the one you are on is a different kind of
+      // statement from a row you have picked out.
+      if (list) {
+        const auto chosen = c.themeColor("tertiaryContainer");
+        QList<QQuickItem *> containers;
+        collectItems(list, "menuItemContainer", containers);
+        int marked = 0;
+        for (auto container : containers)
+          if (container->property("color").value<QColor>() == chosen)
+            ++marked;
+        c.check(marked == 1,
+                QString("one of the %1 menu items is marked as the one you are on (%2)")
+                    .arg(containers.size()).arg(marked));
+        c.check(chosen != c.themeColor("secondaryContainer"),
+                "in the tertiary container, which is not what marks a chosen row");
+      }
+      if (auto leading = list ? anyItem(list, "menuItemLeading") : nullptr)
+        c.check(leading->property("ink").value<QColor>() == c.themeColor("muted") ||
+                    leading->property("ink").value<QColor>() == c.themeColor("tertiaryContainerText"),
+                "a menu item's leading icon is the variant ink until the item is chosen");
       c.shotNow("05-segmented-menu");
       QMetaObject::invokeMethod(menu, "close");
       QTest::qWait(300);
@@ -3983,6 +4044,34 @@ void runMaterialAnatomyTests(Backend *b, QQuickWindow *w) {
     pinnable = shownItem(w->contentItem(), "artistHeroPin");
   c.check(c.evaluate("['home','library','heart','pin'].length").toInt() == 4,
           "four symbols carry an outlined form");
+
+  // --- One plain tooltip, not four ---
+  // Material has two tooltips: a plain one, which is a short label drawn
+  // against the theme, and a rich one, which is a surface with a subhead and
+  // an action. The app had four treatments of the plain one across six
+  // controls, two of them a fake inverse pair and two of them dressed as
+  // cards. This is the component they all use now.
+  {
+    QQmlComponent tipSource(qmlEngine(w), QUrl("qrc:/qml/MTooltip.qml"));
+    QScopedPointer<QObject> tipObject(tipSource.create(qmlContext(w)));
+    c.check(!tipObject.isNull(), "there is one plain tooltip to share");
+    if (!tipObject.isNull()) {
+      tipObject->setProperty("text", QString("Shuffle"));
+      auto shape = tipObject->property("background").value<QQuickItem *>();
+      auto label = tipObject->property("contentItem").value<QQuickItem *>();
+      c.check(shape && shape->property("color").value<QColor>() == c.themeColor("inverseSurface"),
+              "drawn against the theme on the inverse surface");
+      c.check(shape && qAbs(shape->property("radius").toDouble() - 4) < 0.5,
+              QString("at the smallest corner on the scale (%1)")
+                  .arg(shape ? shape->property("radius").toDouble() : 0, 0, 'f', 0));
+      c.check(label && label->property("color").value<QColor>() ==
+                  c.themeColor("inverseSurfaceText"),
+              "with the ink that goes on it");
+      c.check(label && qAbs(label->property("font").value<QFont>().pixelSize() -
+                            c.evaluate("Theme.bodySmall").toDouble()) < 0.5,
+              "and body small, which is the size Material sets a plain tooltip in");
+    }
+  }
 
   // --- A tonal toggle stays tonal and changes role ---
   // The tonal variant sits on the secondary container, and coming on inverts
@@ -4509,6 +4598,12 @@ void runMaterialControlsTests(Backend *b, QQuickWindow *w) {
     c.check(layer && qAbs(layer->width() - 40) < 0.5, "and its state layer is 40dp");
     c.check(box->property("checked").toBool(), "the row it belongs to is selected");
   }
+  if (row)
+    if (auto content = row->property("contentItem").value<QQuickItem *>())
+      c.check(qAbs(content->property("spacing").toDouble() - 12) < 0.5,
+              QString("a list item keeps 12dp between its leading element and what "
+                      "it introduces (%1)")
+                  .arg(content->property("spacing").toDouble(), 0, 'f', 0));
   // Material marks a chosen list item with the secondary container and puts
   // its ink on everything the row carries. Picking rows out is not an action,
   // so it does not borrow the accent an action is offered in.
@@ -4811,8 +4906,8 @@ void runMaterialScaleTests(Backend *b, QQuickWindow *w) {
     sample->setProperty("elevated", true);
     QTest::qWait(200);
     auto container = sample->property("background").value<QQuickItem *>();
-    c.check(container && container->property("color").value<QColor>() == c.themeColor("surface"),
-            "an elevated button sits on the low surface");
+    c.check(container && container->property("color").value<QColor>() == c.themeColor("surfaceLow"),
+            "an elevated button sits on the low surface container");
     auto lift = container ? anyItem(container, "elevation") : nullptr;
     c.check(lift && lift->property("level").toInt() == 1, "one level off the page");
     c.check(sample->property("ink").value<QColor>() == c.themeColor("primary"),
@@ -4830,6 +4925,26 @@ void runMaterialScaleTests(Backend *b, QQuickWindow *w) {
             "in the outline variant, which is the role Material names for it");
     c.check(sample->property("ink").value<QColor>() == c.themeColor("muted"),
             "and labels itself in onSurfaceVariant");
+    // A button with a label and no container is Material's text button, and it
+    // labels itself in the accent. The generated token says the variant ink,
+    // but Compose sets Primary above a note that the token is uncorrected, and
+    // the dialog action token says Primary too. A left aligned one is how this
+    // app builds a list row, where the label is the row's own ink.
+    sample->setProperty("outlined", false);
+    sample->setProperty("text", QString("Try again"));
+    sample->setProperty("leftAligned", false);
+    QTest::qWait(200);
+    c.check(sample->property("ink").value<QColor>() == c.themeColor("primary"),
+            "a plain text button labels itself in the accent");
+    sample->setProperty("leftAligned", true);
+    QTest::qWait(200);
+    c.check(sample->property("ink").value<QColor>() == c.themeColor("text"),
+            "and a row built from one keeps the surface ink");
+    sample->setProperty("leftAligned", false);
+    sample->setProperty("text", QString(""));
+    QTest::qWait(200);
+    c.check(sample->property("ink").value<QColor>() == c.themeColor("text"),
+            "as does an icon button, which has no label to colour");
     c.shotNow("03-button-variants");
     sample->setVisible(false);
     sample->setParentItem(nullptr);

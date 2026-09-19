@@ -64,14 +64,17 @@ Slider {
         objectName: "seekPreview"; visible: !s.volumeMode && s.enabled && s.visible && (seekHover.hovered || s.interacting || s.visualFocus)
         delay: s.interacting || s.visualFocus ? 0 : 180; timeout: -1
         x: Math.max(0,Math.min(s.width-width, ((s.interacting || (s.visualFocus && !seekHover.hovered))?s.thumbCenter:seekHover.point.position.x)-width/2))
-        y: -height-6; width: s.previewLine?Math.min(280,Math.max(120,s.width)):76
+        // This is a slider's value indicator, not a tooltip and not a card.
+        // Material draws it against the theme, on the inverse surface with the
+        // ink that goes there, and leaves 12dp between it and the track.
+        y: -height-12; width: s.previewLine?Math.min(280,Math.max(120,s.width)):76
         padding: 10
         contentItem: Column {
             spacing: 4
-            SungText { width: parent.width; text: app.formatTime(s.previewValue); color: Theme.text; font.pixelSize: 12; horizontalAlignment: Text.AlignHCenter }
-            SungText { width: parent.width; visible: !!s.previewLine; text: s.previewLine; color: Theme.muted; font.pixelSize: 12; wrapMode: Text.Wrap; maximumLineCount: 2; horizontalAlignment: Text.AlignHCenter }
+            SungText { width: parent.width; text: app.formatTime(s.previewValue); color: Theme.inverseSurfaceText; font.pixelSize: Theme.labelLarge; labelRole: true; horizontalAlignment: Text.AlignHCenter }
+            SungText { width: parent.width; visible: !!s.previewLine; text: s.previewLine; color: Theme.inverseSurfaceText; font.pixelSize: Theme.bodySmall; wrapMode: Text.Wrap; maximumLineCount: 2; horizontalAlignment: Text.AlignHCenter }
         }
-        background: Rectangle { color: Theme.high; radius: Theme.shapeMedium; border.color: Theme.outlineVariant }
+        background: Rectangle { objectName: "seekPreviewContainer"; color: Theme.inverseSurface; radius: Theme.shapeFull(height) }
     }
     background: Item {
         id: track

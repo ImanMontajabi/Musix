@@ -17,7 +17,11 @@ Rectangle {
     radius: Theme.shapeMedium
     // Material's filled card is the highest surface container; the elevated
     // and outlined ones sit lower and are told apart by shadow and boundary.
-    color: variant === "filled" ? Theme.highest : Theme.surface
+    // Three containers for three cards: the highest for a filled one, the low
+    // container for an elevated one that casts its own shadow, and the surface
+    // itself for an outlined one, which is told apart by its boundary.
+    color: variant === "filled" ? Theme.highest
+         : variant === "outlined" ? Theme.surface : Theme.surfaceLow
     border.width: variant === "outlined" ? 1 : 0
     border.color: Theme.outlineVariant
 

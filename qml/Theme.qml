@@ -121,6 +121,9 @@ QtObject {
     // the full step, the corners inside it are the resting one, and the items
     // are set apart rather than divided by a rule.
     readonly property int listSegmentedGap: 2
+    // The shape a segmented menu gives the item under the pointer. Material
+    // publishes it on the component rather than off the shape scale.
+    readonly property int menuItemTaken: 24
 
     // --- App bars ------------------------------------------------------------
     // Material's flexible app bars hug what is in them, so a bar with a
@@ -301,7 +304,12 @@ QtObject {
     readonly property bool followDesktop: app.theme === "system" && desktopTheme.available
     readonly property bool dark: followDesktop ? desktopTheme.dark : app.theme === "dark" || (app.theme === "system" && Application.styleHints.colorScheme === Qt.Dark)
     readonly property color background: followDesktop ? desktopTheme.colors.background : role("background", dark ? "#181211" : "#fff8f6")
-    readonly property color surface: followDesktop ? desktopTheme.colors.surface : role("surfaceContainerLow", dark ? "#201a18" : "#fff1ec")
+    // Material's surface is the plainest one there is, the tone a page starts
+    // from. The ladder of containers is measured against it, and the app had
+    // been using the first step of that ladder under this name while the role
+    // itself went unread.
+    readonly property color surface: followDesktop ? desktopTheme.colors.background : role("surface", dark ? "#181211" : "#fff8f6")
+    readonly property color surfaceLow: followDesktop ? desktopTheme.colors.surface : role("surfaceContainerLow", dark ? "#201a18" : "#fff1ec")
     readonly property color container: followDesktop ? desktopTheme.colors.container : role("surfaceContainer", dark ? "#2b2320" : "#f6e5de")
     readonly property color high: followDesktop ? desktopTheme.colors.high : role("surfaceContainerHigh", dark ? "#382c28" : "#efddd5")
     readonly property color highest: role("surfaceContainerHighest", dark ? "#433733" : "#e9d8d0")

@@ -40,10 +40,12 @@ Menu {
         ScrollBar.vertical: MScrollBar { objectName: "menuScrollBar" }
     }
     background: Rectangle {
-        // A segmented menu sits on the surface below its items so the run
-        // reads as a group; a plain one is the container itself.
-        color: menu.vibrant ? Theme.tertiaryContainer : menu.segmented ? Theme.surface : Theme.container
-        radius: Theme.shapeLargeIncreased
+        // Material puts a menu on the low surface container, whether its items
+        // are a run or a list, and a vibrant one on the tertiary container.
+        // The plain menu was a step higher, which made it the same surface as
+        // the sheets and dialogs it opens over.
+        color: menu.vibrant ? Theme.tertiaryContainer : Theme.surfaceLow
+        radius: menu.segmented ? Theme.shapeLarge : Theme.shapeLargeIncreased
         border.color: Theme.outlineVariant
         MElevation { anchors.fill: parent; radius: parent.radius; level: 2 }
     }

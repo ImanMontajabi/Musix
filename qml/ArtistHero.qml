@@ -26,7 +26,7 @@ Item {
         url: app.cover || ""
         // The band sits on the surface it belongs to, so the cover only ever
         // tints it. Material keeps hero imagery behind text, never competing.
-        scrim: Theme.surface
+        scrim: Theme.surfaceLow
         dim: 0.82
         corner: 28
         opacity: 1-hero.collapse

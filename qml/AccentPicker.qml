@@ -25,11 +25,10 @@ Flow {
             Accessible.name: picker.names[index]+" accent"
             Accessible.checkable: true; Accessible.checked: chosen
             onClicked: app.accentColor=modelData
-            ToolTip {
+            MTooltip {
                 objectName: "accentTip"
-                visible: swatch.hovered; delay: 650; padding: 10
-                contentItem: SungText { text: picker.names[swatch.index]; font.pixelSize: 12; color: Theme.background }
-                background: Rectangle { color: Theme.text; radius: Theme.shapeSmall }
+                visible: swatch.hovered; delay: 650
+                text: picker.names[swatch.index]
             }
             background: Rectangle {
                 anchors.centerIn: parent

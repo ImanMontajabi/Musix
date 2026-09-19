@@ -71,7 +71,16 @@ AbstractButton {
                       : outlined ? Theme.muted
                       : tonal ? (toggle && selected ? Theme.secondaryText : Theme.secondaryContainerText)
                       : toggle ? (selected ? Theme.primary : Theme.text)
-                      : selected ? Theme.primary : Theme.text
+                      : selected ? Theme.primary
+                      // Material's text button labels itself in the accent. The
+                      // generated token says the variant ink, but Compose sets
+                      // Primary and notes the token is uncorrected, and the
+                      // dialog action token agrees. An icon button has no label
+                      // to colour and takes the ink of what it sits on, and a
+                      // left aligned one is how this app builds a list row,
+                      // where the label is the row's own ink rather than an
+                      // offer to act.
+                      : text.length && !leftAligned ? Theme.primary : Theme.text
     // Material draws the container at the size's own height and keeps a 48dp
     // touch target around it, so a small button is a 40dp shape you can still
     // hit comfortably. The target is the footprint the layout sees.
@@ -93,18 +102,12 @@ AbstractButton {
         function releaseIfIdle() { if (!wanted && (!item || !item.visible)) active=false; }
         onWantedChanged: { if (wanted) active=true; else releaseIfIdle(); }
         Component.onCompleted: if (wanted) active=true
-        sourceComponent: ToolTip {
+        sourceComponent: MTooltip {
             objectName: "buttonTip"
             parent: control
             visible: tooltipLoader.wanted
             onClosed: Qt.callLater(tooltipLoader.releaseIfIdle)
             delay: 650; text: control.tip
-            padding: 10
-            contentItem: SungText { text: control.tip; font.pixelSize: 12; color: Theme.background }
-            background: Rectangle {
-                color: Theme.text; radius: Theme.shapeSmall
-                MElevation { anchors.fill: parent; radius: parent.radius; level: 2 }
-            }
         }
     }
     background: Rectangle {
@@ -124,7 +127,7 @@ AbstractButton {
         color: control.dimmed
                  ? (control.hasContainer ? Qt.rgba(Theme.text.r,Theme.text.g,Theme.text.b,Theme.disabledContainerOpacity) : "transparent")
              : control.filled ? Theme.primary
-             : control.elevated ? Theme.surface
+             : control.elevated ? Theme.surfaceLow
              : control.tonal ? (control.toggle && control.selected ? Theme.secondary : Theme.secondaryContainer)
              : control.selected && !control.toggle ? Theme.high : "transparent"
         border.color: control.outlined && !control.dimmed ? Theme.outlineVariant

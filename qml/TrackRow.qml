@@ -163,7 +163,9 @@ ItemDelegate {
         onDoubleClicked: mouse=> {if(!(mouse.modifiers&(Qt.ControlModifier|Qt.ShiftModifier)))row.clicked();}
     }
     contentItem: RowLayout {
-        spacing: 14
+        // Material's list item keeps 12dp between the leading element and what
+        // it introduces.
+        spacing: 12
         transform: Translate { x: row.swipe }
         Item {
             Layout.preferredWidth: row.queueMode?(app.compactDensity?36:48):Theme.rowArtwork; Layout.preferredHeight: Layout.preferredWidth

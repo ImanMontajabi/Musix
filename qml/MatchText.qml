@@ -28,14 +28,22 @@ SungText {
         function releaseIfIdle() { if (!wanted && (!item || !item.visible)) active=false; }
         onWantedChanged: { if (wanted) active=true; else releaseIfIdle(); }
         Component.onCompleted: if (wanted) active=true
-        sourceComponent: ToolTip {
+        // An elided label says the rest of itself in a plain tooltip, which is
+        // what Material calls this: a short label about the thing under the
+        // pointer. It was drawn as a small surface of its own, which is the
+        // rich tooltip's treatment and says more than it should.
+        sourceComponent: MTooltip {
             objectName: "fullTitleTip"
             parent: label
             visible: tooltipLoader.wanted
             onClosed: Qt.callLater(tooltipLoader.releaseIfIdle)
-            delay: 650; timeout: -1; width: Math.min(360,label.Window.window?label.Window.window.width-32:360); padding: 12
-            contentItem: SungText { text: label.sourceText; wrapMode: Text.Wrap; maximumLineCount: 8; font.pixelSize: Theme.bodyMedium; color: Theme.text }
-            background: Rectangle { color: Theme.high; radius: Theme.shapeMedium; border.color: Theme.outlineVariant }
+            delay: 650; timeout: -1
+            width: Math.min(360,label.Window.window?label.Window.window.width-32:360)
+            text: label.sourceText
+            contentItem: SungText {
+                text: label.sourceText; wrapMode: Text.Wrap; maximumLineCount: 8
+                font.pixelSize: Theme.bodySmall; color: Theme.inverseSurfaceText
+            }
         }
     }
 }

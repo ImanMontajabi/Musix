@@ -28,7 +28,7 @@ Popup {
     Overlay.modal: Rectangle { color: Theme.scrimColor() }
     background: Rectangle {
         objectName: "drawerSurface"
-        color: Theme.surface
+        color: Theme.surfaceLow
         topRightRadius: Theme.shapeExtraLarge
         bottomRightRadius: Theme.shapeExtraLarge
         MElevation { anchors.fill: parent; radius: Theme.shapeExtraLarge; level: 1 }

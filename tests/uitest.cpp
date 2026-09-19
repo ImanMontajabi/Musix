@@ -1229,7 +1229,14 @@ void runVisualDelightTests(Backend *b,QQuickWindow *w) {
   QFile lrc(dir+"/preview.lrc");check(lrc.open(QIODevice::WriteOnly),"lyric fixture opens");lrc.write("[00:01] First example line\n[00:20] Another example line\n[00:40] Final example line");lrc.close();b->importLyrics(QUrl::fromLocalFile(lrc.fileName()),songs.first().toMap().value("id").toString());
   check(until([&]{return b->lyricLines().size()==3;}),"timed lyrics available for preview");b->openPlaylist(id);QTest::qWait(300);
   auto seek=findItem(w->contentItem(),"seekBar");if(seek){const auto point=seek->mapToScene(QPointF(seek->width()/2,seek->height()/2));QTest::mouseMove(w,point.toPoint());}QTest::qWait(300);
-  auto preview=w->findChild<QObject*>("seekPreview");check(preview&&preview->property("visible").toBool(),"seek preview appears on hover");check(seek&&!seek->property("previewLine").toString().isEmpty(),"seek preview contains timed lyric");shot("02-seek-preview");
+  auto preview=w->findChild<QObject*>("seekPreview");check(preview&&preview->property("visible").toBool(),"seek preview appears on hover");
+  // What a slider shows while you scrub is its value indicator, and Material
+  // draws that against the theme rather than as a small surface of its own.
+  if(auto previewShape=w->findChild<QQuickItem*>("seekPreviewContainer")){
+    QQmlExpression inverse(qmlContext(w),w,"Theme.inverseSurface");
+    check(previewShape->property("color").value<QColor>()==inverse.evaluate().value<QColor>(),
+          "and is drawn on the inverse surface, as a value indicator is");
+  }check(seek&&!seek->property("previewLine").toString().isEmpty(),"seek preview contains timed lyric");shot("02-seek-preview");
   QTest::mouseMove(w,QPoint(10,10));QTest::qWait(80);
   auto playing=findItem(w->contentItem(),"playingIndicator");check(playing&&playing->property("animating").toBool(),"playing bars animate");b->toggle();QTest::qWait(80);check(playing&&!playing->property("animating").toBool(),"playing bars stop when paused");
   w->setProperty("side","queue");QTest::qWait(300);b->moveQueueRows({2},0);QTest::qWait(80);shot("03-queue-moving");QTest::qWait(250);check(b->queue()->get(0).value("id")==songs[2].toMap().value("id"),"animated reorder preserves queue order");b->undo();QTest::qWait(280);check(b->queue()->get(0)==Backend::queueWithOrigin({songs[0]},"manual").first().toMap(),"animated reorder undo preserves queue order");
