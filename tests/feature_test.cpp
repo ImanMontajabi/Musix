@@ -2845,14 +2845,33 @@ void runMaterialSizingTests(Backend *b, QQuickWindow *w) {
       c.check(sample->height() >= 47.5,
               QString("with a touch target of at least 48dp (%1)").arg(sample->height(), 0, 'f', 0));
     }
+    // Material gives an icon button three widths, published as the space kept
+    // either side of the glyph. The container takes them; the touch target
+    // around it keeps its 48dp whatever the container does.
     sample->setProperty("size", QString("small"));
     sample->setProperty("text", QString());
-    sample->setProperty("iconWidth", QString("narrow"));
+    struct Width { const char *variant; double container; };
+    for (const auto &wanted : {Width{"narrow", 32}, Width{"uniform", 40}, Width{"wide", 52}}) {
+      sample->setProperty("iconWidth", QString::fromLatin1(wanted.variant));
+      QTest::qWait(140);
+      auto shape = sample->property("background").value<QQuickItem *>();
+      c.check(shape && qAbs(shape->width() - wanted.container) < 0.5,
+              QString("a %1 small icon button is %2dp across (%3)")
+                  .arg(wanted.variant).arg(wanted.container, 0, 'f', 0)
+                  .arg(shape ? shape->width() : 0, 0, 'f', 0));
+      c.check(sample->height() >= 47.5 && sample->width() >= 47.5,
+              "and keeps the target Material puts around it");
+    }
+    // Pressing squares the shape by the step its own size takes.
+    for (const auto &step : {Width{"xsmall", 8}, Width{"medium", 12}, Width{"large", 16}}) {
+      sample->setProperty("size", QString::fromLatin1(step.variant));
+      QTest::qWait(120);
+      c.check(qAbs(sample->property("sizedPressed").toDouble() - step.container) < 0.5,
+              QString("a pressed %1 button goes to %2dp").arg(step.variant).arg(step.container, 0, 'f', 0));
+    }
+    sample->setProperty("size", QString("small"));
+    sample->setProperty("iconWidth", QString("uniform"));
     QTest::qWait(120);
-    c.check(sample->width() < sample->height(), "a narrow icon button is narrower than it is tall");
-    sample->setProperty("iconWidth", QString("wide"));
-    QTest::qWait(120);
-    c.check(sample->width() > sample->height(), "and a wide one is wider");
     c.shotNow("01-button-sizes");
     sample->setVisible(false);
     sample->setParentItem(nullptr);
@@ -2876,15 +2895,33 @@ void runMaterialSizingTests(Backend *b, QQuickWindow *w) {
     c.shot("02-optical-centering");
   }
 
-  // --- Emphasis follows the role ---
-  c.check(c.evaluate("Theme.weightFor(true,true)").toInt() == QFont::Bold,
-          "an emphasized label is bold");
-  c.check(c.evaluate("Theme.weightFor(false,true)").toInt() == QFont::Medium,
-          "a plain one is medium");
-  c.check(c.evaluate("Theme.weightFor(true,false)").toInt() == QFont::Medium,
-          "an emphasized title is medium");
-  c.check(c.evaluate("Theme.weightFor(false,false)").toInt() == QFont::Normal,
-          "and a plain one regular");
+  // --- Emphasis is a role of its own ---
+  // Material publishes an emphasized variant of every role. It carries its own
+  // weight and its own tracking, and neither moves by a constant, so emphasis
+  // cannot be a weight laid over a regular style.
+  struct Emphasis { const char *role; int weight; int emphasized; double track; double emphasizedTrack; };
+  const Emphasis roles[] = {
+      {"displayLarge",  QFont::Normal, QFont::Medium, -0.2, 0.0},
+      {"headlineSmall", QFont::Normal, QFont::Medium, 0.0,  0.0},
+      {"titleLarge",    QFont::Normal, QFont::Medium, 0.0,  0.0},
+      {"titleMedium",   QFont::Medium, QFont::Bold,   0.2,  0.15},
+      {"titleSmall",    QFont::Medium, QFont::Bold,   0.1,  0.1},
+      {"bodyLarge",     QFont::Normal, QFont::Medium, 0.5,  0.15},
+      {"bodyMedium",    QFont::Normal, QFont::Medium, 0.2,  0.25},
+      {"labelLarge",    QFont::Medium, QFont::Bold,   0.1,  0.1}};
+  for (const auto &role : roles) {
+    const auto size = c.evaluate(QString("Theme.typeScale.%1[0]").arg(role.role)).toInt();
+    c.check(c.evaluate(QString("Theme.weightFor(false,false,%1,'%2')").arg(size).arg(role.role)).toInt() == role.weight,
+            QString("%1 is %2 at rest").arg(role.role).arg(role.weight));
+    c.check(c.evaluate(QString("Theme.weightFor(true,false,%1,'%2')").arg(size).arg(role.role)).toInt() == role.emphasized,
+            QString("and %1 emphasized").arg(role.emphasized));
+    c.check(qAbs(c.evaluate(QString("Theme.trackingFor(%1,false,'%2',false)").arg(size).arg(role.role)).toDouble()
+                 - role.track) < 0.001,
+            QString("tracking %1 at rest").arg(role.track));
+    c.check(qAbs(c.evaluate(QString("Theme.trackingFor(%1,false,'%2',true)").arg(size).arg(role.role)).toDouble()
+                 - role.emphasizedTrack) < 0.001,
+            QString("and %1 emphasized").arg(role.emphasizedTrack));
+  }
 
   // --- The shape library ---
   const auto names = c.evaluate("app.shapeNames()").toStringList();
@@ -3123,6 +3160,32 @@ void runMaterialSchemeTests(Backend *b, QQuickWindow *w) {
   c.check(contrastOf(high.value("outlineVariant").value<QColor>(), high.value("surface").value<QColor>()) >
               contrastOf(standard.value("outlineVariant").value<QColor>(), standard.value("surface").value<QColor>()),
           "and the quietest boundary moves with it");
+
+  // --- Error is a role of the scheme, not a colour left behind by it ---
+  // Material gives a scheme a sixth palette at a fixed hue and chroma. Error
+  // therefore holds its own hue whatever the source colour is, while still
+  // answering the contrast level like every other role.
+  for (const auto &input : {QColor("#2e7d32"), QColor("#1565c0"), QColor("#b8860b")}) {
+    const auto roles = m3::scheme(input, true, m3::Variant::TonalSpot, 0);
+    const auto shade = roles.value("error").value<QColor>();
+    c.check(shade.isValid() && roles.value("onError").value<QColor>().isValid() &&
+                roles.value("errorContainer").value<QColor>().isValid() &&
+                roles.value("onErrorContainer").value<QColor>().isValid(),
+            QString("a %1 scheme still publishes the error roles").arg(input.name()));
+    c.check(shade.hslHueF() * 360 < 60 || shade.hslHueF() * 360 > 330,
+            QString("and error stays red rather than following the source (%1)").arg(shade.name()));
+  }
+  // It is held to the ratio Material asks of an accent on a surface, at every
+  // level, which is the part a colour written into the theme cannot promise.
+  for (const auto level : {0.0, 0.5, 1.0}) {
+    const auto roles = m3::scheme(source, true, m3::Variant::TonalSpot, level);
+    const double ratio = contrastOf(roles.value("error").value<QColor>(),
+                                    roles.value("surface").value<QColor>());
+    const double wanted = level <= 0 ? 3.0 : level <= 0.5 ? 4.5 : 7.0;
+    c.check(ratio >= wanted - 0.05,
+            QString("error clears %1:1 at contrast %2 (%3:1)")
+                .arg(wanted).arg(level).arg(ratio, 0, 'f', 1));
+  }
 
   // --- What that looks like in the window ---
   for (const char *variant : {"neutral", "tonalSpot", "vibrant", "expressive", "content"}) {
@@ -3422,6 +3485,165 @@ void runMaterialGrainTests(Backend *b, QQuickWindow *w) {
   w->resize(1400, 900);
   QTest::qWait(600);
   c.shot("07-restored");
+  b->clearQueue();
+  c.finish();
+}
+
+// Emphasis as a role, the error palette, and the three interactions Material
+// draws differently from the way we were drawing them. Driven through the
+// interface rather than through the properties behind it.
+void runMaterialEmphasisTests(Backend *b, QQuickWindow *w) {
+  Check c{b, w, qEnvironmentVariable("SUNG_TEST_OUTPUT")};
+  QDir().mkpath(c.directory + "/music/Night Ferry");
+  QWindowSystemInterface::handleFocusWindowChanged(w);
+  w->resize(1400, 900);
+  QTest::qWait(500);
+  b->setTheme("dark");
+  b->setMotion(true);
+  b->setVolume(0);
+  b->setAutoplay(false);
+  b->setWatchMusicFolders(false);
+  b->setOnlineArtwork(false);
+
+  for (int i = 1; i <= 4; ++i)
+    if (!encodeTrack(c, QString("%1/music/Night Ferry/%2.flac").arg(c.directory).arg(i),
+                     QString("Ferry %1").arg(i), "Night Ferry", "Marble Coast", i))
+      return c.finish();
+  b->importMusicFolder(QUrl::fromLocalFile(c.directory + "/music"));
+  c.check(c.until([&] { return !b->importingLocal(); }, 40000), "import the emphasis fixture");
+  QMetaObject::invokeMethod(w, "chooseLibrary", Q_ARG(QVariant, QVariant("files")));
+  c.check(c.until([&] { return b->results()->count() == 4; }), "the library is listed");
+  QTest::qWait(500);
+
+  // --- An emphasized style on screen carries the role's own tracking ---
+  // The weight was already a step up. The tracking was not: it stayed at the
+  // regular role's, which is the part that makes emphasis a role of its own.
+  if (auto headline = shownItem(w->contentItem(), "collectionHeaderTitle")) {
+    const auto font = headline->property("font").value<QFont>();
+    c.check(headline->property("emphasized").toBool(), "the page headline is an emphasized style");
+    const double wanted =
+        c.evaluate(QString("Theme.trackingFor(%1,false,'',true)").arg(font.pixelSize())).toDouble();
+    const double plain =
+        c.evaluate(QString("Theme.trackingFor(%1,false,'',false)").arg(font.pixelSize())).toDouble();
+    c.check(qAbs(font.letterSpacing() - wanted) < 0.02,
+            QString("and is tracked at the emphasized figure (%1, not %2)")
+                .arg(font.letterSpacing(), 0, 'f', 2).arg(plain, 0, 'f', 2));
+  }
+  c.shot("01-emphasized-headline");
+
+  // --- The error roles come off the scheme ---
+  c.check(c.evaluate("Theme.error").value<QColor>().isValid() &&
+              c.evaluate("Theme.errorContainer").value<QColor>().isValid(),
+          "the window has an error role to draw with");
+  b->setColorContrast(1);
+  QTest::qWait(400);
+  const auto tightened = c.evaluate("Theme.error").value<QColor>();
+  b->setColorContrast(0);
+  QTest::qWait(400);
+  c.check(tightened.isValid() && c.evaluate("Theme.error").value<QColor>().isValid(),
+          "and it survives a change of contrast rather than ignoring it");
+
+  // --- A swipe uncovers a button, and its shape says what letting go does ---
+  QMetaObject::invokeMethod(w, "activateSide", Q_ARG(QVariant, QVariant("queue")));
+  b->enqueueItems(b->results()->rows);
+  c.check(c.until([&] { return b->queue()->count() == 4; }), "the queue has rows to push");
+  QTest::qWait(700);
+  auto row = shownItem(w->contentItem(), "queueRow_1");
+  c.check(row, "a queue row is on screen");
+  if (row) {
+    const auto start = row->mapToScene(QPointF(row->width()/2, row->height()/2)).toPoint();
+    QTest::mousePress(w, Qt::LeftButton, Qt::NoModifier, start);
+    QTest::qWait(60);
+    // Far enough to reveal, not far enough to commit.
+    QTest::mouseMove(w, start + QPoint(int(row->width()/6), 0));
+    QTest::qWait(200);
+    auto action = anyItem(row, "swipeAction");
+    c.check(action && action->isVisible(), "pushing the row aside uncovers a button");
+    const double offered = action ? action->property("radius").toDouble() : 0;
+    c.check(offered > 19, QString("round while it is only on offer (%1)").arg(offered, 0, 'f', 0));
+    c.shotNow("02-swipe-offered");
+    // Past the threshold it becomes the action.
+    QTest::mouseMove(w, start + QPoint(int(row->width()/2), 0));
+    QTest::qWait(300);
+    const double committing = action ? action->property("radius").toDouble() : 0;
+    c.check(committing < offered,
+            QString("and squarer once letting go would act (%1)").arg(committing, 0, 'f', 0));
+    c.check(action && action->property("color").value<QColor>() == c.themeColor("primary"),
+            "in the accent Material gives the action it is offering");
+    c.shotNow("03-swipe-committing");
+    QTest::mouseMove(w, start);
+    QTest::qWait(150);
+    QTest::mouseRelease(w, Qt::LeftButton, Qt::NoModifier, start);
+    QTest::qWait(400);
+    c.check(b->queue()->count() == 4, "letting go short of the threshold keeps the row");
+  }
+  QMetaObject::invokeMethod(w, "activateSide", Q_ARG(QVariant, QVariant("")));
+  QTest::qWait(400);
+
+  // --- The expander is at the trailing edge and fills when it is open ---
+  b->collection()->setProperty("sortKey", QString("folder"));
+  QTest::qWait(600);
+  auto expander = shownItem(w->contentItem(), "groupExpander_" + b->musicFolders().value(0));
+  if (!expander)
+    for (auto candidate : w->findChildren<QQuickItem *>())
+      if (candidate->objectName().startsWith("groupExpander_") && candidate->isVisible()) {
+        expander = candidate;
+        break;
+      }
+  c.check(expander, "a group heading carries an expander");
+  if (expander) {
+    if (auto label = shownItem(w->contentItem(), "toggleGroup_" + b->musicFolders().value(0)))
+      c.check(expander->mapToScene(QPointF(0, 0)).x() > label->mapToScene(QPointF(0, 0)).x(),
+              "at the trailing edge of the item it opens");
+    const auto open = expander->property("color").value<QColor>();
+    c.check(open == c.themeColor("container"),
+            "its container is filled while the group is open");
+    const auto point = expander->mapToScene(expander->boundingRect().center()).toPoint();
+    QTest::mouseClick(w, Qt::LeftButton, Qt::NoModifier, point);
+    QTest::qWait(500);
+    c.check(expander->property("color").value<QColor>().alpha() == 0,
+            "and empties once it is shut");
+    c.shot("04-group-expander");
+    QTest::mouseClick(w, Qt::LeftButton, Qt::NoModifier, point);
+    QTest::qWait(400);
+  }
+  b->collection()->setProperty("sortKey", QString("original"));
+  QTest::qWait(300);
+
+  // --- A menu that is a choice between peers is drawn as a run ---
+  w->resize(700, 820);
+  QTest::qWait(500);
+  if (auto settings = w->findChild<QObject *>("settingsDialog")) {
+    QMetaObject::invokeMethod(settings, "open");
+    QTest::qWait(700);
+    c.click("settingsCategoryPicker");
+    QTest::qWait(500);
+    auto menu = w->findChild<QObject *>("settingsCategoryMenu");
+    c.check(menu && menu->property("segmented").toBool(),
+            "the settings categories open as a segmented menu");
+    if (menu) {
+      auto frame = menu->property("background").value<QQuickItem *>();
+      c.check(frame && frame->property("color").value<QColor>() == c.themeColor("surface"),
+              "on the group container Material puts under a run");
+      // Every menu item owns one of these, so it has to be the open menu's.
+      auto list = menu->property("contentItem").value<QQuickItem *>();
+      auto item = list ? anyItem(list, "menuItemContainer") : nullptr;
+      c.check(item && item->isVisible(), "and each item carries a container of its own");
+      if (item)
+        c.check(qAbs(item->property("topLeftRadius").toDouble() - 12) < 0.5,
+                QString("with the run's end rounded (%1)")
+                    .arg(item->property("topLeftRadius").toDouble(), 0, 'f', 0));
+      c.shotNow("05-segmented-menu");
+      QMetaObject::invokeMethod(menu, "close");
+      QTest::qWait(300);
+    }
+    QMetaObject::invokeMethod(settings, "close");
+    QTest::qWait(400);
+  }
+  w->resize(1400, 900);
+  QTest::qWait(400);
+
+  b->stop();
   b->clearQueue();
   c.finish();
 }
@@ -4014,8 +4236,10 @@ void runMaterialScaleTests(Backend *b, QQuickWindow *w) {
                         {"bodyMedium", 14, 20, 0.2},    {"labelLarge", 14, 20, 0.1},
                         {"labelMedium", 12, 16, 0.5},   {"labelSmall", 11, 16, 0.5}};
   for (const auto &role : roles) {
+    // Size, line height, tracking, the emphasized tracking, and the two
+    // weights the role sits at.
     const auto entry = c.evaluate(QString("Theme.typeScale.%1").arg(role.name)).toList();
-    c.check(entry.size() == 3 && entry[0].toInt() == role.size &&
+    c.check(entry.size() == 6 && entry[0].toInt() == role.size &&
                 entry[1].toInt() == role.line && qAbs(entry[2].toDouble() - role.track) < 0.001,
             QString("%1 is %2 on %3 with %4 tracking")
                 .arg(role.name).arg(role.size).arg(role.line).arg(role.track));

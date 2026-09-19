@@ -1808,7 +1808,7 @@ ApplicationWindow {
             y:settingsSearch.height+12;width:parent.width;leftAligned:true;tonal:true
             text:settingsDialog.searchQuery.trim()?"Search results":settingsDialog.categories[settingsDialog.category];symbol:"chevron"
             onClicked:settingsCategoryMenu.popup(this,0,height+4)
-            MMenu {id:settingsCategoryMenu;width:settingsCategoryPicker.width
+            MMenu {id:settingsCategoryMenu;objectName:"settingsCategoryMenu";segmented:true;width:settingsCategoryPicker.width
                 Repeater {model:settingsDialog.categories
                     MMenuItem {required property string modelData;required property int index;text:modelData;onTriggered:{settingsDialog.category=index;settingsDialog.searchQuery="";settingsScrollView.contentItem.contentY=0;}}
                 }

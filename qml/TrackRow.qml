@@ -48,17 +48,35 @@ ItemDelegate {
     Accessible.description: selectable ? "Ctrl-click to toggle selection, Shift-click for a range. Drag selected songs to move them." : ""
     Accessible.name: (track.title || "") + ", " + (track.artist || "")
     Accessible.selected: selected
-    Rectangle {
+    // Material's reveal list uncovers a button rather than a coloured sheet:
+    // the item's own surface stays behind it, and what appears is an icon
+    // button. It is round while it is only on offer and takes the large corner
+    // in the accent once the swipe has gone far enough to commit, so the shape
+    // says what letting go will do.
+    Item {
         objectName: "swipeReveal"
         anchors.fill: parent; z: -0.5
         visible: row.swipe !== 0
-        radius: Theme.shapeLarge
-        color: Theme.errorContainer
-        opacity: Math.min(1, Math.abs(row.swipe)/row.dismissThreshold)
-        Icon {
-            name: "remove"; ink: Theme.errorContainerText
+        readonly property bool committing: Math.abs(row.swipe) >= row.dismissThreshold
+        Rectangle {
+            anchors.fill: parent
+            radius: Theme.listActive
+            color: Theme.surface
+        }
+        Rectangle {
+            objectName: "swipeAction"
             anchors.verticalCenter: parent.verticalCenter
-            x: row.swipe > 0 ? 20 : parent.width-44
+            x: row.swipe > 0 ? 16 : parent.width-width-16
+            width: 40; height: 40
+            radius: parent.committing ? Theme.listActive : Theme.shapeFull(height)
+            color: parent.committing ? Theme.primary : Theme.secondaryContainer
+            Behavior on radius { enabled: app.motion; NumberAnimation { duration: Theme.springFastEffectsMs; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.springFastEffects } }
+            Behavior on color { ColorAnimation { duration: Theme.springFastEffectsMs } }
+            Icon {
+                anchors.centerIn: parent
+                name: "remove"; size: 20
+                ink: parent.parent.committing ? Theme.primaryText : Theme.secondaryContainerText
+            }
         }
     }
     NumberAnimation { id: swipeReturn; target: row; property: "swipe"; to: 0; duration: Theme.springFastEffectsMs }

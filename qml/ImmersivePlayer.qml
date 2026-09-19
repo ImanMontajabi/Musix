@@ -164,7 +164,7 @@ Item {
         }
     }
     MMenu {
-        id:layoutMenu;objectName:"immersiveLayoutMenu"
+        id:layoutMenu;objectName:"immersiveLayoutMenu";vibrant:true
         onClosed:{layoutButton.forceActiveFocus(Qt.PopupFocusReason);player.wake();}
         Repeater {
             model:[{key:"artwork",label:"Artwork"},{key:"lyrics",label:"Lyrics"},{key:"split",label:"Split"},{key:"singalong",label:"Sing along"}]

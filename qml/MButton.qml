@@ -10,12 +10,22 @@ AbstractButton {
     property string size: "small"
     // Material's icon button widths. A uniform one is square; narrow and wide
     // keep the height and change how much room the glyph is given.
+    // Material's three icon button widths. "uniform" is its default width.
     property string iconWidth: "uniform"
-    readonly property real widthFactor: iconWidth === "narrow" ? 0.7 : iconWidth === "wide" ? 1.5 : 1
+    readonly property var iconSpaces: Theme.iconButtonSpace[size] || [4,8,14]
+    readonly property real iconSpace: iconSpaces[iconWidth === "narrow" ? 0 : iconWidth === "wide" ? 2 : 1]
+    // Material's default icon button is as wide as it is tall, and the other
+    // two widths are that container opened or closed by the difference between
+    // their space and the default one. Taking it as a difference rather than
+    // as the glyph plus its space keeps the default square whatever size the
+    // glyph itself is drawn at.
+    readonly property real sizedSquareWidth: sizedHeight + 2*(iconSpace - iconSpaces[1])
     readonly property real sizedHeight: Theme.buttonHeights[size] || 40
     readonly property real sizedIcon: Theme.buttonIcon[size] || 20
     readonly property real sizedGap: Theme.buttonGap[size] || 8
     readonly property real sizedSquare: Theme.buttonSquare[size] || Theme.shapeMedium
+    readonly property real sizedPressed: Theme.buttonPressed[size] || Theme.shapeSmall
+    readonly property real sizedOutline: Theme.buttonOutline[size] || 1
     property real contentInset: Theme.buttonInset[size] || 16
     // M3 button labels are label-large; list rows built from a button use body-large.
     property real labelSize: Theme.buttonLabel[size] || Theme.labelLarge
@@ -57,7 +67,8 @@ AbstractButton {
     // touch target around it, so a small button is a 40dp shape you can still
     // hit comfortably. The target is the footprint the layout sees.
     readonly property real touchTarget: Math.max(Theme.minimumTarget, sizedHeight)
-    implicitWidth: text.length ? buttonLabel.implicitWidth + (symbol.length || busy ? control.sizedIcon+control.sizedGap : 0) + control.contentInset*2 : Math.round(control.touchTarget*control.widthFactor)
+    implicitWidth: text.length ? buttonLabel.implicitWidth + (symbol.length || busy ? control.sizedIcon+control.sizedGap : 0) + control.contentInset*2
+                               : Math.max(control.touchTarget, Math.round(control.sizedSquareWidth))
     implicitHeight: control.touchTarget
     hoverEnabled: true
     focusPolicy: Qt.StrongFocus
@@ -89,7 +100,7 @@ AbstractButton {
     }
     background: Rectangle {
         // The container sits inside the touch target rather than filling it.
-        width: control.text.length ? control.width : Math.min(control.width, Math.round(control.sizedHeight*control.widthFactor))
+        width: control.text.length ? control.width : Math.min(control.width, Math.round(control.sizedSquareWidth))
         height: Math.min(control.height, control.sizedHeight)
         x: (control.width-width)/2
         y: (control.height-height)/2
@@ -98,7 +109,7 @@ AbstractButton {
         // stadium, not an over-rounded lozenge. Pressing morphs it towards a
         // squarer step, which is the shape morph the specification asks for on
         // interaction states.
-        radius: control.down ? (control.toggle ? Theme.shapeSmall : control.sizedSquare)
+        radius: control.down ? (control.toggle ? control.sizedPressed : control.sizedSquare)
                              : control.toggle && control.selected ? control.sizedSquare
                              : Theme.shapeFull(Math.min(width, height))
         color: control.dimmed
@@ -110,7 +121,7 @@ AbstractButton {
         border.color: control.outlined && !control.dimmed ? Theme.outline
                     : control.outlined ? Qt.rgba(Theme.text.r,Theme.text.g,Theme.text.b,Theme.disabledContainerOpacity)
                     : "transparent"
-        border.width: control.outlined ? 1 : 2
+        border.width: control.outlined ? control.sizedOutline : 2
         // An elevated button is the one variant Material lifts off the page.
         MElevation { anchors.fill: parent; radius: parent.radius; level: control.elevated && !control.dimmed ? 1 : 0 }
         Behavior on color { ColorAnimation { duration: Theme.fast; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.fastEffectsCurve } }

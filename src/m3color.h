@@ -39,9 +39,14 @@ struct TonalPalette {
   QColor tone(double value) const { return solve(hue, chroma, value); }
 };
 
-// The five palettes a scheme spreads around a source color.
+// The palettes a scheme is built from: five spread around the source color,
+// and one that does not follow it.
 struct Palettes {
   TonalPalette primary, secondary, tertiary, neutral, neutralVariant;
+  // Material's sixth palette. Error is the one part of a scheme that does not
+  // follow the source colour: it sits at a fixed hue and chroma so a warning
+  // reads as a warning whatever the artwork happens to be.
+  TonalPalette error{25.0, 84.0};
 };
 
 // Material's scheme variants. Each one is a different answer to how much of the

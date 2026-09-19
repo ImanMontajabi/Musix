@@ -95,12 +95,26 @@ ListView {
         objectName: list.groupFolders ? "folderHeading" : "sourceHeading"
         width:list.width;height:list.foldable?48:32
         RowLayout {anchors.fill:parent;spacing:4
-            MButton {objectName:"toggleGroup_"+heading.section;visible:list.foldable;Layout.fillWidth:true;leftAligned:true
+            MButton {objectName:"toggleGroup_"+heading.section;visible:list.foldable;Layout.fillWidth:true;Layout.minimumWidth:0;leftAligned:true
                 text:(list.groupFolders?app.musicFolderLabel(heading.section):heading.section)+" · "+(list.groupRows[heading.section] || []).length
                 tip:(list.folded[heading.section]?"Expand ":"Collapse ")+heading.section
-                symbol:"";contentInset:34;
-                Icon {x:8;anchors.verticalCenter:parent.verticalCenter;name:"chevron";size:18;rotation:list.folded[heading.section]?0:90;Behavior on rotation {NumberAnimation {duration:app.motion?180:0}}}
+                symbol:"";contentInset:12;
                 onClicked:list.toggleGroup(heading.section)
+            }
+            // Material puts the expander at the trailing edge of the item it
+            // opens, inside a container that is the item's own surface while it
+            // is shut and a step above it once it is open, so the state is
+            // readable without watching the chevron turn.
+            Rectangle {
+                objectName:"groupExpander_"+heading.section
+                visible:list.foldable
+                Layout.preferredWidth:32;Layout.preferredHeight:32
+                radius:Theme.shapeFull(height)
+                color:list.folded[heading.section]?"transparent":Theme.container
+                Behavior on color {ColorAnimation {duration:Theme.fast;easing.type:Easing.BezierSpline;easing.bezierCurve:Theme.fastEffectsCurve}}
+                Icon {anchors.centerIn:parent;name:"chevron";size:18;rotation:list.folded[heading.section]?0:90;Behavior on rotation {NumberAnimation {duration:app.motion?180:0}}}
+                TapHandler {onTapped:list.toggleGroup(heading.section)}
+                Accessible.ignored:true
             }
             SungText {visible:!list.foldable;Layout.fillWidth:true;Layout.leftMargin:12;text:heading.section;color:Theme.muted;font.pixelSize:12;elide:Text.ElideRight}
             MButton {objectName:"playGroup_"+heading.section;visible:list.foldable;symbol:"play";tip:"Play "+heading.section;onClicked:app.playGroup(heading.section,list.groupFolders)}

@@ -328,6 +328,10 @@ QVariantMap scheme(const QColor &source, bool dark, Variant variant, double cont
       toneMeeting(p.neutralVariant, dark ? 60 : 50, dark, {surfaceTone}, kOutline.at(contrast));
   const double outlineVariantTone =
       toneMeeting(p.neutralVariant, dark ? 30 : 80, dark, {surfaceTone}, kOutlineVariant.at(contrast));
+  // Error is drawn on the same surfaces as primary and answers the same
+  // contrast curve, so it tightens with the rest of the scheme rather than
+  // staying where a fixed colour would leave it.
+  const double errorTone = toneMeeting(p.error, dark ? 80 : 40, dark, surfaces, kPrimary.at(contrast));
   if (dark) {
     put("primary", p.primary.tone(primaryTone));
     put("onPrimary", p.primary.tone(20));
@@ -337,6 +341,7 @@ QVariantMap scheme(const QColor &source, bool dark, Variant variant, double cont
     put("secondaryContainer", p.secondary.tone(30));
     put("onSecondaryContainer", p.secondary.tone(90));
     put("tertiary", p.tertiary.tone(80));
+    put("onTertiary", p.tertiary.tone(20));
     put("tertiaryContainer", p.tertiary.tone(30));
     put("onTertiaryContainer", p.tertiary.tone(90));
     put("background", p.neutral.tone(6));
@@ -356,6 +361,10 @@ QVariantMap scheme(const QColor &source, bool dark, Variant variant, double cont
     put("inverseSurface", p.neutral.tone(90));
     put("inverseOnSurface", p.neutral.tone(20));
     put("inversePrimary", p.primary.tone(40));
+    put("error", p.error.tone(errorTone));
+    put("onError", p.error.tone(20));
+    put("errorContainer", p.error.tone(30));
+    put("onErrorContainer", p.error.tone(90));
   } else {
     put("primary", p.primary.tone(primaryTone));
     put("onPrimary", p.primary.tone(100));
@@ -365,6 +374,7 @@ QVariantMap scheme(const QColor &source, bool dark, Variant variant, double cont
     put("secondaryContainer", p.secondary.tone(90));
     put("onSecondaryContainer", p.secondary.tone(10));
     put("tertiary", p.tertiary.tone(40));
+    put("onTertiary", p.tertiary.tone(100));
     put("tertiaryContainer", p.tertiary.tone(90));
     put("onTertiaryContainer", p.tertiary.tone(10));
     put("background", p.neutral.tone(98));
@@ -384,6 +394,10 @@ QVariantMap scheme(const QColor &source, bool dark, Variant variant, double cont
     put("inverseSurface", p.neutral.tone(20));
     put("inverseOnSurface", p.neutral.tone(95));
     put("inversePrimary", p.primary.tone(80));
+    put("error", p.error.tone(errorTone));
+    put("onError", p.error.tone(100));
+    put("errorContainer", p.error.tone(90));
+    put("onErrorContainer", p.error.tone(10));
   }
   // The fixed accents. Every other role flips its tone between light and dark;
   // these hold the same tone in both, so anything painted with them keeps its

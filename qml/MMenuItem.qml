@@ -12,19 +12,30 @@ MenuItem {
     property string symbol: ""
     // The keyboard shortcut that reaches this item without the menu.
     property string shortcut: ""
+    // Material's segmented menu draws its items as one run: each one carries a
+    // container of its own, nearly square inside the run and round at its
+    // ends, set apart rather than divided by a rule. The menu sets these.
+    property bool segmented: false
+    property bool firstInRun: false
+    property bool lastInRun: false
+    // A vibrant menu takes the tertiary container, for a menu opened over
+    // something a surface would disappear into.
+    property bool vibrant: false
+    readonly property color ink: !control.enabled ? Theme.muted
+                               : control.vibrant ? Theme.tertiaryContainerText : Theme.text
 
     readonly property bool showsTick: checkable && checked
     readonly property bool hasLeading: showsTick || symbol.length > 0
     readonly property real leadingSpace: 32
 
-    implicitHeight: 48
+    implicitHeight: segmented ? 44 : 48
     height: visible ? implicitHeight : 0
     leftPadding: 14; rightPadding: 14
-    palette.windowText: control.enabled ? Theme.text : Theme.muted
+    palette.windowText: control.ink
     indicator: Icon {
         objectName: "menuItemLeading"
         name: control.showsTick ? "check" : control.symbol
-        size: 20; ink: control.enabled ? Theme.text : Theme.muted
+        size: 20; ink: control.ink
         visible: control.hasLeading
         x: control.mirrored ? control.width-width-control.rightPadding : control.leftPadding
         // Set on the label's baseline rather than the row's centre line.
@@ -36,7 +47,7 @@ MenuItem {
             anchors.verticalCenter: parent.verticalCenter
             x: control.mirrored ? 0 : control.leadingSpace
             width: parent.width-control.leadingSpace-(shortcutLabel.visible ? shortcutLabel.width+12 : 0)
-            text: control.text; color: control.enabled ? Theme.text : Theme.muted
+            text: control.text; color: control.ink
             opacity: control.enabled ? 1 : 0.5; font.pixelSize: Theme.bodyLarge
             elide: Text.ElideRight
         }
@@ -54,8 +65,25 @@ MenuItem {
     }
     Accessible.name: control.text + (control.shortcut ? ", " + control.shortcut : "")
     background: Item {
+        // The run's own container. Material rounds the ends of the run and
+        // leaves the corners inside it nearly square, and rounds an item fully
+        // while it is taken.
         Rectangle {
-            anchors.fill: parent; radius: Theme.shapeMedium; color: Theme.text
+            objectName: "menuItemContainer"
+            visible: control.segmented
+            y: 1; height: parent.height-2
+            width: parent.width
+            readonly property bool taken: control.down || control.visualFocus || control.highlighted || control.checked
+            topLeftRadius: taken ? Theme.shapeMedium : control.firstInRun ? Theme.shapeMedium : Theme.shapeExtraSmall
+            topRightRadius: topLeftRadius
+            bottomLeftRadius: taken ? Theme.shapeMedium : control.lastInRun ? Theme.shapeMedium : Theme.shapeExtraSmall
+            bottomRightRadius: bottomLeftRadius
+            color: control.checked ? (control.vibrant ? Theme.tertiary : Theme.secondaryContainer)
+                                   : (control.vibrant ? Theme.tertiaryContainer : Theme.container)
+            Behavior on color { ColorAnimation { duration: Theme.fast; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.fastEffectsCurve } }
+        }
+        Rectangle {
+            anchors.fill: parent; radius: Theme.shapeMedium; color: control.ink
             opacity: control.down || control.visualFocus ? Theme.pressedOpacity : control.highlighted ? Theme.hoverOpacity : 0
             Behavior on opacity { NumberAnimation { duration: Theme.fast; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.fastEffectsCurve } }
         }

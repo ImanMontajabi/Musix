@@ -73,6 +73,16 @@ QtObject {
     readonly property var buttonIcon: ({xsmall:20, small:20, medium:24, large:32})
     readonly property var buttonInset: ({xsmall:16, small:16, medium:24, large:48})
     readonly property var buttonGap: ({xsmall:8, small:8, medium:8, large:12})
+    // An icon button is its own component in Material, with its own widths and
+    // its own shapes. The width is the space kept either side of the glyph, in
+    // three steps: a dense row takes the narrow one, a lone primary action the
+    // wide one. [narrow, default, wide]
+    readonly property var iconButtonSpace: ({xsmall:[4,6,10], small:[4,8,14], medium:[12,16,24], large:[16,32,48]})
+    // Pressing moves the shape one step squarer, and the step belongs to the
+    // size rather than being the same everywhere.
+    readonly property var buttonPressed: ({xsmall:shapeSmall, small:shapeSmall, medium:shapeMedium, large:shapeLarge})
+    // A boundary thickens with the size it draws around.
+    readonly property var buttonOutline: ({xsmall:1, small:1, medium:1, large:2})
     readonly property var buttonLabel: ({xsmall:labelLarge, small:labelLarge, medium:titleMedium, large:headlineSmall})
     // Material's optical centering: content inside an asymmetric shape is
     // nudged by this much of the difference between its two corner radii, so it
@@ -196,14 +206,14 @@ QtObject {
     // Material's emphasized styles lean on a variable font's weight and width
     // to carry hierarchy, rather than only its size. Google Sans Flex is
     // variable, so the emphasis is real rather than a synthesised bold.
-    // Material's emphasized styles are one weight step up from the regular
-    // ones, and the step is not the same for every role: labels go from medium
-    // to bold, everything else from regular to medium.
     readonly property int emphasizedWidth: 110
     readonly property int regularWidth: 100
-    function weightFor(emphasized,label) {
-        if (label) return emphasized ? Font.Bold : Font.Medium
-        return emphasized ? Font.Medium : Font.Normal
+    // The weight belongs to the role, not to whether the style is a label:
+    // title medium and title small sit at medium and go bold with the labels,
+    // while everything else sits at regular and goes medium.
+    function weightFor(emphasized,label,size,named) {
+        const role = typeScale[typeRole(size,label,named)]
+        return emphasized ? role[5] : role[4]
     }
     // Material's type scale. A role is a size, a line height and a letter
     // spacing together; setting the size alone leaves two thirds of the style
@@ -227,12 +237,26 @@ QtObject {
     readonly property int labelMedium: 12
     readonly property int labelSmall: 11
     // [size, line height, letter spacing] for each role Material publishes.
+    // [size, line height, tracking, emphasized tracking, weight, emphasized
+    // weight]. Emphasis is a role of its own rather than a weight laid over
+    // one: the tracking moves with it, and not by a constant, so body large
+    // tightens from 0.5 to 0.15 while body medium opens from 0.2 to 0.25.
     readonly property var typeScale: ({
-        displayLarge:  [57, 64, -0.2], displayMedium: [45, 52, 0.0], displaySmall: [36, 44, 0.0],
-        headlineLarge: [32, 40,  0.0], headlineMedium:[28, 36, 0.0], headlineSmall:[24, 32, 0.0],
-        titleLarge:    [22, 28,  0.0], titleMedium:   [16, 24, 0.2], titleSmall:   [14, 20, 0.1],
-        bodyLarge:     [16, 24,  0.5], bodyMedium:    [14, 20, 0.2], bodySmall:    [12, 16, 0.4],
-        labelLarge:    [14, 20,  0.1], labelMedium:   [12, 16, 0.5], labelSmall:   [11, 16, 0.5]
+        displayLarge:  [57, 64, -0.2, 0.0,  Font.Normal, Font.Medium],
+        displayMedium: [45, 52,  0.0, 0.0,  Font.Normal, Font.Medium],
+        displaySmall:  [36, 44,  0.0, 0.0,  Font.Normal, Font.Medium],
+        headlineLarge: [32, 40,  0.0, 0.0,  Font.Normal, Font.Medium],
+        headlineMedium:[28, 36,  0.0, 0.0,  Font.Normal, Font.Medium],
+        headlineSmall: [24, 32,  0.0, 0.0,  Font.Normal, Font.Medium],
+        titleLarge:    [22, 28,  0.0, 0.0,  Font.Normal, Font.Medium],
+        titleMedium:   [16, 24,  0.2, 0.15, Font.Medium, Font.Bold],
+        titleSmall:    [14, 20,  0.1, 0.1,  Font.Medium, Font.Bold],
+        bodyLarge:     [16, 24,  0.5, 0.15, Font.Normal, Font.Medium],
+        bodyMedium:    [14, 20,  0.2, 0.25, Font.Normal, Font.Medium],
+        bodySmall:     [12, 16,  0.4, 0.4,  Font.Normal, Font.Medium],
+        labelLarge:    [14, 20,  0.1, 0.1,  Font.Medium, Font.Bold],
+        labelMedium:   [12, 16,  0.5, 0.5,  Font.Medium, Font.Bold],
+        labelSmall:    [11, 16,  0.5, 0.5,  Font.Medium, Font.Bold]
     })
     // A size on its own does not say which role it is: 16 is both title medium
     // and body large. Whether the text is a label settles the ones that matter,
@@ -257,7 +281,9 @@ QtObject {
         const role = typeScale[typeRole(size,label,named)]
         return Math.round(size*(role[1]/role[0]))
     }
-    function trackingFor(size,label,named) { return typeScale[typeRole(size,label,named)][2] }
+    function trackingFor(size,label,named,emphasized) {
+        return typeScale[typeRole(size,label,named)][emphasized ? 3 : 2]
+    }
     // Material's four state layers, and what it does to a disabled control: the
     // container drops to a tenth of onSurface and the content to 38% of
     // onSurfaceVariant, rather than the whole control fading together.
@@ -283,20 +309,29 @@ QtObject {
     readonly property color primaryContainer: useSource ? role("primaryContainer",blend(container,primary,0.16)) : followDesktop ? desktopTheme.colors.primaryContainer : (dark ? "#75351b" : "#ffdbcb")
     readonly property color containerText: useSource ? role("onPrimaryContainer",readable(primary,[primaryContainer])) : followDesktop ? desktopTheme.colors.containerText : (dark ? "#ffdbcb" : "#743419")
     readonly property color secondaryContainer: role("secondaryContainer", dark ? "#54432a" : "#f5e0bb")
+    // Material's third accent. A vibrant surface takes it where the usual
+    // container would disappear into what it is sitting over.
+    readonly property color tertiary: role("tertiary", dark ? "#b8ceb0" : "#3b5236")
+    readonly property color tertiaryText: role("onTertiary", dark ? "#243420" : "#ffffff")
+    readonly property color tertiaryContainer: role("tertiaryContainer", dark ? "#3b5236" : "#d4eacb")
+    readonly property color tertiaryContainerText: role("onTertiaryContainer", dark ? "#d4eacb" : "#233a1f")
+    readonly property color secondaryContainerText: role("onSecondaryContainer", dark ? "#f5e0bb" : "#221a04")
     readonly property color secondary: followDesktop ? desktopTheme.colors.secondary : role("secondary", dark ? "#d8c4a0" : "#6c5b3b")
     // The inverse roles. A snackbar sits against the theme rather than in it,
     // so it takes the surface and the accent the other theme would have used.
     readonly property color inverseSurface: role("inverseSurface", dark ? "#f5ded5" : "#3c2c25")
     readonly property color inverseSurfaceText: role("inverseOnSurface", dark ? "#392e2a" : "#ffede6")
     readonly property color inversePrimary: role("inversePrimary", dark ? "#964829" : "#ffb596")
-    readonly property color error: dark ? "#ffb4ab" : "#ba1a1a"
-    readonly property color errorText: dark ? "#690005" : "#ffffff"
+    // Error comes off the scheme's own error palette, so it answers the
+    // contrast setting with everything else instead of sitting at one value.
+    readonly property color error: role("error", dark ? "#ffb4ab" : "#ba1a1a")
+    readonly property color errorText: role("onError", dark ? "#690005" : "#ffffff")
     // Material's scrim, and the opacity it dims with.
     readonly property color scrim: role("scrim","#000000")
     readonly property real scrimOpacity: 0.32
     function scrimColor(amount) { return Qt.rgba(scrim.r,scrim.g,scrim.b,amount===undefined?scrimOpacity:amount) }
-    readonly property color errorContainer: dark ? "#93000a" : "#ffdad6"
-    readonly property color errorContainerText: dark ? "#ffdad6" : "#410002"
+    readonly property color errorContainer: role("errorContainer", dark ? "#93000a" : "#ffdad6")
+    readonly property color errorContainerText: role("onErrorContainer", dark ? "#ffdad6" : "#410002")
     // Material's fixed accents keep one tone in both themes, so anything drawn
     // with them holds its identity when the rest of the window flips.
     readonly property color primaryFixed: role("primaryFixed","#ffdbcb")

@@ -26,7 +26,7 @@ Text {
     font.variableAxes: ({"wdth": label.emphasized ? Theme.emphasizedWidth : Theme.regularWidth})
     color: Theme.text
     font.pixelSize: 14
-    font.weight: Theme.weightFor(emphasized, labelRole)
+    font.weight: Theme.weightFor(emphasized, labelRole, metricSize, typeRole)
     // A role carries its line height and letter spacing, not only its size.
     // Letter spacing cannot read the size from a binding: font.letterSpacing
     // and font.pixelSize live in one grouped property, so a binding that sets
@@ -35,7 +35,7 @@ Text {
     property real metricSize: 14
     onFontChanged: if (metricSize !== label.font.pixelSize) metricSize = label.font.pixelSize
     Component.onCompleted: metricSize = font.pixelSize
-    font.letterSpacing: Theme.trackingFor(metricSize, labelRole, typeRole)
+    font.letterSpacing: Theme.trackingFor(metricSize, labelRole, typeRole, emphasized)
     // A style that wants its own line height states it as a multiple of the
     // size, the way Text takes one, and it is turned into the pixels the
     // fixed mode reads. Left alone, the role's own line height applies.
