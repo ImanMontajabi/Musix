@@ -338,6 +338,7 @@ QVariantMap scheme(const QColor &source, bool dark, Variant variant, double cont
     put("primaryContainer", p.primary.tone(30));
     put("onPrimaryContainer", p.primary.tone(90));
     put("secondary", p.secondary.tone(80));
+    put("onSecondary", p.secondary.tone(20));
     put("secondaryContainer", p.secondary.tone(30));
     put("onSecondaryContainer", p.secondary.tone(90));
     put("tertiary", p.tertiary.tone(80));
@@ -371,6 +372,7 @@ QVariantMap scheme(const QColor &source, bool dark, Variant variant, double cont
     put("primaryContainer", p.primary.tone(90));
     put("onPrimaryContainer", p.primary.tone(10));
     put("secondary", p.secondary.tone(40));
+    put("onSecondary", p.secondary.tone(100));
     put("secondaryContainer", p.secondary.tone(90));
     put("onSecondaryContainer", p.secondary.tone(10));
     put("tertiary", p.tertiary.tone(40));

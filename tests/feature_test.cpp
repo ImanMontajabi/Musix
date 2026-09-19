@@ -299,6 +299,8 @@ void runDynamicColorTests(Backend *b, QQuickWindow *w) {
             where + ": the destination you are on keeps 4.5:1 on its indicator");
     c.check(contrastOf(c.themeColor("secondary"), c.themeColor("surface")) >= 4.5,
             where + ": and its label keeps 4.5:1 beneath it");
+    c.check(contrastOf(c.themeColor("secondaryText"), c.themeColor("secondary")) >= 4.5,
+            where + ": a tonal toggle that is on keeps 4.5:1 on the secondary role");
     c.check(contrastOf(c.themeColor("tertiaryContainerText"), c.themeColor("tertiaryContainer")) >= 4.5,
             where + ": a row being carried keeps 4.5:1 on the reorder container");
     // The two outline roles have two jobs and two floors: a rule only has to
@@ -2364,6 +2366,15 @@ void runMaterialDetailTests(Backend *b, QQuickWindow *w) {
     c.check(bar->parentItem()->parentItem()->property("color").value<QColor>() ==
                 c.themeColor("high"),
             "the bar itself sits on surfaceContainerHigh");
+  // Material raises the search bar three levels so it holds against whatever
+  // scrolls under it. It had the colour and the shape and no shadow at all.
+  if (auto surface = bar && bar->parentItem() ? bar->parentItem()->parentItem() : nullptr) {
+    auto shade = anyItem(surface, "searchBarShade");
+    c.check(shade, "the search bar casts a shadow");
+    c.check(shade && shade->property("level").toInt() == 3,
+            QString("three levels off the page (%1)")
+                .arg(shade ? shade->property("level").toInt() : -1));
+  }
 
   // Compact windows get the whole screen instead of a menu under the bar.
   const double docked = view ? view->property("height").toReal() : 0;
@@ -2502,13 +2513,21 @@ void runMaterialExpressiveTests(Backend *b, QQuickWindow *w) {
     c.check(qAbs(off - shuffleContainer->height()/2) < 1.5,
             QString("off it is a full corner (%1 of %2)")
                 .arg(off, 0, 'f', 1).arg(shuffleContainer->height()/2, 0, 'f', 1));
+    // Material's standard icon button carries no container in either state.
+    // On is a filled glyph in the accent, not a pill behind one, which is what
+    // separates it from the filled and tonal variants that do have containers.
+    c.check(offColour.alpha() == 0, "a standard toggle has no container while it is off");
+    c.check(shuffle->property("ink").value<QColor>() == c.themeColor("text"),
+            "and is drawn in the surface ink");
     c.shot("01-toggle-off");
     b->setShuffle(true);
     QTest::qWait(600);
     const double on = radiusOf(shuffle);
     c.check(qAbs(on - 12) < 1.5, QString("on it settles at the medium step (%1)").arg(on, 0, 'f', 1));
     c.check(shuffle->property("background").value<QQuickItem *>()->property("color").value<QColor>()
-                != offColour, "and takes the container colour with it");
+                .alpha() == 0, "on it still has none");
+    c.check(shuffle->property("ink").value<QColor>() == c.themeColor("primary"),
+            "and says so by taking the accent instead");
     c.shot("02-toggle-on");
     b->setShuffle(false);
     QTest::qWait(400);
@@ -3548,7 +3567,9 @@ void runMaterialSchemeTests(Backend *b, QQuickWindow *w) {
     card->setProperty("variant", QString("filled"));
     QTest::qWait(150);
     const auto filled = card->property("color").value<QColor>();
-    c.check(filled == c.themeColor("high"), "a filled card takes the highest container");
+    c.check(filled == c.themeColor("highest"), "a filled card takes the highest container");
+    c.check(c.themeColor("highest") != c.themeColor("high"),
+            "which is a step above the one it used to take");
     card->setProperty("variant", QString("outlined"));
     QTest::qWait(150);
     c.check(card->property("color").value<QColor>() != filled &&
@@ -3962,6 +3983,46 @@ void runMaterialAnatomyTests(Backend *b, QQuickWindow *w) {
     pinnable = shownItem(w->contentItem(), "artistHeroPin");
   c.check(c.evaluate("['home','library','heart','pin'].length").toInt() == 4,
           "four symbols carry an outlined form");
+
+  // --- A tonal toggle stays tonal and changes role ---
+  // The tonal variant sits on the secondary container, and coming on inverts
+  // it onto the secondary role itself rather than moving it to the accent.
+  // Built here rather than found on a page, so the check runs whatever the
+  // library happens to be showing.
+  {
+    QQmlComponent buttonSource(qmlEngine(w), QUrl("qrc:/qml/MButton.qml"));
+    QScopedPointer<QObject> buttonObject(buttonSource.create(qmlContext(w)));
+    auto tonal = qobject_cast<QQuickItem *>(buttonObject.data());
+    c.check(tonal, "a tonal toggle can be made to try the variant on");
+    if (tonal) {
+      tonal->setParentItem(w->contentItem());
+      tonal->setX(620); tonal->setY(300); tonal->setZ(95);
+      tonal->setProperty("symbol", QString("pin"));
+      tonal->setProperty("tonal", true);
+      tonal->setProperty("toggle", true);
+      tonal->setProperty("selected", false);
+      QTest::qWait(250);
+      auto shape = tonal->property("background").value<QQuickItem *>();
+      c.check(shape && shape->property("color").value<QColor>() ==
+                  c.themeColor("secondaryContainer"),
+              "off, a tonal toggle is the secondary container");
+      c.check(tonal->property("ink").value<QColor>() ==
+                  c.themeColor("secondaryContainerText"),
+              "with the ink that belongs on it");
+      tonal->setProperty("selected", true);
+      QTest::qWait(400);
+      c.check(shape && shape->property("color").value<QColor>() == c.themeColor("secondary"),
+              "on, it takes the secondary role itself");
+      c.check(tonal->property("ink").value<QColor>() == c.themeColor("secondaryText"),
+              "and the ink that goes on that, which the scheme had never computed");
+      c.check(c.themeColor("secondary") != c.themeColor("primaryContainer"),
+              "neither of which is the accent container it used to take");
+      c.shotNow("06-tonal-toggle-on");
+      tonal->setVisible(false);
+      tonal->setParentItem(nullptr);
+    }
+  }
+
   {
     // A symbol with an outlined form is drawn outlined until what it reports
     // is on. Material calls that the fill axis, and it is what a navigation
@@ -4448,6 +4509,21 @@ void runMaterialControlsTests(Backend *b, QQuickWindow *w) {
     c.check(layer && qAbs(layer->width() - 40) < 0.5, "and its state layer is 40dp");
     c.check(box->property("checked").toBool(), "the row it belongs to is selected");
   }
+  // Material marks a chosen list item with the secondary container and puts
+  // its ink on everything the row carries. Picking rows out is not an action,
+  // so it does not borrow the accent an action is offered in.
+  if (row) {
+    auto container = row->property("background").value<QQuickItem *>();
+    auto title = anyItem(row, "trackTitle");
+    c.check(container && container->property("color").value<QColor>() ==
+                c.themeColor("secondaryContainer"),
+            "a selected row is the secondary container");
+    c.check(c.themeColor("secondaryContainer") != c.themeColor("primaryContainer"),
+            "which is not the container an action is offered in");
+    c.check(title && title->property("color").value<QColor>() ==
+                c.themeColor("secondaryContainerText"),
+            "and what it carries is drawn in that container's ink");
+  }
 
   // --- The docked toolbar that selection brings up ---
   auto toolbar = shownItem(w->contentItem(), "selectionToolbar");
@@ -4483,6 +4559,17 @@ void runMaterialControlsTests(Backend *b, QQuickWindow *w) {
     auto remove = anyItem(chip, "chipRemove");
     c.check(remove && remove->isVisible(), "and it carries the means to take the filter back out");
     c.shot("04-input-chip");
+    // A chosen chip is marked the way every other chosen thing is marked.
+    const bool wasChosen = chip->property("selected").toBool();
+    chip->setProperty("selected", true);
+    QTest::qWait(250);
+    c.check(container && container->property("color").value<QColor>() ==
+                c.themeColor("secondaryContainer"),
+            "chosen, a chip is the secondary container");
+    c.check(c.themeColor("secondaryContainer") != c.themeColor("primaryContainer"),
+            "rather than the container an action is offered in");
+    chip->setProperty("selected", wasChosen);
+    QTest::qWait(200);
     QMetaObject::invokeMethod(remove, "clicked");
     QTest::qWait(400);
     c.check(b->collection()->property("query").toString().isEmpty(),

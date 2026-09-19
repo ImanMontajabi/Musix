@@ -25,12 +25,12 @@ ItemDelegate {
     // of the row asks for, so the rule lives in one place.
     readonly property bool carried: dragging
     readonly property color titleInk: carried ? Theme.tertiaryContainerText
-                                    : selected ? Theme.containerText
+                                    : selected ? Theme.secondaryContainerText
                                     : active ? Theme.primary : Theme.text
     readonly property color supportInk: carried ? Theme.tertiaryContainerText
-                                      : selected ? Theme.containerText : Theme.muted
+                                      : selected ? Theme.secondaryContainerText : Theme.muted
     readonly property color actionInk: carried ? Theme.tertiaryContainerText
-                                     : selected ? Theme.containerText : Theme.text
+                                     : selected ? Theme.secondaryContainerText : Theme.text
     property point pressPoint
     property int pressModifiers: 0
     property bool queueMode: false
@@ -115,7 +115,10 @@ ItemDelegate {
         topRightRadius: topLeftRadius
         bottomLeftRadius: wholeShape ? stateCorner : row.lastInRun ? Theme.listActive : Theme.listRest
         bottomRightRadius: bottomLeftRadius
-        color: row.carried ? Theme.tertiaryContainer : row.selected ? Theme.primaryContainer : row.motionRaised ? Theme.container : row.active ? Theme.high : row.hovered ? Theme.container : row.segmented ? Theme.container : "transparent"
+        // Material marks a chosen list item with the secondary container, the
+        // same role that marks a chosen anything else. Picking rows out is not
+        // an action, so it does not take the accent an action is offered in.
+        color: row.carried ? Theme.tertiaryContainer : row.selected ? Theme.secondaryContainer : row.motionRaised ? Theme.container : row.active ? Theme.high : row.hovered ? Theme.container : row.segmented ? Theme.container : "transparent"
         border.width: row.keyboardCurrent ? 2 : 0; border.color: Theme.focusRing
         Behavior on color { ColorAnimation { duration: Theme.fast; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.fastEffectsCurve } }
         Behavior on topLeftRadius { enabled: app.motion; NumberAnimation { duration: Theme.springFastEffectsMs; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.springFastEffects } }

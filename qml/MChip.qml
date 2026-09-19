@@ -32,13 +32,13 @@ AbstractButton {
         y: (control.height-Theme.chipHeight)/2; height: Theme.chipHeight; radius: Theme.shapeSmall
         color: control.dimmed && control.selected
                  ? Qt.rgba(Theme.text.r,Theme.text.g,Theme.text.b,Theme.disabledContainerOpacity)
-             : control.selected ? Theme.primaryContainer : "transparent"
+             : control.selected ? Theme.secondaryContainer : "transparent"
         border.width: control.selected ? 0 : 1
         border.color: control.dimmed ? Qt.rgba(Theme.text.r,Theme.text.g,Theme.text.b,Theme.disabledContainerOpacity) : Theme.outlineVariant
         Behavior on color { ColorAnimation { duration: Theme.fast; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.fastEffectsCurve } }
         Rectangle {
             anchors.fill: parent; radius: parent.radius
-            color: control.selected ? Theme.containerText : Theme.text
+            color: control.selected ? Theme.secondaryContainerText : Theme.text
             opacity: control.down || control.visualFocus ? Theme.pressedOpacity : control.hovered ? Theme.hoverOpacity : 0
             Behavior on opacity { NumberAnimation { duration: Theme.fast } }
         }
@@ -55,12 +55,12 @@ AbstractButton {
             besideText: Theme.labelLarge
             name: control.symbol.length ? control.symbol : "check"
             visible: control.leads
-            ink: control.selected ? Theme.containerText : Theme.text
+            ink: control.selected ? Theme.secondaryContainerText : Theme.muted
         }
         SungText {
             id: label; x: control.leads ? 38 : control.removable ? 12 : (parent.width-implicitWidth)/2
             text: control.text; font.pixelSize: Theme.labelLarge; font.weight: Font.Medium
-            color: control.selected ? Theme.containerText : Theme.text; anchors.verticalCenter: parent.verticalCenter
+            color: control.selected ? Theme.secondaryContainerText : Theme.muted; anchors.verticalCenter: parent.verticalCenter
             Behavior on x { NumberAnimation { duration: Theme.normal; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curve } }
         }
         // An input chip stands for something entered, so it carries the means

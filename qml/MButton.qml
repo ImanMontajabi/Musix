@@ -57,12 +57,21 @@ AbstractButton {
     property real endRadius: 0
     readonly property real opticalShift: Theme.opticalShift(startRadius, endRadius)
     readonly property bool dimmed: !enabled && !busy
-    readonly property bool hasContainer: filled || tonal || elevated || selected
+    readonly property bool hasContainer: filled || tonal || elevated || (selected && !toggle)
+    // Material has four icon buttons and a toggle stays inside the one it is,
+    // changing role rather than changing variant when it comes on. A standard
+    // one carries no container at all: on is a filled glyph in the accent. A
+    // tonal one sits on the secondary container and inverts onto the secondary
+    // role itself. The unselected ink stays the surface ink rather than the
+    // variant Material names, so a toggle in a row of plain icon buttons reads
+    // the same as the ones beside it.
     property color ink: dimmed ? Theme.muted
                       : filled ? Theme.primaryText
                       : elevated ? Theme.primary
                       : outlined ? Theme.muted
-                      : toggle && selected ? Theme.containerText : selected ? Theme.primary : Theme.text
+                      : tonal ? (toggle && selected ? Theme.secondaryText : Theme.secondaryContainerText)
+                      : toggle ? (selected ? Theme.primary : Theme.text)
+                      : selected ? Theme.primary : Theme.text
     // Material draws the container at the size's own height and keeps a 48dp
     // touch target around it, so a small button is a 40dp shape you can still
     // hit comfortably. The target is the footprint the layout sees.
@@ -116,8 +125,8 @@ AbstractButton {
                  ? (control.hasContainer ? Qt.rgba(Theme.text.r,Theme.text.g,Theme.text.b,Theme.disabledContainerOpacity) : "transparent")
              : control.filled ? Theme.primary
              : control.elevated ? Theme.surface
-             : control.toggle && control.selected ? Theme.primaryContainer
-             : control.tonal || control.selected ? Theme.high : "transparent"
+             : control.tonal ? (control.toggle && control.selected ? Theme.secondary : Theme.secondaryContainer)
+             : control.selected && !control.toggle ? Theme.high : "transparent"
         border.color: control.outlined && !control.dimmed ? Theme.outlineVariant
                     : control.outlined ? Qt.rgba(Theme.text.r,Theme.text.g,Theme.text.b,Theme.disabledContainerOpacity)
                     : "transparent"

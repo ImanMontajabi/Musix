@@ -329,6 +329,9 @@ QtObject {
     readonly property color tertiaryContainerText: role("onTertiaryContainer", dark ? "#d4eacb" : "#233a1f")
     readonly property color secondaryContainerText: role("onSecondaryContainer", dark ? "#f5e0bb" : "#221a04")
     readonly property color secondary: followDesktop ? desktopTheme.colors.secondary : role("secondary", dark ? "#d8c4a0" : "#6c5b3b")
+    // The ink that goes on the secondary role itself, which is what a tonal
+    // toggle takes once it is on.
+    readonly property color secondaryText: role("onSecondary", dark ? "#3b2f15" : "#ffffff")
     // The inverse roles. A snackbar sits against the theme rather than in it,
     // so it takes the surface and the accent the other theme would have used.
     readonly property color inverseSurface: role("inverseSurface", dark ? "#f5ded5" : "#3c2c25")

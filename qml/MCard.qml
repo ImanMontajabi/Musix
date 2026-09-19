@@ -15,7 +15,9 @@ Rectangle {
     default property alias content: body.data
 
     radius: Theme.shapeMedium
-    color: variant === "filled" ? Theme.high : Theme.surface
+    // Material's filled card is the highest surface container; the elevated
+    // and outlined ones sit lower and are told apart by shadow and boundary.
+    color: variant === "filled" ? Theme.highest : Theme.surface
     border.width: variant === "outlined" ? 1 : 0
     border.color: Theme.outlineVariant
 

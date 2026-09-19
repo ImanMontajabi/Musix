@@ -77,8 +77,8 @@ Window {
     }
     Rectangle {
         anchors.left: parent.left; anchors.right: parent.right; anchors.bottom: parent.bottom; anchors.margins: 8
-        height: 58; radius: Theme.shapeLarge; color: Theme.primaryContainer; visible: !!app.error
-        SungText { anchors.left: parent.left; anchors.right: retry.left; anchors.verticalCenter: parent.verticalCenter; anchors.margins: 14; text: app.error; color: Theme.containerText; font.pixelSize: 12 }
-        MButton { id: retry; anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter; text: app.canRetry?"Retry":"Open"; ink: Theme.containerText; onClicked: app.canRetry?app.retry():mini.restoreRequested() }
+        height: 58; radius: Theme.shapeLarge; color: Theme.errorContainer; visible: !!app.error
+        SungText { anchors.left: parent.left; anchors.right: retry.left; anchors.verticalCenter: parent.verticalCenter; anchors.margins: 14; text: app.error; color: Theme.errorContainerText; font.pixelSize: 12 }
+        MButton { id: retry; anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter; text: app.canRetry?"Retry":"Open"; ink: Theme.errorContainerText; onClicked: app.canRetry?app.retry():mini.restoreRequested() }
     }
 }

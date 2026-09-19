@@ -614,9 +614,16 @@ ApplicationWindow {
                     color: Theme.high; radius: Theme.shapeExtraLarge
                     border.width: searchField.activeFocus?2:0; border.color: Theme.focusRing
                     Behavior on color { ColorAnimation { duration: Theme.fast; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.fastEffectsCurve } }
+                    // Material raises the search bar three levels, so it holds
+                    // its own against whatever scrolls beneath it rather than
+                    // sitting in the page with it.
+                    MElevation { objectName: "searchBarShade"; anchors.fill: parent; radius: parent.radius; level: 3 }
                     RowLayout {
                         anchors.fill: parent; anchors.leftMargin: 18; anchors.rightMargin: 8; spacing: 12
-                        Icon { name: "search"; ink: Theme.muted }
+                        // The leading icon says what the bar is for, so it is
+                        // drawn in the surface ink; the trailing clear button
+                        // is an action on it and stays in the variant.
+                        Icon { name: "search"; ink: Theme.text }
                         TextField {
                             font.family: Theme.fontFamily; id: searchField; objectName: "searchField"; Layout.fillWidth: true; Layout.fillHeight: true
                             placeholderText: app.page==="server"?"Search server":"Search music"; placeholderTextColor: Theme.muted
@@ -696,10 +703,10 @@ ApplicationWindow {
                                 }
                                 Item {
                                     anchors.left: parent.left; anchors.right: parent.right; anchors.bottom: parent.bottom; height: 56
-                                    Rectangle { anchors.fill: parent; radius: Theme.shapeMedium; color: suggestionRow.highlighted?Theme.primaryContainer:"transparent" }
+                                    Rectangle { anchors.fill: parent; radius: Theme.shapeMedium; color: suggestionRow.highlighted?Theme.secondaryContainer:"transparent" }
                                     Rectangle {
                                         objectName: "suggestionStateLayer"; anchors.fill: parent; radius: Theme.shapeMedium
-                                        color: suggestionRow.highlighted?Theme.containerText:Theme.text
+                                        color: suggestionRow.highlighted?Theme.secondaryContainerText:Theme.text
                                         opacity: suggestionButton.down?Theme.pressedOpacity:suggestionButton.hovered?Theme.hoverOpacity:0
                                         Behavior on opacity { NumberAnimation { duration: Theme.fast; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.fastEffectsCurve } }
                                     }
@@ -714,8 +721,8 @@ ApplicationWindow {
                                             Column {
                                                 objectName: "suggestionLabels"
                                                 width: parent.width; anchors.verticalCenter: parent.verticalCenter; spacing: 2
-                                                SungText { width: parent.width; text: modelData.title; color: suggestionRow.highlighted?Theme.containerText:Theme.text; font.pixelSize: 14 }
-                                                SungText { width: parent.width; visible: !!modelData.origin; text: (modelData.artist?modelData.artist+" · ":"")+(modelData.origin||""); font.pixelSize: 12; color: suggestionRow.highlighted?Theme.containerText:Theme.muted }
+                                                SungText { width: parent.width; text: modelData.title; color: suggestionRow.highlighted?Theme.secondaryContainerText:Theme.text; font.pixelSize: 14 }
+                                                SungText { width: parent.width; visible: !!modelData.origin; text: (modelData.artist?modelData.artist+" · ":"")+(modelData.origin||""); font.pixelSize: 12; color: suggestionRow.highlighted?Theme.secondaryContainerText:Theme.muted }
                                             }
                                         }
                                     }
@@ -729,7 +736,7 @@ ApplicationWindow {
                                         Icon {
                                             anchors.centerIn: parent; visible: !modelData.art
                                             name: modelData.recent ? "history" : modelData.kind==="local" ? "library" : "disc"
-                                            ink: suggestionRow.highlighted?Theme.containerText:Theme.muted
+                                            ink: suggestionRow.highlighted?Theme.secondaryContainerText:Theme.muted
                                         }
                                     }
                                     MButton { anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter; implicitWidth: 36; implicitHeight: 36; symbol: "close"; tip: "Remove recent search · Shift+Delete"; focusPolicy: Qt.NoFocus; visible: modelData.recent===true; onClicked: app.removeRecentSearch(modelData.title) }
@@ -2032,10 +2039,13 @@ ApplicationWindow {
         objectName: "errorBar"
         anchors.bottom: parent.bottom; anchors.bottomMargin: 140; anchors.horizontalCenter: parent.horizontalCenter
         width: Math.min(window.width-120,errorText.implicitWidth+(app.canRetry?180:100)); height: Math.min(150,errorText.implicitHeight+32)
-        radius: Theme.shapeLarge; color: Theme.containerText; visible: !!app.error; z: 50
-        SungText { id: errorText; anchors.fill: parent; anchors.margins: 16; anchors.rightMargin: app.canRetry?140:58; text: app.error; wrapMode: Text.Wrap; elide: Text.ElideRight; maximumLineCount: 5; color: Theme.primaryContainer; font.pixelSize: Theme.bodyMedium }
-        MButton { anchors.right: parent.right; anchors.rightMargin: 48; anchors.verticalCenter: parent.verticalCenter; text: "Retry"; visible: app.canRetry; ink: Theme.primaryContainer; onClicked: app.retry() }
-        MButton { anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter; symbol: "close"; ink: Theme.primaryContainer; tip: "Dismiss error"; onClicked: app.dismissError() }
+        // Material has a pair of roles for this and nothing else in the app
+        // wears them: an error is the one thing on screen that should not look
+        // like everything else.
+        radius: Theme.shapeLarge; color: Theme.errorContainer; visible: !!app.error; z: 50
+        SungText { id: errorText; anchors.fill: parent; anchors.margins: 16; anchors.rightMargin: app.canRetry?140:58; text: app.error; wrapMode: Text.Wrap; elide: Text.ElideRight; maximumLineCount: 5; color: Theme.errorContainerText; font.pixelSize: Theme.bodyMedium }
+        MButton { anchors.right: parent.right; anchors.rightMargin: 48; anchors.verticalCenter: parent.verticalCenter; text: "Retry"; visible: app.canRetry; ink: Theme.errorContainerText; onClicked: app.retry() }
+        MButton { anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter; symbol: "close"; ink: Theme.errorContainerText; tip: "Dismiss error"; onClicked: app.dismissError() }
     }
     // Material's snackbar. It sits against the theme rather than in it, so the
     // container and everything on it come from the inverse roles, and it takes

@@ -835,6 +835,12 @@ void runSearchSelectionTests(Backend *b,QQuickWindow *w) {
 
 
 void runVisualPolishTests(Backend *b, QQuickWindow *w) {
+  // Read a role by name. A hex written into a check is right until the scheme
+  // or the specification moves, and then it is wrong without saying so.
+  const auto themeColour=[&](const char *role){
+    QQmlExpression expression(qmlContext(w),w,QString("Theme.")+role);
+    return expression.evaluate().value<QColor>();
+  };
   int failures=0;
   const auto dir=qEnvironmentVariable("SUNG_TEST_OUTPUT");QDir().mkpath(dir);
   auto check=[&](bool ok,const char *label){fprintf(stdout,"%s %s\n",ok?"PASS":"FAIL",label);fflush(stdout);if(!ok)++failures;};
@@ -894,7 +900,7 @@ void runVisualPolishTests(Backend *b, QQuickWindow *w) {
     auto selection=qobject_cast<RowSelection*>(list->property("selection").value<QObject*>());
     check(selection&&selection->count()==last+1&&selection->contains(0)&&selection->contains(last),"Shift+End selects from the focused row through the last track");
     auto row=findItem(list,"trackRow_"+QString::number(last));auto title=row?findItem(row,"trackTitle"):nullptr;
-    check(title&&title->property("color").value<QColor>()==QColor("#ffdbcb"),"selected track uses its container foreground color");shot("11-keyboard-range");
+    check(title&&title->property("color").value<QColor>()==themeColour("secondaryContainerText"),"a selected track is drawn in the ink of the container Material marks a choice with");shot("11-keyboard-range");
     if(selection)selection->clear();
     QTest::keyClick(w,Qt::Key_Home);
   }else check(false,"track list exists for page navigation");
@@ -1060,6 +1066,14 @@ MMenu { Repeater { model: 30; MMenuItem { required property int index; objectNam
   b->browseServer();check(until([&]{return !b->busy();}),"disconnected server state settles");QTest::qWait(180);
   auto error=findItem(w->contentItem(),"errorBar");
   check(error&&error->isVisible()&&toast&&!toast->isVisible(),"error and status snackbars never overlap");
+  // Material has a pair of roles for an error and nothing in the app wore
+  // them: this bar was filling itself with an ink role and writing on it in a
+  // container one, which read as legible and said nothing about being wrong.
+  check(error&&error->property("color").value<QColor>()==themeColour("errorContainer"),
+        "an error is drawn in the error container");
+  check(themeColour("errorContainer")!=themeColour("primaryContainer")
+        &&themeColour("errorContainer")!=themeColour("containerText"),
+        "which is neither the accent container nor an ink used as one");
   auto connect=findItem(w->contentItem(),"serverEmptyConnect");
   check(connect&&connect->isVisible(),"disconnected server page exposes direct connection action");
   b->dismissError();QTest::qWait(180);
