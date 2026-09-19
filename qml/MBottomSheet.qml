@@ -32,7 +32,7 @@ Item {
         Rectangle {
             objectName: "bottomSheetScrim"
             anchors.fill: parent
-            color: Qt.rgba(0, 0, 0, 0.32)
+            color: Theme.scrimColor()
             opacity: sheet.open ? 1 : 0
             Behavior on opacity { NumberAnimation { duration: Theme.fast; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.fastEffectsCurve } }
             TapHandler { onTapped: { sheet.open = false; sheet.closed() } }

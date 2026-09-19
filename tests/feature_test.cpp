@@ -42,6 +42,24 @@ QQuickItem *anyItem(QQuickItem *root, const QString &name) {
   return nullptr;
 }
 
+// A style laid out on an absolute line height has to leave room for its own
+// glyphs. A line height given as a multiple of the size, the way Text takes
+// one, is read as a count of pixels in that mode, which stacks every wrapped
+// line on top of the one above it.
+void collectCrampedText(QQuickItem *root, QStringList &out) {
+  if (root->isVisible() && root->metaObject()->indexOfProperty("lineHeightMode") >= 0) {
+    const double line = root->property("lineHeight").toDouble();
+    const double size = root->property("font").value<QFont>().pixelSize();
+    if (root->property("lineHeightMode").toInt() == 1 && size > 0 && line < size)
+      out.append(QString("%1 at %2px on a %3px line")
+                     .arg(root->objectName().isEmpty() ? QStringLiteral("text") : root->objectName())
+                     .arg(size, 0, 'f', 0)
+                     .arg(line, 0, 'f', 2));
+  }
+  for (auto child : root->childItems())
+    collectCrampedText(child, out);
+}
+
 struct Check {
   Backend *backend;
   QQuickWindow *window;
@@ -525,6 +543,15 @@ void runArtistHeroTests(Backend *b, QQuickWindow *w) {
   }
 
   // --- Its actions work ---
+  // The band behind them is the cover, and Material keeps its elevated button
+  // for exactly that: a control that has to hold against a patterned ground.
+  if (auto shuffle = shownItem(w->contentItem(), "artistHeroShuffle")) {
+    c.check(shuffle->property("elevated").toBool(),
+            "the secondary action is elevated over the cover band");
+    auto container = shuffle->property("background").value<QQuickItem *>();
+    auto lift = container ? anyItem(container, "elevation") : nullptr;
+    c.check(lift && lift->property("level").toInt() == 1, "by the one level that goes with it");
+  }
   c.check(b->queue()->count() == 0, "nothing is queued yet");
   c.click("artistHeroPlay");
   c.check(c.until([&] { return b->queue()->count() == 6; }), "Play queues the artist's songs");
@@ -787,6 +814,33 @@ void runSingAlongTests(Backend *b, QQuickWindow *w) {
           "the right line is still emphasised");
   c.shot("06-singalong-reduced-motion");
   b->setMotion(true);
+
+  // --- The reading view sets its lines apart ---
+  QMetaObject::invokeMethod(player, "layoutRequested", Q_ARG(QString, QString("lyrics")));
+  c.check(c.until([&] { return player->property("displayedLayout") == "lyrics"; }),
+          "the reading view can be chosen");
+  QTest::qWait(400);
+  auto reading = shownItem(w->contentItem(), "lyricLabel");
+  c.check(reading, "and puts the words on screen");
+  if (reading) {
+    const double size = reading->property("font").value<QFont>().pixelSize();
+    const double line = reading->property("lineHeight").toDouble();
+    c.check(reading->property("lineHeightMode").toInt() == 1,
+            "laid out on an absolute line height");
+    c.check(line >= size,
+            QString("with room for the glyphs on it (%1px text on a %2px line)")
+                .arg(size, 0, 'f', 0).arg(line, 0, 'f', 0));
+    c.check(line <= size * 2,
+            "and no more than a line's worth of room");
+  }
+  // Nowhere else either: a line height read as a multiple collapses silently.
+  QStringList cramped;
+  collectCrampedText(w->contentItem(), cramped);
+  c.check(cramped.isEmpty(),
+          cramped.isEmpty() ? QStringLiteral("no style is set on a line shorter than its text")
+                            : QString("styles set on a line shorter than their text: %1")
+                                  .arg(cramped.join(", ")));
+  c.shot("07-singalong-reading-view");
 
   w->setProperty("immersive", false);
   QTest::qWait(300);
@@ -3323,5 +3377,208 @@ void runMaterialGrainTests(Backend *b, QQuickWindow *w) {
   QTest::qWait(600);
   c.shot("07-restored");
   b->clearQueue();
+  c.finish();
+}
+
+// Material's type scale as a whole style rather than a size, the app bar that
+// says when content is under it, the button variants that were missing, the
+// scrim as a role, and the list a detail was opened from staying beside it.
+void runMaterialScaleTests(Backend *b, QQuickWindow *w) {
+  Check c{b, w, qEnvironmentVariable("SUNG_TEST_OUTPUT")};
+  QDir().mkpath(c.directory + "/music/Night Ferry");
+  QDir().mkpath(c.directory + "/music/Still Water");
+  QWindowSystemInterface::handleFocusWindowChanged(w);
+  w->resize(1400, 900);
+  QTest::qWait(500);
+  b->setTheme("dark");
+  b->setMotion(true);
+  b->setVolume(0);
+  b->setAutoplay(false);
+  b->setWatchMusicFolders(false);
+  b->setOnlineArtwork(false);
+
+  for (int i = 1; i <= 3; ++i)
+    if (!encodeTrack(c, QString("%1/music/Night Ferry/%2.flac").arg(c.directory).arg(i),
+                     QString("Ferry %1").arg(i), "Night Ferry", "Marble Coast", i))
+      return c.finish();
+  for (int i = 1; i <= 3; ++i)
+    if (!encodeTrack(c, QString("%1/music/Still Water/%2.flac").arg(c.directory).arg(i),
+                     QString("Water %1").arg(i), "Still Water", "Rill", i))
+      return c.finish();
+  b->importMusicFolder(QUrl::fromLocalFile(c.directory + "/music"));
+  c.check(c.until([&] { return !b->importingLocal(); }, 40000), "import the scale fixture");
+  QMetaObject::invokeMethod(w, "chooseLibrary", Q_ARG(QVariant, QVariant("files")));
+  c.check(c.until([&] { return b->results()->count() == 6; }), "the library is listed");
+  QTest::qWait(500);
+
+  // --- A type role is a size, a line height and a tracking together ---
+  struct Role { const char *name; int size; int line; double track; };
+  const Role roles[] = {{"displaySmall", 36, 44, 0.0},  {"headlineSmall", 24, 32, 0.0},
+                        {"titleLarge", 22, 28, 0.0},    {"bodyLarge", 16, 24, 0.5},
+                        {"bodyMedium", 14, 20, 0.2},    {"labelLarge", 14, 20, 0.1},
+                        {"labelMedium", 12, 16, 0.5},   {"labelSmall", 11, 16, 0.5}};
+  for (const auto &role : roles) {
+    const auto entry = c.evaluate(QString("Theme.typeScale.%1").arg(role.name)).toList();
+    c.check(entry.size() == 3 && entry[0].toInt() == role.size &&
+                entry[1].toInt() == role.line && qAbs(entry[2].toDouble() - role.track) < 0.001,
+            QString("%1 is %2 on %3 with %4 tracking")
+                .arg(role.name).arg(role.size).arg(role.line).arg(role.track));
+  }
+  // The size alone cannot say which role it is, so a label says so itself.
+  c.check(c.evaluate("Theme.trackingFor(14,true,'')").toDouble() == 0.1,
+          "a 14pt label tracks like a label");
+  c.check(c.evaluate("Theme.trackingFor(14,false,'')").toDouble() == 0.2,
+          "and a 14pt body like body text");
+  c.check(c.evaluate("Theme.trackingFor(16,false,'titleMedium')").toDouble() == 0.2,
+          "a style that names its role is taken at its word");
+  c.check(c.evaluate("Theme.lineFor(16,false,'')").toInt() == 24,
+          "and a line height comes with the size");
+  // What the window actually renders with.
+  auto title = shownItem(w->contentItem(), "collectionHeaderTitle");
+  c.check(title && title->property("lineHeightMode").toInt() == 1,
+          "text is laid out on the absolute line height Material publishes");
+  if (auto sample = shownItem(w->contentItem(), "trackTitle")) {
+    const auto font = sample->property("font").value<QFont>();
+    c.check(font.letterSpacing() > 0,
+            QString("and carries real letter spacing (%1)").arg(font.letterSpacing(), 0, 'f', 2));
+  }
+  // A role's line height is absolute, so it has to clear its own glyphs.
+  QStringList cramped;
+  collectCrampedText(w->contentItem(), cramped);
+  c.check(cramped.isEmpty(),
+          cramped.isEmpty() ? QStringLiteral("every style clears its own glyphs")
+                            : QString("styles set on a line shorter than their text: %1")
+                                  .arg(cramped.join(", ")));
+  c.shot("01-type-scale");
+
+  // --- The app bar says when content is under it ---
+  auto bar = anyItem(w->contentItem(), "appBarSurface");
+  auto tracks = shownItem(w->contentItem(), "tracksView");
+  c.check(bar && tracks, "the page has an app bar and a list under it");
+  if (bar && tracks) {
+    c.check(!bar->isVisible(), "which is plain surface while nothing has scrolled");
+    const double origin = tracks->property("originY").toReal();
+    tracks->setProperty("contentY", origin + 200);
+    QTest::qWait(400);
+    c.check(bar->isVisible() && bar->opacity() > 0.9,
+            "and takes a container once the list is under it");
+    c.check(bar->property("color").value<QColor>() == c.themeColor("container"),
+            "the surfaceContainer Material names");
+    auto lift = anyItem(bar, "elevation");
+    c.check(lift && lift->property("level").toInt() == 2,
+            "lifted the two levels that go with it");
+    // A panel clips its children to its bounds, not to its corners, so a
+    // shadow left to reach around the bar is drawn outside the panel and rings
+    // its rounded top corners. The bar is flush with the top and both sides,
+    // so the only part of its shadow that can be seen is the part below it.
+    c.check(bar->property("topLeftRadius").toDouble() > 0,
+            "the bar rounds its top corners with the panel");
+    if (auto confine = anyItem(bar, "appBarLift")) {
+      c.check(confine->clip(), "its shadow is confined rather than reaching around them");
+      c.check(qAbs(confine->y() - bar->height()) < 0.5,
+              "to the strip under the bar, clear of the corners");
+      c.check(confine->height() > 0 && confine->height() <= 24,
+              "which is as deep as the shadow reaches and no deeper");
+      c.check(lift && lift->parentItem() == confine, "and the shadow is drawn inside it");
+    } else {
+      c.check(false, "the bar confines its shadow");
+    }
+    c.shot("02-app-bar-scrolled");
+    tracks->setProperty("contentY", origin);
+    QTest::qWait(400);
+    c.check(!bar->isVisible(), "and settles back when the list returns");
+  }
+
+  // --- The two button variants that were missing ---
+  QQmlComponent buttonSource(qmlEngine(w), QUrl("qrc:/qml/MButton.qml"));
+  QScopedPointer<QObject> buttonObject(buttonSource.create(qmlContext(w)));
+  auto sample = qobject_cast<QQuickItem *>(buttonObject.data());
+  c.check(sample, "a button can be made to try the variants on");
+  if (sample) {
+    sample->setParentItem(w->contentItem());
+    sample->setX(540); sample->setY(300); sample->setZ(95);
+    sample->setProperty("text", QString("Shuffle"));
+    sample->setProperty("elevated", true);
+    QTest::qWait(200);
+    auto container = sample->property("background").value<QQuickItem *>();
+    c.check(container && container->property("color").value<QColor>() == c.themeColor("surface"),
+            "an elevated button sits on the low surface");
+    auto lift = container ? anyItem(container, "elevation") : nullptr;
+    c.check(lift && lift->property("level").toInt() == 1, "one level off the page");
+    c.check(sample->property("ink").value<QColor>() == c.themeColor("primary"),
+            "with its label in the accent");
+    sample->setProperty("elevated", false);
+    sample->setProperty("outlined", true);
+    QTest::qWait(200);
+    c.check(container && container->property("border").value<QObject *>()->property("width").toInt() == 1,
+            "an outlined one draws a boundary instead of a container");
+    c.check(container && container->property("border").value<QObject *>()
+                ->property("color").value<QColor>() == c.themeColor("outline"),
+            "in the outline role");
+    c.check(sample->property("ink").value<QColor>() == c.themeColor("muted"),
+            "and labels itself in onSurfaceVariant");
+    c.shotNow("03-button-variants");
+    sample->setVisible(false);
+    sample->setParentItem(nullptr);
+  }
+
+  // --- The scrim is a role ---
+  c.check(c.evaluate("Theme.scrim").value<QColor>().isValid() &&
+              qAbs(c.evaluate("Theme.scrimOpacity").toDouble() - 0.32) < 0.001,
+          "the scrim is published with the opacity Material dims at");
+  const auto scrimmed = c.evaluate("Theme.scrimColor()").value<QColor>();
+  c.check(qAbs(scrimmed.alphaF() - 0.32) < 0.01, "and mixes to it on demand");
+
+  // --- The list a detail was opened from stays beside it ---
+  QMetaObject::invokeMethod(w, "chooseLibrary", Q_ARG(QVariant, QVariant("local-albums")));
+  c.check(c.until([&] { return b->results()->count() == 2; }), "the library groups into albums");
+  QTest::qWait(500);
+  auto pane = anyItem(w->contentItem(), "listPane");
+  c.check(pane && !pane->isVisible(), "with no list pane while the grid is the page");
+  c.shot("04-album-grid");
+  auto card = shownItem(w->contentItem(), "openCollectionCard");
+  c.check(card, "an album can be opened from it");
+  if (card) {
+    const auto point = card->mapToScene(card->boundingRect().center()).toPoint();
+    QTest::mouseClick(w, Qt::LeftButton, Qt::NoModifier, point);
+    c.check(c.until([&] { return b->page() == "local-album"; }), "opening one shows the album");
+    QTest::qWait(700);
+    c.check(pane && pane->isVisible(), "and the grid it came from stays beside it");
+    c.check(b->listPaneTitle() == "Albums",
+            QString("named for what it is (%1)").arg(b->listPaneTitle()));
+    c.check(b->listPane()->count() == 2,
+            QString("holding what was on screen (%1)").arg(b->listPane()->count()));
+    c.check(shownItem(w->contentItem(), "tracksView") != nullptr, "with the album's songs in the detail");
+    c.shot("05-list-detail");
+    // The other album in the pane swaps the detail without losing the list.
+    const auto opened = b->title();
+    auto second = shownItem(pane, "listPaneCard_1");
+    if (second) {
+      auto hit = shownItem(second, "openCollectionCard");
+      if (hit) {
+        QTest::mouseClick(w, Qt::LeftButton, Qt::NoModifier,
+                          hit->mapToScene(hit->boundingRect().center()).toPoint());
+        c.check(c.until([&] { return b->title() != opened; }, 6000),
+                "choosing another from the pane swaps the detail");
+        c.check(pane->isVisible() && b->listPane()->count() == 2, "and the pane is still there");
+        c.shot("06-list-detail-swapped");
+      }
+    }
+    // Material only splits the panes where there is room for both.
+    w->resize(1000, 860);
+    QTest::qWait(800);
+    c.check(!pane->isVisible(), "a window without the room keeps the detail alone");
+    c.shot("07-detail-alone");
+    w->resize(1400, 900);
+    QTest::qWait(800);
+    c.check(pane->isVisible(), "and the pane returns with the width");
+    // Leaving the library puts it away for good.
+    b->home();
+    c.check(c.until([&] { return !b->busy(); }), "Home loads");
+    QTest::qWait(500);
+    c.check(b->listPaneId().isEmpty() && !pane->isVisible(),
+            "and leaving the library clears the pane rather than stranding it");
+  }
+  c.shot("08-restored");
   c.finish();
 }

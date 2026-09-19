@@ -100,7 +100,7 @@ Item {
                 }
                 MButton {
                     objectName: "artistHeroShuffle"
-                    text: "Shuffle"; symbol: "shuffle"; tonal: true
+                    text: "Shuffle"; symbol: "shuffle"; elevated: true
                     enabled: app.collection.count>1
                     onClicked: {app.shuffle=true;app.playCollection(Math.floor(Math.random()*app.collection.count));}
                 }

@@ -111,7 +111,8 @@ if ready:
                       ("material-expressive","--material-expressive-test"),
                       ("material-sizing","--material-sizing-test"),
                       ("material-scheme","--material-scheme-test"),
-                      ("material-grain","--material-grain-test")]:
+                      ("material-grain","--material-grain-test"),
+                      ("material-scale","--material-scale-test")]:
         e=profile(name+"-profile");e.update(SUNG_HELPER=str(root/"tests/catalog_fixture.py"),SUNG_PYTHON="/usr/bin/python3",SUNG_TEST_OUTPUT=str(out/name))
         stage(name,[str(build/"sung"),"--isolated",flag],420,e)
     e=profile("interface-audit-profile");e.update(SUNG_HELPER=str(root/"tests/catalog_fixture.py"),SUNG_PYTHON="/usr/bin/python3",SUNG_TEST_OUTPUT=str(out/"interface-audit"))

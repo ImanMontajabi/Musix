@@ -458,7 +458,28 @@ void Backend::refresh() {
   else if (m_page == "library")
     library(m_libraryId);
 }
+void Backend::clearListPane() {
+  if(m_listPaneId.isEmpty() && m_listPane.rows.isEmpty())return;
+  m_listPaneId.clear();m_listPaneTitle.clear();m_listPane.assign({});emit listPaneChanged();
+}
+void Backend::rememberListPane(const QString &title,const QString &id,const QVariantList &rows) {
+  if(rows.isEmpty()){clearListPane();return;}
+  m_listPaneTitle=title;m_listPaneId=id;m_listPane.assign(rows);emit listPaneChanged();
+}
 void Backend::open(const QVariantMap &item) {
+  // A detail opened out of a library grid keeps that grid beside it. The grid
+  // it came from is whatever is on screen now, which the one collection is
+  // about to stop holding.
+  const auto kindOpening=item.value("kind").toString();
+  const bool fromGrid=(m_page=="library" && (m_libraryId=="local-albums" || m_libraryId=="local-artists"))
+                      && (kindOpening=="local-album" || kindOpening=="local-artist");
+  // Choosing another entry out of the pane is browsing within that list, not
+  // leaving it, so the pane stays where it is.
+  const bool withinPane=!m_listPaneId.isEmpty() &&
+      ((m_listPaneId=="local-albums" && kindOpening=="local-album") ||
+       (m_listPaneId=="local-artists" && kindOpening=="local-artist"));
+  if(fromGrid)rememberListPane(m_libraryId=="local-albums"?"Albums":"Artists",m_libraryId,m_results.rows);
+  else if(!withinPane && kindOpening!="song" && kindOpening!="video")clearListPane();
   if(item.value("kind")=="local-album" || item.value("kind")=="local-artist"){openLocalGroup(item);return;}
 
   if(isServerSource(item.value("source"))){

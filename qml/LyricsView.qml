@@ -102,7 +102,7 @@ Item {
                 leftPadding: 8; rightPadding: 8; topPadding: 10; bottomPadding: 10
                 // Reserve the active size so emphasis never reflows adjacent lines.
                 font.pixelSize: lyricPane.expanded ? Math.max(24,Math.min(app.lyricTextSize*1.68,width/14*app.lyricTextSize/25)) : app.lyricTextSize; font.weight: Font.Medium
-                wrapMode: Text.Wrap; elide: Text.ElideNone; lineHeight: 1.25
+                wrapMode: Text.Wrap; elide: Text.ElideNone; lineSpacing: 1.25
                 color: Theme.primary
                 scale: lyricLine.current ? 1 : 0.86
                 transformOrigin: Item.Left
@@ -115,6 +115,6 @@ Item {
     }
     Timer { id: resumeFollow; interval: 8000; onTriggered: lyricPane.following=true }
     MButton { anchors.bottom: parent.bottom; anchors.horizontalCenter: parent.horizontalCenter; text: "Follow lyrics"; filled: true; visible: liveLyrics.visible && !lyricPane.following; onClicked: {lyricPane.following=true;resumeFollow.stop();} }
-    ScrollView { id: lyricsScroll; anchors.fill: parent; anchors.topMargin: searchControls.height; visible: !app.lyricsBusy && app.lyricLines.length===0 && !(lyricPane.searchOpen && lyricSearch.text.length>0); contentWidth: availableWidth; clip: true; SungText { width: lyricsScroll.availableWidth; text: app.lyrics || "Lyrics unavailable"; wrapMode: Text.Wrap; elide: Text.ElideNone; font.pixelSize: lyricPane.expanded ? app.lyricTextSize*1.12 : app.lyricTextSize*0.84; lineHeight: 1.55; color: app.lyrics?Theme.text:Theme.muted } }
+    ScrollView { id: lyricsScroll; anchors.fill: parent; anchors.topMargin: searchControls.height; visible: !app.lyricsBusy && app.lyricLines.length===0 && !(lyricPane.searchOpen && lyricSearch.text.length>0); contentWidth: availableWidth; clip: true; SungText { width: lyricsScroll.availableWidth; text: app.lyrics || "Lyrics unavailable"; wrapMode: Text.Wrap; elide: Text.ElideNone; font.pixelSize: lyricPane.expanded ? app.lyricTextSize*1.12 : app.lyricTextSize*0.84; lineSpacing: 1.55; color: app.lyrics?Theme.text:Theme.muted } }
     MButton { anchors.horizontalCenter: parent.horizontalCenter; anchors.bottom: parent.bottom; text: "Try again"; tonal: true; visible: !app.lyrics && !app.lyricsBusy && !lyricPane.searchOpen && app.currentIndex>=0; onClicked: app.reloadLyrics() }
 }

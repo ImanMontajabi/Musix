@@ -24,6 +24,12 @@ AbstractButton {
     property bool leftAligned: false
     property bool filled: false
     property bool tonal: false
+    // Material's other two button variants. An elevated button sits on the low
+    // surface and casts a shadow so it holds against busy content; an outlined
+    // one draws a boundary instead of a container, for an action beside a more
+    // important one.
+    property bool elevated: false
+    property bool outlined: false
     property bool selected: false
     // A toggle button reports a state rather than firing an action, so Material
     // has it morph as well as recolour: a round icon button is full cornered
@@ -41,9 +47,12 @@ AbstractButton {
     property real endRadius: 0
     readonly property real opticalShift: Theme.opticalShift(startRadius, endRadius)
     readonly property bool dimmed: !enabled && !busy
-    readonly property bool hasContainer: filled || tonal || selected
+    readonly property bool hasContainer: filled || tonal || elevated || selected
     property color ink: dimmed ? Theme.muted
-                      : filled ? Theme.primaryText : toggle && selected ? Theme.containerText : selected ? Theme.primary : Theme.text
+                      : filled ? Theme.primaryText
+                      : elevated ? Theme.primary
+                      : outlined ? Theme.muted
+                      : toggle && selected ? Theme.containerText : selected ? Theme.primary : Theme.text
     // Material draws the container at the size's own height and keeps a 48dp
     // touch target around it, so a small button is a 40dp shape you can still
     // hit comfortably. The target is the footprint the layout sees.
@@ -95,10 +104,15 @@ AbstractButton {
         color: control.dimmed
                  ? (control.hasContainer ? Qt.rgba(Theme.text.r,Theme.text.g,Theme.text.b,Theme.disabledContainerOpacity) : "transparent")
              : control.filled ? Theme.primary
+             : control.elevated ? Theme.surface
              : control.toggle && control.selected ? Theme.primaryContainer
              : control.tonal || control.selected ? Theme.high : "transparent"
-        border.color: "transparent"
-        border.width: 2
+        border.color: control.outlined && !control.dimmed ? Theme.outline
+                    : control.outlined ? Qt.rgba(Theme.text.r,Theme.text.g,Theme.text.b,Theme.disabledContainerOpacity)
+                    : "transparent"
+        border.width: control.outlined ? 1 : 2
+        // An elevated button is the one variant Material lifts off the page.
+        MElevation { anchors.fill: parent; radius: parent.radius; level: control.elevated && !control.dimmed ? 1 : 0 }
         Behavior on color { ColorAnimation { duration: Theme.fast; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.fastEffectsCurve } }
         Behavior on radius { enabled: app.motion; SpringAnimation { spring: 5; damping: 0.8; mass: 0.8 } }
         Rectangle {

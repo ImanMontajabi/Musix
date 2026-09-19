@@ -88,6 +88,13 @@ class Backend : public QObject {
   Q_PROPERTY(double localImportProgress READ localImportProgress NOTIFY localImportChanged)
   Q_PROPERTY(QStringList recentSearches READ recentSearches NOTIFY recentSearchesChanged)
   Q_PROPERTY(Entries *results READ results CONSTANT)
+  // Material's list and detail layout keeps the list a detail was opened from
+  // alive beside it. The list pane holds the rows that were on screen at that
+  // moment, so the one collection the rest of the view reads can go on to be
+  // the detail.
+  Q_PROPERTY(Entries *listPane READ listPane CONSTANT)
+  Q_PROPERTY(QString listPaneTitle READ listPaneTitle NOTIFY listPaneChanged)
+  Q_PROPERTY(QString listPaneId READ listPaneId NOTIFY listPaneChanged)
   Q_PROPERTY(Entries *queue READ queue CONSTANT)
   Q_PROPERTY(CollectionView *collection READ collection CONSTANT)
   // The songs played before this one, newest first, for the queue panel to
@@ -258,6 +265,12 @@ public:
   Q_INVOKABLE QVariantList searchLyrics(const QString &query) const;
   ~Backend() override;
   Entries *results() { return &m_results; }
+  Entries *listPane() { return &m_listPane; }
+  QString listPaneTitle() const { return m_listPaneTitle; }
+  QString listPaneId() const { return m_listPaneId; }
+  Q_INVOKABLE void clearListPane();
+  // Remembers what is on screen as the list a detail is being opened from.
+  void rememberListPane(const QString &title, const QString &id, const QVariantList &rows);
   Entries *queue() { return &m_queue; }
   CollectionView *collection() { return &m_collection; }
   Entries *recentlyPlayed() { return &m_recent; }
@@ -545,6 +558,7 @@ signals:
   void onlineArtworkChanged();
   void viewAboutToChange();
   void localImportChanged();
+  void listPaneChanged();
   void cleanupChanged();
   void recentSearchesChanged();
   void catalogChanged();
@@ -650,7 +664,8 @@ private:
   PlaybackNotifier m_notifier;
   bool m_historyPaused = false;
   quint64 m_skipHistoryToken = 0, m_announcedToken = 0;
-  Entries m_results, m_queue;
+  Entries m_results, m_queue, m_listPane;
+  QString m_listPaneTitle, m_listPaneId;
   QList<qint64> m_queueSuffix;
   CollectionView m_collection;
   QMediaDevices m_devices;

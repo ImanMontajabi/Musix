@@ -427,7 +427,7 @@ ApplicationWindow {
         width:Math.min(420,window.width-32);height:window.height;modal:true;dim:true;focus:true;interactive:false
         padding:24;leftPadding:24;rightPadding:24;topPadding:24;bottomPadding:24;closePolicy:Popup.CloseOnEscape|Popup.CloseOnPressOutside
         background:Rectangle {color:Theme.container;radius:Theme.shapeExtraLarge}
-        Overlay.modal:Rectangle {color:Qt.rgba(0,0,0,0.32)}
+        Overlay.modal:Rectangle {color:Theme.scrimColor()}
         enter:Transition {NumberAnimation {property:"position";to:1;duration:app.motion?350:0;easing.type:Easing.BezierSpline;easing.bezierCurve:Theme.curve}}
         exit:Transition {NumberAnimation {property:"position";to:0;duration:Theme.normal;easing.type:Easing.BezierSpline;easing.bezierCurve:Theme.exitCurve}}
         onOpened:{if(immersiveQueueLoader.item)immersiveQueueLoader.item.revealCurrent();}
@@ -693,11 +693,55 @@ ApplicationWindow {
             }
             RowLayout {
                 id: contentRow
+                // Material's list and detail layout: the list a detail was
+                // opened from stays beside it once there is room for both. The
+                // supporting pane can still take the far side, which is the
+                // arrangement Material allows at this width.
+                readonly property bool listDetail: app.listPaneId.length>0 && window.width>=1200 && !window.sheetMode
                 // Material's supporting pane layout splits the row two thirds
                 // to one; the third is where the panel starts before anyone
                 // drags it somewhere else.
                 readonly property real supportingWidth: Math.max(320,Math.min(480,Math.round(width/3)))
                 Layout.fillWidth: true; Layout.fillHeight: true; spacing: 12
+                Rectangle {
+                    id: listPane
+                    objectName: "listPane"
+                    Layout.preferredWidth: contentRow.listDetail ? 320 : 0
+                    Layout.fillHeight: true
+                    visible: Layout.preferredWidth > 1
+                    clip: true
+                    radius: Theme.shapeExtraLarge
+                    color: window.washed(Theme.surface)
+                    Behavior on Layout.preferredWidth { enabled: app.motion; NumberAnimation { duration: Theme.springSpatialMs; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.springSpatial } }
+                    ColumnLayout {
+                        anchors.fill: parent; anchors.margins: 16; spacing: 12
+                        RowLayout {
+                            Layout.fillWidth: true
+                            SungText { objectName: "listPaneTitle"; text: app.listPaneTitle; font.pixelSize: Theme.titleLarge; Layout.fillWidth: true }
+                            MButton { objectName: "listPaneClose"; symbol: "close"; tip: "Close list"; onClicked: window.chooseLibrary(app.listPaneId) }
+                        }
+                        GridView {
+                            id: listPaneGrid
+                            objectName: "listPaneGrid"
+                            Layout.fillWidth: true; Layout.fillHeight: true
+                            clip: true; reuseItems: true; cacheBuffer: 0
+                            model: app.listPane
+                            cellWidth: width/Math.max(1,Math.floor(width/140))
+                            cellHeight: cellWidth+52
+                            ScrollBar.vertical: MScrollBar {}
+                            delegate: ArtCard {
+                                // A delegate that requires one property requires
+                                // them all: index stops being handed over.
+                                required property var entry
+                                required property int index
+                                objectName: "listPaneCard_"+index
+                                width: listPaneGrid.cellWidth-12
+                                track: entry
+                                openHandler: window.openCollection
+                            }
+                        }
+                    }
+                }
                 Rectangle {
                     id: content
                     readonly property real headerCollapse: tracks.visible ? Math.max(0,Math.min(1,(tracks.contentY-tracks.originY)/160)) : 0
@@ -710,7 +754,7 @@ ApplicationWindow {
                     Rectangle {
                         objectName: "searchScrim"
                         anchors.fill: parent; radius: parent.radius; z: 40
-                        color: Qt.rgba(0,0,0,0.32)
+                        color: Theme.scrimColor()
                         visible: opacity>0
                         opacity: window.searchViewOpen ? 1 : 0
                         Behavior on opacity { NumberAnimation { duration: Theme.fast; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.fastEffectsCurve } }
@@ -721,6 +765,36 @@ ApplicationWindow {
                         // it inside the panel would only double the scrim.
                         url: app.page==="home" && !window.windowWashed ? window.homeArtwork : ""
                         scrim: Theme.surface; dim: 0.88; corner: parent.radius
+                    }
+                    // Material moves an app bar from the plain surface to a
+                    // container, and lifts it two levels, as soon as content
+                    // scrolls underneath it. Without that the list slides under
+                    // a header that gives no sign it is in front.
+                    Rectangle {
+                        id: appBar
+                        objectName: "appBarSurface"
+                        anchors.left: parent.left; anchors.right: parent.right; anchors.top: parent.top
+                        height: contentColumn.y + contentBody.y
+                        topLeftRadius: parent.radius; topRightRadius: parent.radius
+                        color: Theme.container
+                        opacity: Math.min(1, content.headerCollapse*4)
+                        visible: opacity > 0
+                        // A rounded panel clips its children to its bounds, not
+                        // to its corners, so a shadow left to reach around the
+                        // bar is drawn outside the panel and rings its top
+                        // corners. The bar is flush with the top and both
+                        // sides, so the only part of its shadow that can be
+                        // seen is the part below it, and that is all it draws.
+                        Item {
+                            objectName: "appBarLift"
+                            anchors.left: parent.left; anchors.right: parent.right; anchors.top: parent.bottom
+                            height: 16
+                            clip: true
+                            MElevation {
+                                width: parent.width; height: appBar.height; y: -appBar.height
+                                radius: 0; level: 2
+                            }
+                        }
                     }
                     ColumnLayout {
                         id: contentColumn
@@ -1090,7 +1164,7 @@ ApplicationWindow {
                     Rectangle {
                         objectName: "searchScrimPanel"
                         anchors.fill: parent; radius: parent.radius; z: 40
-                        color: Qt.rgba(0,0,0,0.32)
+                        color: Theme.scrimColor()
                         visible: opacity>0
                         opacity: window.searchViewOpen ? 1 : 0
                         Behavior on opacity { NumberAnimation { duration: Theme.fast; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.fastEffectsCurve } }
@@ -1903,7 +1977,7 @@ ApplicationWindow {
         function onCatalogChanged(){
             Qt.callLater(window.restoreView);if(window.albumFlying && !window.albumOpening && !app.busy)albumSettle.restart();
             if(!app.collection.query && app.collection.sortKey==="original")window.collectionTools=false;
-            if(app.page==="home"){window.destination="home";window.localPlaylist="";searchField.clear();}
+            if(app.page==="home"){window.destination="home";window.localPlaylist="";searchField.clear();app.clearListPane();}
             else if(app.page==="server"){window.destination="library";window.libraryTab="server";window.localPlaylist="";searchField.suggestions=[];searchField.text=app.serverRequest.query || "";}
             else if(app.page==="library" || app.page==="local" || app.page==="local-album" || app.page==="local-artist"){
                 window.destination="library";

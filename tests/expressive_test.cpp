@@ -809,6 +809,11 @@ void runOnboardingTests(Backend *b, QQuickWindow *w) {
                           "-t", "30", "-metadata", "title=Onboarding fixture", "-metadata", "artist=Example Artist",
                           c.directory + "/music/01.flac"});
   c.check(encode.waitForFinished(15000) && encode.exitCode() == 0, "generate onboarding fixture");
+  // Browse is a real action standing beside a more important one, which is the
+  // emphasis Material's outlined button carries.
+  if (auto browse = shownItem(w->contentItem(), "onboardingBrowse"))
+    c.check(browse->property("outlined").toBool(),
+            "browsing is offered at the medium emphasis beside Add folder");
   auto path = itemNamed(w->contentItem(), "onboardingFolderPath");
   c.check(path, "the folder field is present");
   if (path)

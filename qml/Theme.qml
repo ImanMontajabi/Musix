@@ -118,11 +118,19 @@ QtObject {
         if (label) return emphasized ? Font.Bold : Font.Medium
         return emphasized ? Font.Medium : Font.Normal
     }
+    // Material's type scale. A role is a size, a line height and a letter
+    // spacing together; setting the size alone leaves two thirds of the style
+    // at whatever the toolkit happens to default to.
+    readonly property int displayLarge: 57
+    readonly property int displayMedium: 45
     readonly property int displaySmall: 36
+    readonly property int headlineLarge: 32
     readonly property int headlineMedium: 28
     readonly property int headlineSmall: 24
     readonly property int titleLarge: 22
     readonly property int titleMedium: 16
+    readonly property int titleSmall: 14
+    readonly property int bodySmall: 12
     readonly property int rowHeight: app.viewCompactDensity ? 56 : 72
     readonly property int rowArtwork: app.viewCompactDensity ? 36 : 48
     readonly property int gridCell: app.viewCompactDensity ? 148 : 180
@@ -131,6 +139,38 @@ QtObject {
     readonly property int labelLarge: 14
     readonly property int labelMedium: 12
     readonly property int labelSmall: 11
+    // [size, line height, letter spacing] for each role Material publishes.
+    readonly property var typeScale: ({
+        displayLarge:  [57, 64, -0.2], displayMedium: [45, 52, 0.0], displaySmall: [36, 44, 0.0],
+        headlineLarge: [32, 40,  0.0], headlineMedium:[28, 36, 0.0], headlineSmall:[24, 32, 0.0],
+        titleLarge:    [22, 28,  0.0], titleMedium:   [16, 24, 0.2], titleSmall:   [14, 20, 0.1],
+        bodyLarge:     [16, 24,  0.5], bodyMedium:    [14, 20, 0.2], bodySmall:    [12, 16, 0.4],
+        labelLarge:    [14, 20,  0.1], labelMedium:   [12, 16, 0.5], labelSmall:   [11, 16, 0.5]
+    })
+    // A size on its own does not say which role it is: 16 is both title medium
+    // and body large. Whether the text is a label settles the ones that matter,
+    // and a style can name its role outright when it needs to.
+    function typeRole(size,label,named) {
+        if (named && typeScale[named]) return named
+        if (label) return size <= 11 ? "labelSmall" : size <= 12 ? "labelMedium" : "labelLarge"
+        if (size >= 51) return "displayLarge"
+        if (size >= 40) return "displayMedium"
+        if (size >= 34) return "displaySmall"
+        if (size >= 30) return "headlineLarge"
+        if (size >= 26) return "headlineMedium"
+        if (size >= 23) return "headlineSmall"
+        if (size >= 20) return "titleLarge"
+        if (size >= 15) return "bodyLarge"
+        if (size >= 13) return "bodyMedium"
+        return "bodySmall"
+    }
+    // Material's line heights are absolute, and grow with a style that has been
+    // scaled past the role it was named for.
+    function lineFor(size,label,named) {
+        const role = typeScale[typeRole(size,label,named)]
+        return Math.round(size*(role[1]/role[0]))
+    }
+    function trackingFor(size,label,named) { return typeScale[typeRole(size,label,named)][2] }
     // Material's four state layers, and what it does to a disabled control: the
     // container drops to a tenth of onSurface and the content to 38% of
     // onSurfaceVariant, rather than the whole control fading together.
@@ -164,6 +204,10 @@ QtObject {
     readonly property color inversePrimary: role("inversePrimary", dark ? "#964829" : "#ffb596")
     readonly property color error: dark ? "#ffb4ab" : "#ba1a1a"
     readonly property color errorText: dark ? "#690005" : "#ffffff"
+    // Material's scrim, and the opacity it dims with.
+    readonly property color scrim: role("scrim","#000000")
+    readonly property real scrimOpacity: 0.32
+    function scrimColor(amount) { return Qt.rgba(scrim.r,scrim.g,scrim.b,amount===undefined?scrimOpacity:amount) }
     readonly property color errorContainer: dark ? "#93000a" : "#ffdad6"
     readonly property color errorContainerText: dark ? "#ffdad6" : "#410002"
     // Material's fixed accents keep one tone in both themes, so anything drawn

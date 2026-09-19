@@ -79,7 +79,7 @@ MDialog {
             SungText { objectName: "onboardingFolderDone"; Layout.fillWidth: true; Layout.minimumWidth: 0; visible: root.folderAdded && !app.importingLocal; text: "Folder added. Sung keeps it up to date while it is running."; color: Theme.muted; font.pixelSize: Theme.bodyMedium; wrapMode: Text.Wrap }
             RowLayout {
                 spacing: 8
-                MButton { objectName: "onboardingBrowse"; text: "Browse…"; symbol: "folder"; enabled: !app.importingLocal; onClicked: root.browseRequested() }
+                MButton { objectName: "onboardingBrowse"; text: "Browse…"; symbol: "folder"; outlined: true; enabled: !app.importingLocal; onClicked: root.browseRequested() }
                 MButton { objectName: "onboardingAddFolder"; text: "Add folder"; tonal: true; enabled: folderPath.text.trim().length>0 && !app.importingLocal; busy: app.importingLocal; onClicked: root.addFolder() }
             }
         }

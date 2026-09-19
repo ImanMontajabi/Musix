@@ -77,3 +77,4 @@ void runMaterialExpressiveTests(Backend*,QQuickWindow*);
 void runMaterialSizingTests(Backend*,QQuickWindow*);
 void runMaterialSchemeTests(Backend*,QQuickWindow*);
 void runMaterialGrainTests(Backend*,QQuickWindow*);
+void runMaterialScaleTests(Backend*,QQuickWindow*);

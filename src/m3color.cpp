@@ -352,6 +352,7 @@ QVariantMap scheme(const QColor &source, bool dark, Variant variant, double cont
     put("onSurfaceVariant", p.neutralVariant.tone(onSurfaceVariantTone));
     put("outline", p.neutralVariant.tone(outlineTone));
     put("outlineVariant", p.neutralVariant.tone(outlineVariantTone));
+    put("scrim", p.neutral.tone(0));
     put("inverseSurface", p.neutral.tone(90));
     put("inverseOnSurface", p.neutral.tone(20));
     put("inversePrimary", p.primary.tone(40));
@@ -379,6 +380,7 @@ QVariantMap scheme(const QColor &source, bool dark, Variant variant, double cont
     put("onSurfaceVariant", p.neutralVariant.tone(onSurfaceVariantTone));
     put("outline", p.neutralVariant.tone(outlineTone));
     put("outlineVariant", p.neutralVariant.tone(outlineVariantTone));
+    put("scrim", p.neutral.tone(0));
     put("inverseSurface", p.neutral.tone(20));
     put("inverseOnSurface", p.neutral.tone(95));
     put("inversePrimary", p.primary.tone(80));

@@ -25,7 +25,7 @@ Popup {
     height: parent ? parent.height : 0
     padding: 12
 
-    Overlay.modal: Rectangle { color: Qt.rgba(0, 0, 0, 0.32) }
+    Overlay.modal: Rectangle { color: Theme.scrimColor() }
     background: Rectangle {
         objectName: "drawerSurface"
         color: Theme.surface

@@ -190,6 +190,7 @@ int main(int argc, char **argv) {
   }
   if(args.contains("--immersive-edges-test")){QTimer::singleShot(0,&app,[&]{runImmersiveEdgeTests(&backend,window);});return app.exec();}
   if(args.contains("--immersive-preferences-test")){QTimer::singleShot(0,&app,[&]{runImmersivePreferencesTest(&backend,window);});return app.exec();}
+  if(args.contains("--material-scale-test")){QTimer::singleShot(0,&app,[&]{runMaterialScaleTests(&backend,window);});return app.exec();}
   if(args.contains("--material-grain-test")){QTimer::singleShot(0,&app,[&]{runMaterialGrainTests(&backend,window);});return app.exec();}
   if(args.contains("--material-scheme-test")){QTimer::singleShot(0,&app,[&]{runMaterialSchemeTests(&backend,window);});return app.exec();}
   if(args.contains("--material-sizing-test")){QTimer::singleShot(0,&app,[&]{runMaterialSizingTests(&backend,window);});return app.exec();}
