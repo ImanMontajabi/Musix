@@ -44,7 +44,7 @@ Menu {
         // reads as a group; a plain one is the container itself.
         color: menu.vibrant ? Theme.tertiaryContainer : menu.segmented ? Theme.surface : Theme.container
         radius: Theme.shapeLargeIncreased
-        border.color: Theme.outline
+        border.color: Theme.outlineVariant
         MElevation { anchors.fill: parent; radius: parent.radius; level: 2 }
     }
     enter: Transition { NumberAnimation { property: "opacity"; from: 0; to: 1; duration: Theme.enterDuration; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.fastEffectsCurve } }

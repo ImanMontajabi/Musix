@@ -36,7 +36,7 @@ Flow {
                 width: 40; height: 40; radius: Theme.shapeLargeIncreased
                 color: swatch.modelData ? swatch.modelData : Theme.high
                 border.width: swatch.modelData ? 0 : 2
-                border.color: Theme.controlOutline
+                border.color: Theme.outline
                 Rectangle {
                     anchors.fill: parent; anchors.margins: -4; radius: Theme.shapeExtraLarge
                     color: "transparent"; border.width: 2; border.color: Theme.focusRing

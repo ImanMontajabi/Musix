@@ -35,7 +35,7 @@ SungText {
             onClosed: Qt.callLater(tooltipLoader.releaseIfIdle)
             delay: 650; timeout: -1; width: Math.min(360,label.Window.window?label.Window.window.width-32:360); padding: 12
             contentItem: SungText { text: label.sourceText; wrapMode: Text.Wrap; maximumLineCount: 8; font.pixelSize: Theme.bodyMedium; color: Theme.text }
-            background: Rectangle { color: Theme.high; radius: Theme.shapeMedium; border.color: Theme.outline }
+            background: Rectangle { color: Theme.high; radius: Theme.shapeMedium; border.color: Theme.outlineVariant }
         }
     }
 }

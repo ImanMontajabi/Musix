@@ -293,8 +293,21 @@ void runDynamicColorTests(Backend *b, QQuickWindow *w) {
             where + ": text on the accent keeps 4.5:1");
     c.check(contrastOf(c.themeColor("containerText"), c.themeColor("primaryContainer")) >= 4.5,
             where + ": container text keeps 4.5:1");
-    c.check(contrastOf(c.themeColor("outline"), c.themeColor("surface")) >= 1.3,
+    // Navigation is drawn in the secondary pair and a row being carried in the
+    // tertiary one, so both have to hold their ink wherever the scheme lands.
+    c.check(contrastOf(c.themeColor("secondaryContainerText"), c.themeColor("secondaryContainer")) >= 4.5,
+            where + ": the destination you are on keeps 4.5:1 on its indicator");
+    c.check(contrastOf(c.themeColor("secondary"), c.themeColor("surface")) >= 4.5,
+            where + ": and its label keeps 4.5:1 beneath it");
+    c.check(contrastOf(c.themeColor("tertiaryContainerText"), c.themeColor("tertiaryContainer")) >= 4.5,
+            where + ": a row being carried keeps 4.5:1 on the reorder container");
+    // The two outline roles have two jobs and two floors: a rule only has to
+    // be seen, a control boundary has to meet Material's 3:1 for a shape that
+    // carries meaning.
+    c.check(contrastOf(c.themeColor("outlineVariant"), c.themeColor("surface")) >= 1.3,
             where + ": dividers stay visible");
+    c.check(contrastOf(c.themeColor("outline"), c.themeColor("surface")) >= 3.0,
+            where + ": a control's boundary keeps 3:1");
   };
   floors("green dark");
 
@@ -1794,7 +1807,10 @@ void runMaterialFoundationTests(Backend *b, QQuickWindow *w) {
     const auto expand = [&](const QString &scheme) {
       b->setMotionScheme(scheme);
       c.evaluate("railSettings.expanded=false");
-      c.until([&] { return qAbs(rail->width() - 88) < 1; }, 2000);
+      // Settled means the rail has reached the width it is asking for, which
+      // is a number the specification owns rather than one written in here.
+      c.until([&] { return qAbs(rail->width() - rail->property("shownWidth").toDouble()) < 1; },
+              2000);
       QTest::qWait(200);
       c.evaluate("railSettings.expanded=true");
       double widest = 0;
@@ -2027,13 +2043,45 @@ void runMaterialComponentTests(Backend *b, QQuickWindow *w) {
     for (const auto *key : {"home", "search", "library"})
       c.check(shownItem(bar, QString("navBarLabel_") + key),
               QString("the %1 label is shown, never dropped").arg(key));
-    // Exactly one destination carries the active indicator.
+    // Exactly one destination carries the active indicator, and Material
+    // paints it in the secondary container: navigation reports where you are
+    // rather than offering an action, so it does not take the action accent.
     int active = 0;
+    QString marked;
     for (const auto *key : {"home", "search", "library"})
       if (auto indicator = shownItem(bar, QString("navBarIndicator_") + key))
-        if (indicator->property("color").value<QColor>() == c.themeColor("primaryContainer"))
+        if (indicator->property("color").value<QColor>() == c.themeColor("secondaryContainer")) {
           ++active;
+          marked = key;
+        }
     c.check(active == 1, QString("exactly one destination is marked active (%1)").arg(active));
+    c.check(active == 1 && c.themeColor("secondaryContainer") != c.themeColor("primaryContainer"),
+            "in the secondary container, not the primary one");
+    for (const auto *key : {"home", "search", "library"})
+      if (auto label = shownItem(bar, QString("navBarLabel_") + key))
+        c.check(label->property("color").value<QColor>() ==
+                    c.themeColor(key == marked ? "secondary" : "muted"),
+                key == marked
+                    ? QString("the %1 you are on has the secondary role for a label").arg(key)
+                    : QString("and the %1 you are not on is the variant ink").arg(key));
+    // Round 13 put one focus ring on every control in the app. The bar was
+    // bordering its indicator instead, which marked the pill rather than the
+    // destination and read differently from everything around it.
+    if (auto reached = shownItem(bar, QString("navBar_") + marked)) {
+      reached->forceActiveFocus(Qt::TabFocusReason);
+      QTest::qWait(250);
+      auto ring = anyItem(bar, QString("navBarFocusRing_") + marked);
+      c.check(ring && ring->isVisible(),
+              "a destination the keyboard reaches wears the app's focus ring");
+      c.check(ring && ring->property("border").value<QObject *>()->property("color")
+                          .value<QColor>() == c.themeColor("focusRing"),
+              "in the same role every other ring is drawn in");
+      if (auto indicator = shownItem(bar, QString("navBarIndicator_") + marked))
+        c.check(ring && ring->width() > indicator->width(),
+                QString("around the destination rather than around its pill (%1 against %2)")
+                    .arg(ring ? ring->width() : 0, 0, 'f', 0)
+                    .arg(indicator->width(), 0, 'f', 0));
+    }
     c.shot("06-navigation-bar");
     c.click("navBar_search");
     c.check(c.until([&] { return w->property("destination") == "search"; }, 3000),
@@ -2616,6 +2664,10 @@ void runMaterialExpressiveTests(Backend *b, QQuickWindow *w) {
     c.check(qAbs(handle->width() - 4) < 0.5 && qAbs(handle->height() - 48) < 0.5,
             QString("at rest it is Material's 4 by 48 capsule (%1 by %2)")
                 .arg(handle->width(), 0, 'f', 0).arg(handle->height(), 0, 'f', 0));
+    // A handle is something you take hold of, so Material draws it in the
+    // outline role rather than in the variant a rule is drawn in.
+    c.check(handle->property("color").value<QColor>() == c.themeColor("outline"),
+            "drawn in the outline role, not the rule one");
     const auto point = grip->mapToScene(grip->boundingRect().center()).toPoint();
     QTest::mouseMove(w, point);
     QTest::mousePress(w, Qt::LeftButton, Qt::NoModifier, point);
@@ -2623,6 +2675,8 @@ void runMaterialExpressiveTests(Backend *b, QQuickWindow *w) {
     c.check(qAbs(handle->width() - 12) < 0.5 && qAbs(handle->height() - 52) < 0.5,
             QString("held it thickens to 12 by 52 (%1 by %2)")
                 .arg(handle->width(), 0, 'f', 0).arg(handle->height(), 0, 'f', 0));
+    c.check(handle->property("color").value<QColor>() == c.themeColor("text"),
+            "and takes the surface ink while it is held");
     c.check(qAbs(handle->property("radius").toDouble() - 12) < 0.5,
             "and squares off to a medium corner");
     c.shotNow("08-drag-handle");
@@ -2975,11 +3029,121 @@ void runMaterialSizingTests(Backend *b, QQuickWindow *w) {
               QString("the active indicator is 56 by 32 (%1 by %2)")
                   .arg(pill->width(), 0, 'f', 0).arg(pill->height(), 0, 'f', 0));
 
+  // --- Navigation is drawn in the secondary pair ---
+  // Material gives the navigation bar and the rail the same colours, and they
+  // are not the accent that offers an action: the indicator is the secondary
+  // container, the glyph on it the ink that belongs there, and the label the
+  // secondary role itself. Everything you are not on is the variant ink.
+  QQuickItem *here = nullptr;
+  for (const auto *key : {"home", "search", "library"})
+    if (auto d = shownItem(w->contentItem(), QString("nav_") + key))
+      if (d->property("selected").toBool()) here = d;
+  c.check(here, "one rail destination is marked as the one you are on");
+  if (here) {
+    auto pill = anyItem(here, "navigationIndicator");
+    auto glyph = shownItem(here, "materialIcon");
+    auto label = anyItem(here, "navigationLabel");
+    c.check(pill && pill->property("color").value<QColor>() == c.themeColor("secondaryContainer"),
+            "its indicator is the secondary container");
+    // Material wraps the glyph in the indicator with (32-24)/2 either side, so
+    // the two share a centre. They did not: the indicator sat at the top of
+    // the container and the glyph 4dp below its middle.
+    if (pill && glyph) {
+      const double pillMiddle = pill->mapToItem(here, QPointF(0, pill->height()/2)).y();
+      const double glyphMiddle = glyph->mapToItem(here, QPointF(0, glyph->height()/2)).y();
+      c.check(qAbs(pillMiddle - glyphMiddle) < 0.51,
+              QString("the glyph sits in the middle of it (%1 against %2)")
+                  .arg(glyphMiddle, 0, 'f', 1).arg(pillMiddle, 0, 'f', 1));
+    }
+    c.check(c.themeColor("secondaryContainer") != c.themeColor("high") &&
+                c.themeColor("secondary") != c.themeColor("primary"),
+            "which is neither the surface it used to take nor the action accent");
+    c.check(glyph && glyph->property("ink").value<QColor>() == c.themeColor("secondaryContainerText"),
+            "the glyph on it is the ink that container carries");
+    c.check(label && label->property("color").value<QColor>() == c.themeColor("secondary"),
+            "and the label is the secondary role");
+    for (const auto *key : {"home", "search", "library"})
+      if (auto other = shownItem(w->contentItem(), QString("nav_") + key))
+        if (!other->property("selected").toBool())
+          if (auto quiet = anyItem(other, "navigationLabel"))
+            c.check(quiet->property("color").value<QColor>() == c.themeColor("muted"),
+                    QString("%1, which you are not on, is the variant ink").arg(key));
+  }
+
+  // --- The rail's own measurements ---
+  // Material's collapsed rail is 96dp across and sets 4dp between its
+  // destinations, each of which is a 64dp container.
+  c.check(qAbs(c.evaluate("navigationRail.shownWidth").toDouble() - 96) < 0.5,
+          QString("the collapsed rail is 96dp wide (%1)")
+              .arg(c.evaluate("navigationRail.shownWidth").toDouble(), 0, 'f', 0));
+  c.check(qAbs(c.evaluate("navigationRail.spacing").toDouble() - 4) < 0.5,
+          QString("with 4dp between its destinations (%1)")
+              .arg(c.evaluate("navigationRail.spacing").toDouble(), 0, 'f', 0));
+  if (here)
+    c.check(qAbs(here->height() - 64) < 0.5,
+            QString("and a 64dp container for each (%1)").arg(here->height(), 0, 'f', 0));
+
+  // --- The expanded rail, opened the way a person opens it ---
+  // Material's horizontal rail item keeps 16dp either side of the row and sets
+  // 8dp between the glyph and the words, inside a 56dp indicator.
+  c.click("navigationMenuButton");
+  const bool opened = c.until([&] { return c.evaluate("navigationRail.expanded").toBool(); }, 3000);
+  c.check(opened, "the menu button opens the rail");
+  if (opened) {
+    QTest::qWait(700);
+    const double wide = c.evaluate("navigationRail.shownWidth").toDouble();
+    c.check(wide >= 220 && wide <= 360,
+            QString("which runs between 220 and 360dp (%1)").arg(wide, 0, 'f', 0));
+    if (auto open = shownItem(w->contentItem(), "nav_home")) {
+      auto glyph = shownItem(open, "materialIcon");
+      auto label = anyItem(open, "navigationWideLabel");
+      const double glyphLeft = glyph ? glyph->mapToItem(open, QPointF(0, 0)).x() : -1;
+      const double labelLeft = label ? label->mapToItem(open, QPointF(0, 0)).x() : -1;
+      const double labelRight = label ? labelLeft + label->width() : 0;
+      c.check(qAbs(glyphLeft - 16) < 0.5,
+              QString("the row starts 16dp in (%1)").arg(glyphLeft, 0, 'f', 0));
+      c.check(qAbs(labelLeft - glyphLeft - 32) < 0.5,
+              QString("the words follow a 24dp glyph 8dp later (%1)")
+                  .arg(labelLeft - glyphLeft - 24, 0, 'f', 0));
+      c.check(qAbs(open->width() - labelRight - 16) < 0.5,
+              QString("and it ends 16dp from the far edge (%1)")
+                  .arg(open->width() - labelRight, 0, 'f', 0));
+      if (auto pill = anyItem(open, "navigationIndicator"))
+        c.check(qAbs(pill->height() - 56) < 0.5,
+                QString("the indicator around it is 56dp tall (%1)")
+                    .arg(pill->height(), 0, 'f', 0));
+      // Where the glyph leads, the label is inside the indicator and takes the
+      // ink of the container it is on. Stacked, it is below the indicator and
+      // on the surface, so it takes the secondary role instead. Material makes
+      // that distinction and it is the difference between a label that is
+      // legible on the container and one that is merely near it.
+      QQuickItem *chosen = nullptr;
+      for (const auto *key : {"home", "search", "library"})
+        if (auto d = shownItem(w->contentItem(), QString("nav_") + key))
+          if (d->property("selected").toBool()) chosen = d;
+      if (auto wideLabel = chosen ? anyItem(chosen, "navigationWideLabel") : nullptr)
+        c.check(wideLabel->property("color").value<QColor>() ==
+                    c.themeColor("secondaryContainerText"),
+                "the label inside the indicator is drawn on its container");
+    }
+    c.shot("09-rail-expanded");
+    c.click("navigationMenuButton");
+    c.check(c.until([&] { return !c.evaluate("navigationRail.expanded").toBool(); }, 3000),
+            "and closes it again");
+    QTest::qWait(500);
+  }
+
   // --- A rule inside a list starts where the labels start ---
-  if (auto drawerRule = w->findChild<QQuickItem *>("drawerDivider"))
+  if (auto drawerRule = w->findChild<QQuickItem *>("drawerDivider")) {
     c.check(qAbs(drawerRule->property("inset").toDouble() - 16) < 0.5,
             QString("a list is ruled off 16dp in from both ends (%1)")
                 .arg(drawerRule->property("inset").toDouble(), 0, 'f', 0));
+    // A divider is decorative separation, so it takes the variant of the two
+    // outline roles rather than the one a control's boundary is drawn in.
+    if (auto rule = drawerRule->property("contentItem").value<QQuickItem *>())
+      c.check(rule->property("color").value<QColor>() == c.themeColor("outlineVariant"),
+              "in the outline variant, which is the role a rule is drawn in");
+  }
 
   // --- The shape library ---
   const auto names = c.evaluate("app.shapeNames()").toStringList();
@@ -3292,6 +3456,24 @@ void runMaterialSchemeTests(Backend *b, QQuickWindow *w) {
     c.check(qAbs(anyButton->height() - comfortable) < 0.5, "and it comes back");
   }
 
+  // --- Material has two outline roles and they do different jobs ---
+  // The outline is a boundary that has to hold on its own: a text field, a
+  // switch track, a connected button group. The variant is decorative
+  // separation, a divider or the edge of a container that is already legible.
+  // The scheme computes both, at neutral variant tone 60/50 and 30/80, and
+  // reading one of them for the other throws away the distinction.
+  const auto outlineRole = c.themeColor("outline");
+  const auto outlineVariantRole = c.themeColor("outlineVariant");
+  const auto against = c.themeColor("surface");
+  c.check(outlineRole != outlineVariantRole, "the two outline roles are two colours");
+  c.check(contrastOf(outlineRole, against) > contrastOf(outlineVariantRole, against),
+          QString("and the one that has to hold holds harder (%1 against %2)")
+              .arg(contrastOf(outlineRole, against), 0, 'f', 2)
+              .arg(contrastOf(outlineVariantRole, against), 0, 'f', 2));
+  c.check(outlineRole == c.evaluate("Theme.roles['outline']").value<QColor>() &&
+              outlineVariantRole == c.evaluate("Theme.roles['outlineVariant']").value<QColor>(),
+          "both come off the scheme rather than being mixed by hand");
+
   // --- A short window takes the short navigation bar ---
   w->resize(520, 640);
   QTest::qWait(800);
@@ -3468,7 +3650,11 @@ void runMaterialGrainTests(Backend *b, QQuickWindow *w) {
   }
   Q_UNUSED(previous)
 
-  // --- A dragged row carries the heavier state layer ---
+  // --- A row being carried takes Material's reorder container ---
+  // The reorder list names a container for the item under the finger: the
+  // tertiary one, at corner large, with its own ink. It is a colour the app
+  // uses nowhere else, so a row being moved is unmistakably the subject of
+  // the gesture rather than a row that happens to be lit.
   QVariantList queued;
   for (int i = 0; i < 4; ++i)
     queued.append(b->results()->get(i));
@@ -3479,18 +3665,42 @@ void runMaterialGrainTests(Backend *b, QQuickWindow *w) {
   auto row = queue ? shownItem(queue, "queueRow_1") : nullptr;
   c.check(row, "a queue row can be taken hold of");
   if (row) {
+    auto container = row->property("background").value<QQuickItem *>();
+    auto title = anyItem(row, "trackTitle");
     auto layer = anyItem(row, "rowDraggedLayer");
-    c.check(layer && !layer->isVisible(), "which leaves no layer while it is at rest");
+    const auto carriedContainer = c.themeColor("tertiaryContainer");
+    const auto carriedInk = c.themeColor("tertiaryContainerText");
+    c.check(container && container->property("color").value<QColor>() != carriedContainer,
+            "which is not wearing the reorder container while it rests");
+    c.check(layer && !layer->isVisible(), "and no state layer either");
     const auto from = row->mapToScene(row->boundingRect().center()).toPoint();
     QTest::mousePress(w, Qt::LeftButton, Qt::NoModifier, from);
     QTest::mouseMove(w, from + QPoint(0, 40), 40);
-    QTest::qWait(250);
-    c.check(layer && layer->isVisible(), "and the layer Material asks for once it is being carried");
-    c.check(layer && qAbs(layer->opacity() - 0.16) < 0.01,
-            QString("at Material's 16%% for a drag (%1)").arg(layer ? layer->opacity() : 0, 0, 'f', 2));
-    c.shotNow("03-dragged");
+    QTest::qWait(400);
+    c.check(row->property("dragging").toBool(), "moving the pointer picks it up");
+    c.check(container && container->property("color").value<QColor>() == carriedContainer,
+            "the carried row takes the tertiary container Material names for it");
+    c.check(carriedContainer != c.themeColor("primaryContainer") &&
+                carriedContainer != c.themeColor("container"),
+            "which is a container it wears in no other state");
+    c.check(title && title->property("color").value<QColor>() == carriedInk,
+            "and the ink that belongs on it");
+    c.check(container && qAbs(container->property("topLeftRadius").toDouble() -
+                              c.evaluate("Theme.listActive").toDouble()) < 0.5,
+            "at corner large, which is the reorder list's shape");
+    // The container is the answer to the drag; 16% of the surface ink laid
+    // over it would only be a second one.
+    c.check(layer && !layer->isVisible(),
+            "the state layer stays off, so the container reads as itself");
+    auto zone = anyItem(queue, "dropZone");
+    c.check(zone && zone->isVisible(), "the place it will land is drawn");
+    c.check(zone && zone->property("color").value<QColor>() == c.themeColor("surface"),
+            "in the surface container a step below the list");
+    c.shotNow("03-carried");
     QTest::mouseRelease(w, Qt::LeftButton, Qt::NoModifier, from + QPoint(0, 40));
     QTest::qWait(500);
+    c.check(container && container->property("color").value<QColor>() != carriedContainer,
+            "and it gives the container back once it is put down");
   }
   w->setProperty("side", "");
   QTest::qWait(400);
@@ -3886,10 +4096,35 @@ void runMaterialAnatomyTests(Backend *b, QQuickWindow *w) {
           c.check(qAbs(wide->width() - rows->width()) < 1,
                   QString("and is given the column's width rather than its own (%1)")
                       .arg(wide->width(), 0, 'f', 0));
-          if (auto sw = w->findChild<QQuickItem *>("ambientBackdropSwitch"))
+          if (auto sw = w->findChild<QQuickItem *>("ambientBackdropSwitch")) {
             c.check(qAbs(sw->width() - rows->width()) < 1,
                     QString("so the rows beside it are not dragged out with it (%1 of %2)")
                         .arg(sw->width(), 0, 'f', 0).arg(rows->width()));
+            // --- What a switch looks like when it is off ---
+            // Material draws the off state out of the outline role and the
+            // highest surface container, not out of the variant ink and the
+            // step below: the track and its handle are a boundary, and they
+            // read as one piece because they are drawn in the same role.
+            const bool wasOn = sw->property("checked").toBool();
+            if (wasOn) {
+              c.clickWithin(rows, "ambientBackdropSwitch");
+              c.until([&] { return !sw->property("checked").toBool(); }, 2000);
+            }
+            auto track = anyItem(sw, "switchTrack");
+            auto handle = anyItem(sw, "switchHandle");
+            c.check(!sw->property("checked").toBool(), "a switch can be turned off");
+            c.check(track && track->property("color").value<QColor>() == c.themeColor("highest"),
+                    "its track off is the highest surface container");
+            c.check(handle && handle->property("color").value<QColor>() == c.themeColor("outline"),
+                    "and its handle is the outline role");
+            c.check(c.themeColor("highest") != c.themeColor("high") &&
+                        c.themeColor("outline") != c.themeColor("muted"),
+                    "neither of which is the role it used to take");
+            if (wasOn) {
+              c.clickWithin(rows, "ambientBackdropSwitch");
+              c.until([&] { return sw->property("checked").toBool(); }, 2000);
+            }
+          }
           double spill = 0; QString culprit;
           collectOverflow(rows, scroll, spill, culprit);
           c.check(spill <= 1,
@@ -4500,9 +4735,12 @@ void runMaterialScaleTests(Backend *b, QQuickWindow *w) {
     QTest::qWait(200);
     c.check(container && container->property("border").value<QObject *>()->property("width").toInt() == 1,
             "an outlined one draws a boundary instead of a container");
+    // An outlined button is one of the components Material draws in the
+    // variant rather than in the outline itself, because the label inside it
+    // already says what it is.
     c.check(container && container->property("border").value<QObject *>()
-                ->property("color").value<QColor>() == c.themeColor("outline"),
-            "in the outline role");
+                ->property("color").value<QColor>() == c.themeColor("outlineVariant"),
+            "in the outline variant, which is the role Material names for it");
     c.check(sample->property("ink").value<QColor>() == c.themeColor("muted"),
             "and labels itself in onSurfaceVariant");
     c.shotNow("03-button-variants");

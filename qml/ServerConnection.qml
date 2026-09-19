@@ -43,7 +43,7 @@ MDialog {
         Rectangle {
             objectName: "dialogScrollDivider"
             anchors.top: parent.top; anchors.left: parent.left; anchors.right: parent.right
-            height: 1; color: Theme.outline; visible: dialog.moreBelow
+            height: 1; color: Theme.outlineVariant; visible: dialog.moreBelow
         }
         Row {
             anchors.right: parent.right; anchors.bottom: parent.bottom; anchors.margins: 24; spacing: 8

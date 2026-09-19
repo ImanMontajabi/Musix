@@ -145,7 +145,7 @@ ApplicationWindow {
     Rectangle {
         id: dragGhost; parent: window.contentItem; z: 1000
         objectName: "trackDragPreview"
-        width: 180; height: 68; radius: Theme.shapeLargeIncreased; color: Theme.high; border.color: Theme.outline
+        width: 180; height: 68; radius: Theme.shapeLargeIncreased; color: Theme.high; border.color: Theme.outlineVariant
         Repeater { model: dragGhost.visible?Math.min(3,trackDrag.items.length):0
             Artwork { required property int index; x: 12+(2-index)*6; y: 10+(2-index)*3; width: 42; height: 42; radius: Theme.shapeSmall; pixels: 96; rotation: (2-index)*5; url: trackDrag.items[index].art || "" }
         }
@@ -514,10 +514,12 @@ ApplicationWindow {
             readonly property var pinned: expanded ? app.pins.slice(0,6) : []
             // Material's expanded rail runs from 220dp to 360dp; it takes more
             // of that range as the window has room to give.
-            property real shownWidth: expanded ? Math.max(220, Math.min(360, window.width*0.2)) : 88
+            property real shownWidth: expanded ? Math.max(220, Math.min(360, window.width*0.2)) : 96
             Behavior on shownWidth { NumberAnimation { duration: Theme.normal; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curve } }
             Layout.preferredWidth: shownWidth; Layout.minimumWidth: shownWidth; Layout.maximumWidth: shownWidth
-            Layout.fillHeight: true; Layout.topMargin: 24; spacing: 12
+            // Material's collapsed rail is 96dp wide and sets 4dp between its
+            // destinations; the header above them keeps 8dp of its own.
+            Layout.fillHeight: true; Layout.topMargin: 24; spacing: 4
             MButton {
                 objectName: "navigationMenuButton"
                 symbol: navigationRail.expanded ? "menu_open" : "menu"
@@ -538,7 +540,7 @@ ApplicationWindow {
                 Layout.preferredHeight: visible ? libraryFab.height : 0
                 Layout.alignment: navigationRail.expanded ? Qt.AlignLeft : Qt.AlignHCenter
                 Layout.leftMargin: navigationRail.expanded ? 16 : 0
-                Layout.bottomMargin: 4
+                Layout.topMargin: 4; Layout.bottomMargin: 4
             }
             Repeater {
                 model: [{key:"home",icon:"home",label:"Home"},{key:"search",icon:"search",label:"Search"},{key:"library",icon:"library",label:"Library"}]
@@ -548,7 +550,7 @@ ApplicationWindow {
                     expanded: navigationRail.expanded
                     Layout.alignment: navigationRail.expanded ? Qt.AlignLeft : Qt.AlignHCenter
                     Layout.preferredWidth: navigationRail.expanded ? navigationRail.shownWidth-24 : 80
-                    Layout.preferredHeight: navigationRail.expanded ? 56 : 68
+                    Layout.preferredHeight: navigationRail.expanded ? 56 : 64
                     symbol: modelData.icon; text: modelData.label; selected: window.destination===modelData.key
                     // Importing is pending work inside the library, so the
                     // destination says so while it runs.
@@ -672,7 +674,7 @@ ApplicationWindow {
                         exit: Transition { NumberAnimation { property: "opacity"; to: 0; duration: app.motion?Theme.fast:0; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.fastEffectsCurve } }
                         onClosed: searchField.dismissed=true
                         background: Rectangle {
-                            radius: Theme.shapeLargeIncreased; color: Theme.high; border.width: 1; border.color: Theme.outline
+                            radius: Theme.shapeLargeIncreased; color: Theme.high; border.width: 1; border.color: Theme.outlineVariant
                             MElevation { anchors.fill: parent; radius: parent.radius; level: 3 }
                         }
                         contentItem: ListView {
@@ -1568,7 +1570,7 @@ ApplicationWindow {
     MMenu {
         id: actions; objectName: "trackActions"
         width: 230; padding: 8
-        background: Rectangle { color: Theme.high; radius: Theme.shapeLargeIncreased; border.color: Theme.outline }
+        background: Rectangle { color: Theme.high; radius: Theme.shapeLargeIncreased; border.color: Theme.outlineVariant }
         MMenuItem { text: "Open"; visible: !(window.menuItem.videoId || window.menuItem.localPath || window.menuItem.serverSong); onTriggered: app.open(window.menuItem) }
         MMenuItem { objectName: "playKeepQueueAction"; symbol: "play"; text: "Play now, keep queue"; visible: !!(window.menuItem.videoId || window.menuItem.localPath || window.menuItem.serverSong); onTriggered: app.playKeepingQueue(window.menuItem) }
         MMenuItem { symbol: "next"; text: "Play next"; visible: !!(window.menuItem.videoId || window.menuItem.localPath || window.menuItem.serverSong); onTriggered: app.enqueue(window.menuItem,true) }

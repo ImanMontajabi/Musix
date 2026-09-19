@@ -75,7 +75,7 @@ Dialog {
             objectName: "dialogHeaderDivider"
             visible: dialog.fullScreen
             anchors.bottom: parent.bottom; anchors.left: parent.left; anchors.right: parent.right
-            height: 1; color: Theme.outline
+            height: 1; color: Theme.outlineVariant
         }
     }
     footer: DialogButtonBox {
@@ -91,7 +91,7 @@ Dialog {
             Rectangle {
                 objectName: "dialogScrollDivider"
                 anchors.top: parent.top; anchors.left: parent.left; anchors.right: parent.right
-                height: 1; color: Theme.outline
+                height: 1; color: Theme.outlineVariant
                 visible: dialog.moreBelow
                 opacity: visible ? 1 : 0
                 Behavior on opacity { NumberAnimation { duration: Theme.fast } }

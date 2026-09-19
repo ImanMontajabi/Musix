@@ -307,9 +307,15 @@ QtObject {
     readonly property color highest: role("surfaceContainerHighest", dark ? "#433733" : "#e9d8d0")
     readonly property color text: followDesktop ? desktopTheme.colors.text : role("onSurface", dark ? "#f5ded5" : "#281912")
     readonly property color muted: followDesktop ? desktopTheme.colors.muted : role("onSurfaceVariant", dark ? "#d5bfb5" : "#705c53")
-    readonly property color outline: followDesktop ? desktopTheme.colors.outline : role("outlineVariant", dark ? "#57443b" : "#dcc5b9")
-    // Controls need a stronger boundary than decorative surface dividers.
-    readonly property color controlOutline: Qt.rgba(muted.r, muted.g, muted.b, dark ? 0.65 : 0.8)
+    // Material has two outline roles and they do different jobs. The outline is
+    // a boundary that has to hold on its own: a text field, a switch track, a
+    // connected button group. The variant is decorative separation: a divider,
+    // or the edge of a container that is already legible without one. The
+    // scheme computes both, at neutral variant tone 60/50 and 30/80.
+    readonly property color outline: followDesktop ? desktopTheme.colors.outline
+                                   : role("outline", blend(outlineVariant, muted, 0.5))
+    readonly property color outlineVariant: followDesktop ? desktopTheme.colors.outline
+                                          : role("outlineVariant", dark ? "#57443b" : "#dcc5b9")
     readonly property color primary: useSource ? role("primary",sourceColor) : followDesktop ? desktopTheme.colors.primary : (dark ? "#ffb596" : "#964829")
     readonly property color primaryText: useSource ? role("onPrimary",luminance(primary)>0.179?"#000000":"#ffffff") : followDesktop ? desktopTheme.colors.primaryText : (dark ? "#572008" : "#ffffff")
     readonly property color primaryContainer: useSource ? role("primaryContainer",blend(container,primary,0.16)) : followDesktop ? desktopTheme.colors.primaryContainer : (dark ? "#75351b" : "#ffdbcb")

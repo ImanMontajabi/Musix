@@ -14,12 +14,13 @@ Switch {
     hoverEnabled: true
     readonly property bool dimmed: !enabled
     indicator: Rectangle {
+        objectName: "switchTrack"
         implicitWidth: 52; implicitHeight: 32
         x: control.width-control.rightPadding-width; y: (control.height-height)/2
         radius: Theme.shapeLarge
         color: control.dimmed ? Qt.rgba(Theme.text.r,Theme.text.g,Theme.text.b,Theme.disabledContainerOpacity)
-             : control.checked ? Theme.primary : Theme.high
-        border.width: control.checked ? 0 : 2; border.color: Theme.controlOutline
+             : control.checked ? Theme.primary : Theme.highest
+        border.width: control.checked ? 0 : 2; border.color: Theme.outline
         Behavior on color { ColorAnimation { duration: Theme.fast; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.fastEffectsCurve } }
         Rectangle {
             anchors.fill: parent; anchors.margins: -4; radius: Theme.shapeLargeIncreased
@@ -35,10 +36,14 @@ Switch {
             Behavior on opacity { NumberAnimation { duration: Theme.fast } }
         }
         Rectangle {
+            objectName: "switchHandle"
             x: (control.checked ? 36 : 16) - width/2
             anchors.verticalCenter: parent.verticalCenter
             width: control.down ? 28 : control.checked ? 24 : 16; height: width; radius: width/2
-            color: control.checked ? Theme.primaryText : Theme.muted
+            // Material's off switch is drawn in the outline role, not in the
+            // variant ink: the handle and the track edge are the boundary of a
+            // control, and they read as one piece because of it.
+            color: control.checked ? Theme.primaryText : Theme.outline
             Behavior on x { enabled: app.motion; SpringAnimation { spring: 5; damping: 0.8 } }
             Behavior on width { NumberAnimation { duration: Theme.fast; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.fastEffectsCurve } }
         }

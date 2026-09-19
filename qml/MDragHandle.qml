@@ -23,6 +23,9 @@ Item {
         width: handle.held ? 12 : 4
         height: handle.held ? 52 : 48
         radius: handle.held ? Theme.shapeMedium : Theme.shapeFull(width)
+        // Material draws a drag handle in the outline role and in the surface
+        // ink while it is held, because it is something you take hold of
+        // rather than a rule between two things.
         color: handle.held ? Theme.text : Theme.outline
         Behavior on width { enabled: app.motion; NumberAnimation { duration: Theme.springFastSpatialMs; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.springFastSpatial } }
         Behavior on height { enabled: app.motion; NumberAnimation { duration: Theme.springFastSpatialMs; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.springFastSpatial } }

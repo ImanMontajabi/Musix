@@ -63,7 +63,7 @@ ToolTip {
     background: Rectangle {
         color: Theme.container
         radius: Theme.shapeMedium
-        border.width: 1; border.color: Theme.outline
+        border.width: 1; border.color: Theme.outlineVariant
         MElevation { anchors.fill: parent; radius: parent.radius; level: 2 }
     }
     enter: Transition { NumberAnimation { property: "opacity"; from: 0; to: 1; duration: Theme.enterDuration; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.fastEffectsCurve } }

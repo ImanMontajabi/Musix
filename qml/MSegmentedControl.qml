@@ -99,7 +99,7 @@ Item {
                 // Material selects a segment with the secondary container, not
                 // the primary one: it marks a choice rather than an action.
                 color: button.selected ? Theme.secondaryContainer : "transparent"
-                border.width: 1; border.color: Theme.controlOutline
+                border.width: 1; border.color: Theme.outline
                 Behavior on color { ColorAnimation { duration: Theme.fast; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.fastEffectsCurve } }
                 Behavior on topLeftRadius { enabled: app.motion; SpringAnimation { spring: 5; damping: 0.8; mass: 0.8 } }
                 Behavior on topRightRadius { enabled: app.motion; SpringAnimation { spring: 5; damping: 0.8; mass: 0.8 } }

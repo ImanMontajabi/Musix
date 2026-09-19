@@ -678,8 +678,8 @@ void runHomeRailTests(Backend *b, QQuickWindow *w) {
   c.check(rail, "navigation rail exists");
   if (!rail)
     return c.finish();
-  c.check(!rail->property("expanded").toBool() && qAbs(rail->width() - 88) < 1,
-          "the rail starts collapsed at its M3 width");
+  c.check(!rail->property("expanded").toBool() && qAbs(rail->width() - 96) < 1,
+          "the rail starts collapsed at Material's 96dp container width");
   auto home = itemNamed(w->contentItem(), "nav_home");
   auto stacked = home ? itemNamed(home, "navigationStack") : nullptr;
   auto wide = home ? itemNamed(home, "navigationRow") : nullptr;
@@ -741,7 +741,7 @@ void runHomeRailTests(Backend *b, QQuickWindow *w) {
   // M3 puts the expanded rail beside content, so a narrow window collapses it.
   w->resize(980, 800);
   QTest::qWait(500);
-  c.check(!rail->property("expanded").toBool() && qAbs(rail->width() - 88) < 1,
+  c.check(!rail->property("expanded").toBool() && qAbs(rail->width() - 96) < 1,
           "a narrow window collapses the rail even while the preference is on");
   c.check(!itemNamed(w->contentItem(), "navPin_0"), "collapsing releases the secondary destinations");
   c.check(menu && !menu->isEnabled(), "the menu button is disabled where there is no room");

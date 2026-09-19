@@ -9,7 +9,7 @@ Popup {
     function showAt(anchor){const at=anchor.mapToItem(parent,0,0);anchorPosition=Qt.point(at.x+anchor.width,at.y);open();}
     onOpened: {devices.currentIndex=app.audioDevices.findIndex(d=>d.id===app.audioDeviceId);devices.forceActiveFocus();}
     closePolicy:Popup.CloseOnEscape|Popup.CloseOnPressOutside
-    background:Rectangle {radius:Theme.shapeExtraLarge;color:Theme.high;border.width:1;border.color:Theme.outline}
+    background:Rectangle {radius:Theme.shapeExtraLarge;color:Theme.high;border.width:1;border.color:Theme.outlineVariant}
     enter:Transition {NumberAnimation {property:"opacity";from:0;to:1;duration:Theme.enterDuration}}
     exit:Transition {NumberAnimation {property:"opacity";to:0;duration:Theme.exitDuration}}
     contentItem:ColumnLayout {spacing:8

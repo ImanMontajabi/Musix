@@ -71,7 +71,7 @@ Slider {
             SungText { width: parent.width; text: app.formatTime(s.previewValue); color: Theme.text; font.pixelSize: 12; horizontalAlignment: Text.AlignHCenter }
             SungText { width: parent.width; visible: !!s.previewLine; text: s.previewLine; color: Theme.muted; font.pixelSize: 12; wrapMode: Text.Wrap; maximumLineCount: 2; horizontalAlignment: Text.AlignHCenter }
         }
-        background: Rectangle { color: Theme.high; radius: Theme.shapeMedium; border.color: Theme.outline }
+        background: Rectangle { color: Theme.high; radius: Theme.shapeMedium; border.color: Theme.outlineVariant }
     }
     background: Item {
         id: track

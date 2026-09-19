@@ -17,7 +17,7 @@ Rectangle {
     radius: Theme.shapeMedium
     color: variant === "filled" ? Theme.high : Theme.surface
     border.width: variant === "outlined" ? 1 : 0
-    border.color: Theme.outline
+    border.color: Theme.outlineVariant
 
     MElevation {
         anchors.fill: parent

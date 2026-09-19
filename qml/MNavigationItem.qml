@@ -27,18 +27,27 @@ AbstractButton {
             // M3 lets the expanded indicator fill its container rather than hug
             // the label; the target area spans the full rail either way.
             x: control.expanded ? 0 : (parent.width-width)/2
-            y: control.expanded ? 0 : 0
+            // Material wraps the glyph in the indicator with (32-24)/2 either
+            // side of it, so the two share a centre. Stacked, that puts the
+            // indicator 4dp down from the top of the container.
+            y: control.expanded ? 0 : 4
             // Material's active indicator is 56 by 32 where the destination is
             // stacked, and fills its container where it is laid out in a row.
             width: control.expanded ? parent.width : 56
             height: control.expanded ? parent.height : 32
-            radius: control.down ? 14 : 20
-            color: control.selected ? Theme.high : "transparent"
+            // The indicator's shape is full; pressing squares it towards the
+            // large step, which is the app's own interaction feel rather than
+            // anything Material asks for.
+            radius: control.down ? Theme.shapeLarge : Theme.shapeFull(height)
+            // Material's navigation colours are the secondary pair. The
+            // indicator is the secondary container, its content the ink that
+            // belongs on it, and the label the secondary role itself.
+            color: control.selected ? Theme.secondaryContainer : "transparent"
             Behavior on color { ColorAnimation { duration: Theme.fast; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.fastEffectsCurve } }
             Behavior on radius { enabled: app.motion; SpringAnimation { spring: 5; damping: 0.8; mass: 0.8 } }
             Rectangle {
                 anchors.fill: parent; radius: parent.radius
-                color: Theme.primary
+                color: Theme.secondaryContainerText
                 opacity: control.down || control.visualFocus ? Theme.pressedOpacity : control.hovered ? Theme.hoverOpacity : 0
                 Behavior on opacity { NumberAnimation { duration: Theme.fast; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.fastEffectsCurve } }
             }
@@ -56,7 +65,7 @@ AbstractButton {
             anchors.fill: parent
             visible: opacity>0; opacity: control.expanded ? 0 : 1
             Behavior on opacity { NumberAnimation { duration: Theme.fast } }
-            Icon { id: stackGlyph; anchors.horizontalCenter: parent.horizontalCenter; y: 8; name: control.symbol; fill: control.selected ? 1 : 0; ink: control.selected ? Theme.primary : Theme.text; Accessible.ignored: true }
+            Icon { id: stackGlyph; anchors.horizontalCenter: parent.horizontalCenter; y: 8; name: control.symbol; fill: control.selected ? 1 : 0; ink: control.selected ? Theme.secondaryContainerText : Theme.muted; Accessible.ignored: true }
             MBadge {
                 objectName: "navigationBadge"
                 present: control.badged || control.badgeCount >= 0
@@ -65,23 +74,27 @@ AbstractButton {
             }
             SungText {
                 objectName: "navigationLabel"
-                y: 38; width: parent.width; height: 20
+                // The stacked item is 4dp, a 32dp indicator, 4dp, a 20dp label
+                // and 4dp again, which is the 64dp container Material gives it.
+                y: 40; width: parent.width; height: 20
                 text: control.text; horizontalAlignment: Text.AlignHCenter
                 font.pixelSize: Theme.labelMedium
                 font.weight: control.selected ? Font.DemiBold : Font.Medium
-                color: control.selected ? Theme.primary : Theme.muted
+                color: control.selected ? Theme.secondary : Theme.muted
                 Accessible.ignored: true
             }
         }
         Row {
             objectName: "navigationRow"
-            anchors.fill: parent; anchors.leftMargin: 16; anchors.rightMargin: 12
-            spacing: 12
+            // Material's horizontal rail item: 16dp either side of the row,
+            // and 8dp between the glyph and the words.
+            anchors.fill: parent; anchors.leftMargin: 16; anchors.rightMargin: 16
+            spacing: 8
             visible: opacity>0; opacity: control.expanded ? 1 : 0
             Behavior on opacity { NumberAnimation { duration: Theme.fast } }
             Item {
                 width: 24; height: 24; anchors.verticalCenter: parent.verticalCenter
-                Icon { anchors.centerIn: parent; visible: !control.artUrl; name: control.symbol; fill: control.selected ? 1 : 0; ink: control.selected ? Theme.primary : Theme.text; Accessible.ignored: true }
+                Icon { anchors.centerIn: parent; visible: !control.artUrl; name: control.symbol; fill: control.selected ? 1 : 0; ink: control.selected ? Theme.secondaryContainerText : Theme.muted; Accessible.ignored: true }
                 Artwork { anchors.centerIn: parent; visible: !!control.artUrl; width: 24; height: 24; radius: Theme.shapeSmall; pixels: 96; url: control.artUrl }
                 MBadge {
                     objectName: "navigationWideBadge"
@@ -92,12 +105,16 @@ AbstractButton {
             }
             SungText {
                 objectName: "navigationWideLabel"
-                width: parent.width-36; height: parent.height
+                width: parent.width-32; height: parent.height
                 verticalAlignment: Text.AlignVCenter
                 text: control.text; elide: Text.ElideRight
                 font.pixelSize: Theme.labelLarge
                 font.weight: control.selected ? Font.DemiBold : Font.Medium
-                color: control.selected ? Theme.primary : Theme.text
+                // Where the glyph leads and the label sits inside the
+                // indicator, the label is on the container and takes its ink.
+                // Stacked, the label is below the indicator and on the surface,
+                // so it takes the secondary role instead.
+                color: control.selected ? Theme.secondaryContainerText : Theme.muted
                 Accessible.ignored: true
             }
         }

@@ -59,7 +59,7 @@ Flickable {
         anchors.left: parent.left; anchors.right: parent.right; anchors.bottom: parent.bottom
         width: tabs.width
         height: 1
-        color: Theme.outline
+        color: Theme.outlineVariant
     }
     Row {
         id: row

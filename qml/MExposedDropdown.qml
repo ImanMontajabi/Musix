@@ -47,7 +47,7 @@ Item {
             radius: Theme.shapeExtraSmall
             color: "transparent"
             border.width: field.activeFocus || control.open ? 2 : 1
-            border.color: field.activeFocus || control.open ? Theme.primary : Theme.controlOutline
+            border.color: field.activeFocus || control.open ? Theme.primary : Theme.outline
             Behavior on border.color { ColorAnimation { duration: Theme.fast; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.fastEffectsCurve } }
         }
         contentItem: Item {

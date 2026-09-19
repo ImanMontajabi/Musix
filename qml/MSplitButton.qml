@@ -62,7 +62,7 @@ Item {
             topLeftRadius: control.outer; bottomLeftRadius: control.outer
             topRightRadius: control.inner; bottomRightRadius: control.inner
             border.width: control.filled || control.tonal ? 0 : 1
-            border.color: Theme.controlOutline
+            border.color: Theme.outlineVariant
             Rectangle {
                 anchors.fill: parent
                 topLeftRadius: parent.topLeftRadius; bottomLeftRadius: parent.bottomLeftRadius
@@ -122,7 +122,7 @@ Item {
             topRightRadius: control.menuOpen ? Theme.shapeMedium : control.outer
             bottomRightRadius: control.menuOpen ? Theme.shapeMedium : control.outer
             border.width: control.filled || control.tonal ? 0 : 1
-            border.color: Theme.controlOutline
+            border.color: Theme.outlineVariant
             Behavior on topRightRadius { enabled: app.motion; NumberAnimation { duration: Theme.springFastSpatialMs; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.springFastSpatial } }
             Behavior on bottomRightRadius { enabled: app.motion; NumberAnimation { duration: Theme.springFastSpatialMs; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.springFastSpatial } }
             Rectangle {

@@ -70,6 +70,9 @@ ListView {
     property string playlistId: ""
     property string matchQuery: ""
     readonly property int dropIndex: drop.containsDrag?drop.before:-1
+    // How far the rows move aside for the row being carried. The gap they leave
+    // is twice this, and it is the drop zone.
+    readonly property int dropParting: 10
     required property var dragHub
     property alias selection: selection
     signal activate(int row, var item)
@@ -183,7 +186,7 @@ ListView {
         height:foldedRow?0:implicitHeight
         visible:!foldedRow
         matchQuery: list.matchQuery
-        transform: Translate { y: list.dropIndex<0?0:index>=list.dropIndex?10:-10
+        transform: Translate { y: list.dropIndex<0?0:index>=list.dropIndex?list.dropParting:-list.dropParting
             Behavior on y { NumberAnimation { duration: app.motion?130:0; easing.type: Easing.OutCubic } }
         }
         track: entry; rowIndex: list.queueMode?index:app.collection.sourceIndex(index); queueMode: list.queueMode
@@ -226,10 +229,14 @@ ListView {
         parent: list; anchors.fill: parent; z: 9; radius: Theme.shapeLarge; color: "transparent"; border.color: Theme.focusRing; border.width: 2
         visible: drop.containsDrag
     }
+    // Material's reorder list says where the row will land by showing the place
+    // rather than by drawing a line at it: the rows part, and the gap they open
+    // is the drop zone, in the surface container a step below the list.
     Rectangle {
-        objectName: "dropInsertionLine"
-        parent: list; z: 10; height: 3; radius: Theme.shapeFull(3); color: Theme.primary; width: list.width
+        objectName: "dropZone"
+        parent: list; z: 10; width: list.width
+        height: 2*list.dropParting; radius: Theme.listActive; color: Theme.surface
         visible: drop.containsDrag && drop.before>=0
-        y: {const item=list.itemAtIndex(drop.before);return Math.max(0,Math.min(list.height-3,item?item.y-list.contentY:list.contentHeight-list.contentY));}
+        y: {const item=list.itemAtIndex(drop.before);return Math.max(0,Math.min(list.height-height,(item?item.y-list.contentY:list.contentHeight-list.contentY)-list.dropParting));}
     }
 }

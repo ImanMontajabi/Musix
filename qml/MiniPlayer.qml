@@ -24,7 +24,7 @@ Window {
     Shortcut { sequence: "Ctrl+Left"; onActivated: app.previous() }
     Rectangle {
         anchors.fill: parent; anchors.margins: 1; radius: Theme.shapeExtraLarge; color: Theme.container
-        border.width: 1; border.color: Theme.outline
+        border.width: 1; border.color: Theme.outlineVariant
         MouseArea { anchors.fill: parent; onPressed: mini.startSystemMove() }
         ColumnLayout {
             anchors.fill: parent; anchors.margins: 16; spacing: 4

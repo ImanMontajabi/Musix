@@ -63,13 +63,15 @@ Rectangle {
                         Layout.alignment: Qt.AlignHCenter
                         implicitWidth: bar.short ? 56 : 64; implicitHeight: 32
                         radius: Theme.shapeFull(implicitHeight)
-                        color: destination.active ? Theme.primaryContainer
-                             : destination.down || destination.visualFocus ? Qt.rgba(Theme.primary.r,Theme.primary.g,Theme.primary.b,Theme.pressedOpacity)
-                             : destination.hovered ? Qt.rgba(Theme.primary.r,Theme.primary.g,Theme.primary.b,Theme.hoverOpacity)
+                        // Material paints navigation in the secondary pair, not
+                        // the primary one. Where you are is not an action, and
+                        // the accent that offers an action should not be the
+                        // accent that reports a location.
+                        color: destination.active ? Theme.secondaryContainer
+                             : destination.down || destination.visualFocus ? Qt.rgba(Theme.secondaryContainerText.r,Theme.secondaryContainerText.g,Theme.secondaryContainerText.b,Theme.pressedOpacity)
+                             : destination.hovered ? Qt.rgba(Theme.secondaryContainerText.r,Theme.secondaryContainerText.g,Theme.secondaryContainerText.b,Theme.hoverOpacity)
                              : "transparent"
                         Behavior on color { ColorAnimation { duration: Theme.springFastEffectsMs; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.springFastEffects } }
-                        border.width: destination.visualFocus ? 2 : 0
-                        border.color: Theme.focusRing
                         Icon {
                             id: glyph
                             anchors.centerIn: parent
@@ -78,7 +80,7 @@ Rectangle {
                             // Filled for the active destination, outlined for
                             // the rest, as Material specifies.
                             fill: destination.active ? 1 : 0
-                            ink: destination.active ? Theme.containerText : Theme.muted
+                            ink: destination.active ? Theme.secondaryContainerText : Theme.muted
                         }
                         MBadge {
                             objectName: "navBarBadge_" + destination.modelData.key
@@ -95,8 +97,17 @@ Rectangle {
                         text: destination.modelData.label
                         font.pixelSize: Theme.labelMedium
                         emphasized: destination.active; labelRole: true
-                        color: destination.active ? Theme.text : Theme.muted
+                        color: destination.active ? Theme.secondary : Theme.muted
                     }
+                }
+                // The ring sits around the destination rather than on its
+                // indicator, so it marks the thing the keyboard has reached
+                // and reads the same as every other focus ring in the app.
+                Rectangle {
+                    objectName: "navBarFocusRing_" + destination.modelData.key
+                    anchors.fill: parent; anchors.margins: 2; radius: Theme.shapeLarge
+                    color: "transparent"; border.width: 2; border.color: Theme.focusRing
+                    visible: destination.visualFocus
                 }
             }
         }

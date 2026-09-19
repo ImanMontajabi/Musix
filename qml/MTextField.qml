@@ -21,7 +21,7 @@ TextField {
     property string supporting: ""
     property string errorText: ""
     readonly property bool errored: errorText.length > 0
-    readonly property color accent: errored ? Theme.error : activeFocus ? Theme.primary : Theme.controlOutline
+    readonly property color accent: errored ? Theme.error : activeFocus ? Theme.primary : Theme.outline
     readonly property bool floatingLabel: activeFocus || length > 0 || preeditText.length > 0
     readonly property bool handlesTextInput: true
     implicitHeight: 56

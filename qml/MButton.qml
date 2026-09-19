@@ -118,7 +118,7 @@ AbstractButton {
              : control.elevated ? Theme.surface
              : control.toggle && control.selected ? Theme.primaryContainer
              : control.tonal || control.selected ? Theme.high : "transparent"
-        border.color: control.outlined && !control.dimmed ? Theme.outline
+        border.color: control.outlined && !control.dimmed ? Theme.outlineVariant
                     : control.outlined ? Qt.rgba(Theme.text.r,Theme.text.g,Theme.text.b,Theme.disabledContainerOpacity)
                     : "transparent"
         border.width: control.outlined ? control.sizedOutline : 2

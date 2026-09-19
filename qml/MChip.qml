@@ -34,7 +34,7 @@ AbstractButton {
                  ? Qt.rgba(Theme.text.r,Theme.text.g,Theme.text.b,Theme.disabledContainerOpacity)
              : control.selected ? Theme.primaryContainer : "transparent"
         border.width: control.selected ? 0 : 1
-        border.color: control.dimmed ? Qt.rgba(Theme.text.r,Theme.text.g,Theme.text.b,Theme.disabledContainerOpacity) : Theme.controlOutline
+        border.color: control.dimmed ? Qt.rgba(Theme.text.r,Theme.text.g,Theme.text.b,Theme.disabledContainerOpacity) : Theme.outlineVariant
         Behavior on color { ColorAnimation { duration: Theme.fast; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.fastEffectsCurve } }
         Rectangle {
             anchors.fill: parent; radius: parent.radius

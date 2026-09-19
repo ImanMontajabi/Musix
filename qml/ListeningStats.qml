@@ -129,7 +129,7 @@ MDialog {
                                 // so the row reads as a scale rather than a gap.
                                 height: Math.max(3, parent.height*modelData.seconds/parent.parent.peak)
                                 radius: Theme.shapeSmall
-                                color: modelData.seconds > 0 ? Theme.primary : Theme.outline
+                                color: modelData.seconds > 0 ? Theme.primary : Theme.outlineVariant
                                 Behavior on height { enabled: app.motion; NumberAnimation { duration: Theme.normal; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curve } }
                             }
                         }
