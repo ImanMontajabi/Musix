@@ -4810,6 +4810,14 @@ void runMaterialControlsTests(Backend *b, QQuickWindow *w) {
     c.check(c.until([&]{return !rail->property("expanded").toBool();},3000),"the rail closes again");
     QTest::qWait(600);
     menuOpensClear("collapsed");
+    // The menu is a surface of its own over the content, so it has to hold up
+    // in the light scheme too, where its container and the page behind it are
+    // far closer in tone than they are in the dark one.
+    b->setTheme("light");
+    QTest::qWait(700);
+    menuOpensClear("light");
+    b->setTheme("dark");
+    QTest::qWait(700);
   }
   // A window too narrow for the rail puts the same menu at the bottom right of
   // the content, where it opens upward and towards the leading edge instead.
