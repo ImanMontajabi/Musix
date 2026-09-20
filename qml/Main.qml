@@ -1090,6 +1090,12 @@ ApplicationWindow {
                                 anchors.right: parent.right
                                 anchors.bottom: parent.bottom
                                 anchors.margins: 8
+                                // The button asks to sit above the content, but
+                                // its own z counts among this slot's children,
+                                // not the slot's siblings. Without this the
+                                // lists declared below it take the presses,
+                                // and the button is visible but dead.
+                                z: libraryFab.z
                                 width: libraryFab.inRail ? 0 : libraryFab.width
                                 height: libraryFab.inRail ? 0 : libraryFab.height
                             }

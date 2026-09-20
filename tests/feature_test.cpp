@@ -4784,10 +4784,48 @@ void runMaterialControlsTests(Backend *b, QQuickWindow *w) {
               QString("pressing the button again closes them (%1)").arg(state));
     };
     menuOpensClear("expanded");
+    // With motion off the arrival transitions do not run at all, so the items
+    // have to be in place and visible without them.
+    b->setMotion(false);
+    QTest::qWait(400);
+    menuOpensClear("reduced-motion");
+    b->setMotion(true);
     c.click("navigationMenuButton");
     c.check(c.until([&]{return !rail->property("expanded").toBool();},3000),"the rail closes again");
     QTest::qWait(600);
     menuOpensClear("collapsed");
+  }
+  // A window too narrow for the rail puts the same menu at the bottom right of
+  // the content, where it opens upward and towards the leading edge instead.
+  {
+    const QSize full=w->size();
+    w->resize(560, 760);
+    QTest::qWait(900);
+    auto rail = shownItem(w->contentItem(), "navigationRail");
+    c.check(!rail, "a narrow window puts the destinations at the bottom, not in a rail");
+    auto narrowFab = shownItem(w->contentItem(), "libraryFab");
+    c.check(narrowFab, "and the action moves with them");
+    if (narrowFab) {
+      c.click("fab");
+      c.check(c.until([&]{return shownItem(w->contentItem(),"fabMenuItem_0")!=nullptr;},3000),"the menu still opens");
+      QTest::qWait(700);
+      double worst=0;int found=0;
+      for(int i=0;i<narrowFab->property("count").toInt();++i)
+        if(auto item=shownItem(w->contentItem(),"fabMenuItem_"+QString::number(i))){
+          ++found;
+          const auto box=item->mapToItem(w->contentItem(),QPointF(0,0));
+          worst=qMax(worst,qMax(qMax(-box.x(),box.x()+item->width()-w->width()),
+                                qMax(-box.y(),box.y()+item->height()-w->height())));
+        }
+      c.check(found==narrowFab->property("count").toInt(),
+              QString("all %1 actions are there").arg(narrowFab->property("count").toInt()));
+      c.check(found&&worst<=1,QString("and every action fits the narrow window (worst %1 past the edge)").arg(qRound(worst)));
+      c.shot("06-rail-fab-menu-narrow");
+      c.click("fab");
+      c.until([&]{return !narrowFab->property("open").toBool();},3000);
+    }
+    w->resize(full);
+    QTest::qWait(900);
   }
 
   // --- A segment marks a choice, so it takes the secondary container ---
