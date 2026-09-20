@@ -1,4 +1,5 @@
 #include "backend.h"
+#include "artworkurl.h"
 #include <QLocale>
 #include <QMediaMetaData>
 #include "lrc.h"
@@ -45,6 +46,7 @@ Backend::Backend(QObject *parent) : QObject(parent) {
   // Both decks report everything; only the one being heard is listened to.
   const auto eachDeck=[this](const std::function<void(QMediaPlayer *)> &wire){wire(&m_deckA);wire(&m_deckB);};
   m_userVolume=qBound(0.0,m_settings.value("volume",0.65).toDouble(),1.0);
+  m_videoCovers=m_settings.value("videoCovers").toMap();
   m_audioA.setVolume(m_userVolume);
   m_audioB.setVolume(m_userVolume);
   m_deckA.setAudioOutput(&m_audioA);
@@ -2350,10 +2352,19 @@ void Backend::resetAudioLevels() {
 }
 
 
+// Two reasons to look a song up on Apple: its animated cover, and, for a song
+// whose only cover is a video frame, its still one. Either alone is enough.
+bool Backend::motionLookupWanted() const {
+  return motion() && animatedArtwork() && onlineArtwork() && artworkChoice().isEmpty() && current().value("motionArt").toString().isEmpty();
+}
+bool Backend::coverLookupWanted() const {
+  return albumCovers() && !artworkurl::videoId(QUrl(current().value("art").toString())).isEmpty();
+}
 void Backend::updateOnlineArtwork() {
   const auto song=current();const auto id=song.value("id").toString();
   const bool changed=id!=m_onlineArtworkId || m_trackToken!=m_onlineArtworkToken;
-  const bool enabled=motion() && animatedArtwork() && onlineArtwork() && artworkChoice().isEmpty();
+  const bool motionWanted=motionLookupWanted(),coverWanted=coverLookupWanted();
+  const bool enabled=motionWanted || coverWanted;
   if(changed || !enabled){
     m_onlineArtworkTimer.stop();cancel("motion-artwork");++m_onlineArtworkGeneration;
     m_onlineArtworkId=id;m_onlineArtworkToken=m_trackToken;m_onlineArtworkAttempted=false;m_onlineArtworkRetries=0;
@@ -2361,7 +2372,7 @@ void Backend::updateOnlineArtwork() {
   }
   const bool eligible=enabled && m_uiActive && playing() && !song.value("videoId").toString().isEmpty()
       && song.value("localPath").toString().isEmpty() && !isServerSource(song.value("source"))
-      && song.value("motionArt").toString().isEmpty() && !song.value("artist").toString().isEmpty();
+      && !song.value("artist").toString().isEmpty();
   if(!eligible){
     m_onlineArtworkTimer.stop();
     if(m_processes.contains("motion-artwork")){
@@ -2369,25 +2380,43 @@ void Backend::updateOnlineArtwork() {
     }
     return;
   }
+  // A frame whose cover is already known, found or not, is not asked about again.
+  if(!motionWanted && m_videoCovers.contains(song.value("videoId").toString()))return;
   if(!m_onlineArtworkAttempted && !m_onlineArtworkTimer.isActive())m_onlineArtworkTimer.start();
 }
 void Backend::fetchOnlineArtwork() {
-  m_onlineArtworkAttempted=true;m_artworkStatus="Looking for a cover…";emit onlineArtworkChanged();
+  const bool motionWanted=motionLookupWanted();
+  m_onlineArtworkAttempted=true;
+  // The status line belongs to the artwork controls, which are about the
+  // animated cover. A lookup running only for a still cover says nothing
+  // there; the cover itself is the feedback.
+  if(motionWanted){m_artworkStatus="Looking for a cover…";emit onlineArtworkChanged();}
   const auto directory=audioDirectory();if(!directory || !directory->isValid())return;
   const auto root=QStandardPaths::writableLocation(QStandardPaths::CacheLocation)+"/motion-art";
-  auto args=current();args["op"]="online-artwork";args["artworkCache"]=root;args["scratch"]=directory->path();args["refresh"]=m_artworkForce;m_artworkForce=false;
+  auto args=current();args["op"]="online-artwork";args["artworkCache"]=root;args["scratch"]=directory->path();args["refresh"]=m_artworkForce;args["motion"]=motionWanted;m_artworkForce=false;
   const auto generation=++m_onlineArtworkGeneration;
-  request("motion-artwork",args,[this,generation,root](const QVariantMap &data){
-    if(generation!=m_onlineArtworkGeneration || !onlineArtwork() || !animatedArtwork() || !motion() || !m_uiActive)return;
-    m_artworkStatus="No animated cover found";emit onlineArtworkChanged();
+  const auto videoId=current().value("videoId").toString();
+  request("motion-artwork",args,[this,generation,root,motionWanted,videoId](const QVariantMap &data){
+    if(generation!=m_onlineArtworkGeneration || !m_uiActive)return;
+    if(motionWanted){m_artworkStatus="No animated cover found";emit onlineArtworkChanged();}
     if((data.value("status")=="retry" || !data.value("ok").toBool()) && m_onlineArtworkRetries++<1 && playing()){
-      m_artworkStatus="Waiting to retry";emit onlineArtworkChanged();
+      if(motionWanted){m_artworkStatus="Waiting to retry";emit onlineArtworkChanged();}
       m_onlineArtworkAttempted=false;
       m_onlineArtworkTimer.start(qBound(1,data.value("retryAfter",30).toInt(),3600)*1000);
       return;
     }
+    if(!data.value("ok").toBool())return;
+    // The still cover is remembered against the video id, so every surface
+    // drawing that frame swaps it in, and remembered when absent too, so the
+    // song is not looked up again on every play. Only Apple's own image URLs
+    // are kept, which is what the art loader relies on.
+    if(coverLookupWanted()){
+      const QUrl art(data.value("art").toString());
+      rememberVideoCover(videoId,artworkurl::isAlbumCover(art)?art.toString():QString());
+    }
+    if(!motionWanted || !motionLookupWanted())return;
     const QUrl url(data.value("motionArt").toString());const QFileInfo file(url.toLocalFile());
-    if(!data.value("ok").toBool() || !url.isLocalFile() || !file.isFile() || file.isSymLink()
+    if(!url.isLocalFile() || !file.isFile() || file.isSymLink()
         || file.suffix()!="mp4" || file.size()<=0 || file.size()>16*1024*1024
         || file.canonicalPath()!=QFileInfo(root).canonicalFilePath())return;
     m_onlineMotionArt=url.toString();m_artworkPage=data.value("page").toString();m_artworkStatus="Online album cover";emit onlineArtworkChanged();

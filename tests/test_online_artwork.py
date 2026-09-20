@@ -16,8 +16,9 @@ class OnlineArtworkTests(unittest.TestCase):
         self.root = Path(self.temp.name)
         self.track = dict(title='A Song', artist='An Artist', album='An Album', seconds=200,
                           artworkCache=str(self.root/'cache'), scratch=str(self.root/'scratch'))
+        self.cover = 'https://is1-ssl.mzstatic.com/image/thumb/Music/ab/cd/100x100bb.jpg'
         self.candidate = dict(trackName='A Song', artistName='An Artist', collectionName='An Album',
-                              trackTimeMillis=200000, collectionId=123)
+                              trackTimeMillis=200000, collectionId=123, artworkUrl100=self.cover)
         self.base = 'https://mvod.itunes.apple.com/example/'
 
     def page(self):
@@ -35,6 +36,36 @@ class OnlineArtworkTests(unittest.TestCase):
         self.assertEqual(art.candidates(self.track,[self.candidate,dict(self.candidate,collectionName='Compilation',collectionId=124)]),[])
         self.track['artist']=''
         self.assertEqual(art.candidates(self.track,[self.candidate]),[])
+
+    def test_still_cover_only_from_apples_own_images(self):
+        self.assertEqual(art.still_art(self.candidate),self.cover)
+        for bad in ['http://is1-ssl.mzstatic.com/image/thumb/x/100x100bb.jpg',
+                    'https://mzstatic.com.evil.example/image/thumb/x/100x100bb.jpg',
+                    'https://is1-ssl.mzstatic.com/image/thumb/x/100x100bb.jpg?x=1',
+                    'https://is1-ssl.mzstatic.com/image/thumb/x/cover.gif',
+                    'https://is1-ssl.mzstatic.com/image/thumb/x@y/100x100bb.jpg','']:
+            self.assertEqual(art.still_art(dict(self.candidate,artworkUrl100=bad)),'',bad)
+        self.assertEqual(art.still_art({}),'')
+
+    def test_cover_lookup_skips_the_album_page(self):
+        calls=[]
+        def fetch(url,limit=0):
+            calls.append(url)
+            if '/search?' in url:return json.dumps(dict(results=[self.candidate])).encode()
+            raise AssertionError('a cover lookup must not fetch '+url)
+        with patch.object(art,'fetch',side_effect=fetch):
+            first=dict(self.track,motion=False)
+            found=art.lookup(first)
+            self.assertEqual((found['status'],found['art']),('unavailable',self.cover))
+            self.assertEqual(found['page'],'https://music.apple.com/us/album/123')
+            self.assertEqual(len(calls),1)
+            # Remembered, so playing the song again asks Apple nothing.
+            self.assertEqual(art.lookup(first)['art'],self.cover)
+            self.assertEqual(len(calls),1)
+        # A cover-only answer must not stand in for one that looked for animation.
+        with patch.object(art,'fetch',side_effect=OSError('offline')) as fetch:
+            self.assertEqual(art.lookup(self.track)['status'],'retry')
+            self.assertEqual(fetch.call_count,1)
 
     def test_only_verified_album_header(self):
         self.assertEqual(art.album_motion(self.page(),self.candidate),self.base+'master.m3u8')
@@ -83,6 +114,7 @@ large.m3u8
             return video.read_bytes()
         with patch.object(art,'fetch',side_effect=fetch):
             first=art.lookup(self.track);self.assertEqual(first['status'],'ready');self.assertEqual(len(calls),5)
+            self.assertEqual(first['art'],self.cover)
             self.assertEqual(art.lookup(self.track),first);self.assertEqual(len(calls),5)
             self.track['seconds']=201
             self.assertEqual(art.lookup(self.track),first);self.assertEqual(len(calls),6)

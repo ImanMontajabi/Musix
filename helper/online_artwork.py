@@ -17,6 +17,9 @@ from urllib.request import Request, HTTPRedirectHandler, build_opener
 MEDIA_LIMIT = 16 * 1024 * 1024
 CACHE_LIMIT = 64 * 1024 * 1024
 HOSTS = {'itunes.apple.com', 'music.apple.com', 'mvod.itunes.apple.com'}
+# A cover on Apple's image service in the shape its search API returns it. The
+# player rewrites the size segment for whatever surface draws it.
+APPLE_ART = re.compile(r'^https://is\d+-ssl\.mzstatic\.com/image/thumb/[^?#@]+/\d+x\d+bb\.(?:jpg|png|webp)$')
 
 
 def safe_url(url):
@@ -139,6 +142,12 @@ def resolve_candidates(track, results):
     return [x[2] for x in originals][:3]
 
 
+def still_art(candidate):
+    """The album cover a search result links, or '' when it is not one of Apple's images."""
+    url = str(candidate.get('artworkUrl100', ''))
+    return url if APPLE_ART.match(url) else ''
+
+
 def album_motion(raw, candidate):
     match = re.search(r'<script[^>]*id="serialized-server-data"[^>]*>(.*?)</script>', raw.decode(), re.S)
     if not match:
@@ -238,28 +247,41 @@ def prune(cache):
 
 
 def lookup(req):
-    """All expected failures are quiet. Audio playback never depends on this result."""
+    """All expected failures are quiet. Audio playback never depends on this result.
+
+    One search answers two questions: the album's still cover, which any surface
+    can draw in place of a video frame, and, when `motion` is asked for, its
+    animated cover. The record remembers whether the animation was looked for,
+    so a lookup that skipped it never stands in for one that tried."""
     cache = Path(req['artworkCache']); scratch = Path(req['scratch'])
     cache.mkdir(parents=True, exist_ok=True, mode=0o700)
     scratch.mkdir(parents=True, exist_ok=True, mode=0o700)
-    key = hashlib.sha256(json.dumps([2]+[req.get(k, '') for k in ('title', 'artist', 'album', 'seconds')]).encode()).hexdigest()
+    motion = bool(req.get('motion', True))
+    key = hashlib.sha256(json.dumps([3]+[req.get(k, '') for k in ('title', 'artist', 'album', 'seconds')]).encode()).hexdigest()
     record = cache / (key + '.json')
     now = time.time()
     try:
         saved = json.loads(record.read_text())
         if saved['expires'] > now and (not req.get('refresh') or saved.get('status') == 'retry'):
-            if not saved.get('albumId'):
-                return {'status': saved.get('status', 'unavailable'), 'retryAfter': max(1, math.ceil(saved['expires']-now))} if saved.get('status') == 'retry' else {'status': 'unavailable'}
-            path = cache / (str(saved['albumId']) + '.mp4')
-            if str(saved['albumId']).isdigit() and cached_movie(path, saved.get('bytes')):
-                path.touch()
-                return {'status': 'ready', 'motionArt': path.resolve().as_uri(), 'page': saved['page']}
-            if str(saved['albumId']).isdigit() and path.is_file() and not path.is_symlink():
-                path.unlink()
+            if saved.get('status') == 'retry':
+                return {'status': 'retry', 'retryAfter': max(1, math.ceil(saved['expires']-now))}
+            still = {'art': saved.get('art', ''), 'page': saved.get('page', '')}
+            album_id = str(saved.get('albumId', ''))
+            path = cache / (album_id + '.mp4')
+            if album_id.isdigit():
+                if cached_movie(path, saved.get('bytes')):
+                    path.touch()
+                    return {'status': 'ready', 'motionArt': path.resolve().as_uri(), **still}
+                if path.is_file() and not path.is_symlink():
+                    path.unlink()
+                if not motion:
+                    return {'status': 'unavailable', **still}
+            elif not motion or saved.get('motion', True):
+                return {'status': 'unavailable', **still}
     except (OSError, ValueError, KeyError, TypeError):
         pass
-    result = {'status': 'unavailable'}
-    saved = {'expires': now + 86400}
+    result = {'status': 'unavailable', 'art': '', 'page': ''}
+    saved = {'expires': now + 86400, 'motion': motion}
     try:
         blocked = cache / 'retry-after-v2'
         if blocked.exists() and float(blocked.read_text()) > now:
@@ -268,6 +290,13 @@ def lookup(req):
                            'entity': 'song', 'limit': 40, 'country': 'us'})
         matches = resolve_candidates(req, json.loads(fetch('https://itunes.apple.com/search?' + query)).get('results', []))
         for candidate in matches:
+            # The first verified match names the still cover and the album page; an
+            # animated match below replaces both with its own album's.
+            if still_art(candidate):
+                result.update(art=still_art(candidate), page='https://music.apple.com/us/album/' + str(candidate['collectionId']))
+                saved['expires'] = now + 7 * 86400
+                break
+        for candidate in (matches if motion else []):
             album_id = str(candidate['collectionId'])
             page = 'https://music.apple.com/us/album/' + album_id
             path = cache / (album_id + '.mp4')
@@ -297,9 +326,10 @@ def lookup(req):
             except (ValueError, KeyError, TypeError, AttributeError, ZeroDivisionError, subprocess.SubprocessError):
                 continue
             path.touch()
-            result = {'status': 'ready', 'motionArt': path.resolve().as_uri(), 'page': page}
-            saved.update(albumId=album_id, page=page, bytes=path.stat().st_size, expires=now + 7 * 86400)
+            result.update(status='ready', motionArt=path.resolve().as_uri(), page=page, art=still_art(candidate) or result['art'])
+            saved.update(albumId=album_id, bytes=path.stat().st_size, expires=now + 7 * 86400)
             break
+        saved.update(art=result['art'], page=result['page'])
     except (OSError, ValueError, KeyError, TypeError, AttributeError, ZeroDivisionError, subprocess.SubprocessError) as error:
         delay = 30
         if isinstance(error, HTTPError) and error.code == 429:

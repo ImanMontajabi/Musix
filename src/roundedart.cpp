@@ -4,6 +4,7 @@
 #include <QBuffer>
 #include <QFileInfo>
 #include <QCache>
+#include <QSet>
 #include <QCoreApplication>
 #include <QImageReader>
 #include <QNetworkAccessManager>
@@ -14,7 +15,11 @@
 #include <utility>
 
 std::function<QNetworkRequest(const QUrl &)> RoundedArt::resolveServerArt;
+std::function<QUrl(const QUrl &)> RoundedArt::resolveVideoFrame;
 static QCache<QString, QImage> cache(8 * 1024 * 1024);
+// Every surface alive right now, so a change in what a URL stands for can
+// reach the ones already drawing it. Surfaces live on the GUI thread only.
+static QSet<RoundedArt *> &liveArt() { static QSet<RoundedArt *> set; return set; }
 static QNetworkAccessManager *manager() {
   static QNetworkAccessManager *n = nullptr;
   if (!n) {
@@ -77,8 +82,10 @@ static QImage softened(const QImage &source, int radius) {
 }
 RoundedArt::RoundedArt(QQuickItem *p) : QQuickPaintedItem(p) {
   setAntialiasing(true);
+  liveArt().insert(this);
 }
 RoundedArt::~RoundedArt() {
+  liveArt().remove(this);
   if (m_reply) {
     m_reply->disconnect(this);
     m_reply->abort();
@@ -169,7 +176,10 @@ void RoundedArt::reload(bool preserve) {
   // Ask the image service for the size this surface draws rather than the
   // thumbnail the catalogue handed out. A request that fails is retried once
   // with the source untouched, which is also how a missing HD frame degrades.
-  if(!m_originalSizeFallback && !server)url=artworkurl::sized(url,m_pixels);
+  if(!m_originalSizeFallback && !server){
+    if(resolveVideoFrame && !artworkurl::videoId(url).isEmpty()){const auto cover=resolveVideoFrame(url);if(!cover.isEmpty())url=cover;}
+    url=artworkurl::sized(url,m_pixels);
+  }
   if(url.isEmpty() || (url.scheme()!="https" && !(server&&url.scheme()=="http"))){finishTransition();return;}
   QNetworkRequest req=server?serverRequest:QNetworkRequest(url);
   if(server){req.setAttribute(QNetworkRequest::RedirectPolicyAttribute,QNetworkRequest::ManualRedirectPolicy);req.setAttribute(QNetworkRequest::CacheSaveControlAttribute,false);}
@@ -243,6 +253,19 @@ void RoundedArt::paint(QPainter *p) {
 }
 
 void RoundedArt::clearCaches() { cache.clear(); if(manager()->cache())manager()->cache()->clear(); }
+void RoundedArt::refreshFrames() {
+  for(auto *art:std::as_const(liveArt()))if(!artworkurl::videoId(art->m_source).isEmpty())art->refresh();
+}
+// The source is the same; what it stands for is not. Drop the decoded copy
+// so the reload cannot answer from memory, and keep the old picture up, as a
+// crossfade origin where there is one, until the new one arrives.
+void RoundedArt::refresh() {
+  cache.remove(m_source.toString()+QLatin1Char('|')+QString::number(m_pixels));
+  if(m_fade)m_fade->stop();
+  if(m_crossfade && !m_image.isNull()){m_previous=m_image;m_softPrevious=m_softImage;m_previousFit=m_fit;m_mix=0;}
+  m_originalSizeFallback=false;emit transitionChanged();
+  reload(true);
+}
 
 QColor RoundedArt::seedColor() const {
   if(m_image.isNull())return QColor(Qt::transparent);

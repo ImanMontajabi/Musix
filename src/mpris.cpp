@@ -17,7 +17,7 @@ QVariantMap PlayerAdaptor::metadata() const {
                                 "/org/mpris/MediaPlayer2/track/" +
                                 b->trackToken()))},
           {"mpris:length", b->duration() * 1000},
-          {"mpris:artUrl", isServerSource(t.value("source"))?QVariant(b->serverArtwork()):t.value("art")},
+          {"mpris:artUrl", isServerSource(t.value("source"))?QVariant(b->serverArtwork()):QVariant(b->displayArt(t))},
           {"xesam:title", t.value("title")},
           {"xesam:artist", QStringList{t.value("artist").toString()}},
           {"xesam:album", t.value("album")},

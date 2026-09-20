@@ -8,6 +8,8 @@
 #include "roundedart.h"
 #include <QDir>
 #include <QDataStream>
+#include <QJsonDocument>
+#include <QJsonObject>
 #include <QBuffer>
 #include <QNetworkCacheMetaData>
 #include <QNetworkDiskCache>
@@ -1485,6 +1487,36 @@ void runOnlineArtworkTests(Backend *b,QQuickWindow *w) {
   check(until([&]{const auto c=centre("immersiveArtwork");return c.isValid()&&c.blue()>200&&c.red()<60;}),"immersive view draws the HD frame");
   check(w->grabWindow().save(dir+"/05-hd-frame-immersive.png"),"HD frame capture");
   QMetaObject::invokeMethod(w,"toggleImmersive");QTest::qWait(400);
+
+  // A song Apple Music does have an album for shows that cover in place of the
+  // frame, and the Settings switch decides which of the two is drawn. Animated
+  // covers are off here, so what the player draws is the still cover itself,
+  // and finding one plainly does not depend on the animation preferences.
+  b->setAnimatedArtwork(false);
+  const QUrl albumFrame("https://i.ytimg.com/vi/frame000002/hqdefault.jpg?sqp=-oaymwE");
+  seedArt(albumFrame,solidPng(400,225,Qt::red));
+  seedArt(QUrl("https://is1-ssl.mzstatic.com/image/thumb/Fixture/150x150bb.jpg"),solidPng(300,300,Qt::green));
+  QVariantMap covered{{"id","frame000002"},{"videoId","frame000002"},{"title","Cover song"},{"artist","Fixture artist"},{"kind","video"},{"art",albumFrame.toString()}};
+  b->playItem(covered);check(until([&]{return b->playing();}),"the song with an album starts");
+  check(until([&]{const auto c=centre("nowArtwork");return c.isValid()&&c.green()>200&&c.red()<60;},12000),"the album cover replaces the video frame");
+  check(w->grabWindow().save(dir+"/06-album-cover.png"),"album cover capture");
+  auto settings=w->findChild<QObject*>("settingsDialog");check(settings,"settings dialog exists");
+  if(settings)QMetaObject::invokeMethod(settings,"open");
+  check(until([&]{return settings&&settings->property("opened").toBool();},3000),"Settings opens");
+  if(auto search=findItem(w->contentItem(),"settingsSearch")){search->setProperty("text","Album covers");QMetaObject::invokeMethod(search,"textEdited");}
+  QTest::qWait(350);
+  check(findItem(w->contentItem(),"albumCoversSwitch"),"Settings offers album covers for music videos");
+  check(w->grabWindow().save(dir+"/07-album-cover-setting.png"),"album cover setting capture");
+  if(auto toggle=findItem(w->contentItem(),"albumCoversSwitch")){
+    const auto at=toggle->mapToScene(QPointF(toggle->width()/2,toggle->height()/2));
+    QTest::mouseClick(w,Qt::LeftButton,Qt::NoModifier,at.toPoint());QTest::qWait(200);
+  }
+  check(!b->albumCovers(),"the switch turns them off");
+  QTest::keyClick(w,Qt::Key_Escape);QTest::qWait(400);
+  check(until([&]{const auto c=centre("nowArtwork");return c.isValid()&&c.red()>200&&c.green()<60;}),"and the video frame comes back");
+  b->setAlbumCovers(true);
+  check(until([&]{const auto c=centre("nowArtwork");return c.isValid()&&c.green()>200&&c.red()<60;}),"turning them on restores the album cover without asking again");
+  b->setAnimatedArtwork(true);
   b->stop();fprintf(stdout,"RESULT %d failures\n",failures);fflush(stdout);QCoreApplication::exit(failures?1:0);
 }
 

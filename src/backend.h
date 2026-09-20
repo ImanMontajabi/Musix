@@ -178,6 +178,7 @@ class Backend : public QObject {
   Q_PROPERTY(bool watchMusicFolders READ watchMusicFolders WRITE setWatchMusicFolders NOTIFY settingsChanged)
   Q_PROPERTY(QString onlineMotionArt READ onlineMotionArt NOTIFY onlineArtworkChanged)
   Q_PROPERTY(bool onlineArtwork READ onlineArtwork WRITE setOnlineArtwork NOTIFY settingsChanged)
+  Q_PROPERTY(bool albumCovers READ albumCovers WRITE setAlbumCovers NOTIFY settingsChanged)
   Q_PROPERTY(bool animatedArtwork READ animatedArtwork WRITE setAnimatedArtwork NOTIFY settingsChanged)
   Q_PROPERTY(bool motion READ motion WRITE setMotion NOTIFY settingsChanged)
   Q_PROPERTY(bool historyPaused READ historyPaused WRITE setHistoryPaused NOTIFY settingsChanged)
@@ -430,6 +431,18 @@ public:
   QString onlineMotionArt() const { return m_onlineMotionArt; }
   bool onlineArtwork() const { return m_settings.value("onlineArtwork",true).toBool(); }
   void setOnlineArtwork(bool value) { if(onlineArtwork()==value)return;m_settings.setValue("onlineArtwork",value);emit settingsChanged(); }
+  // Whether a song that only has a video frame shows the album cover Apple
+  // Music has for it instead. Independent of the animated cover switches: the
+  // lookup runs for either, and each result is applied by its own switch.
+  bool albumCovers() const { return m_settings.value("albumCovers",true).toBool(); }
+  void setAlbumCovers(bool value);
+  // The album cover remembered for one of YouTube's video frames, or an empty
+  // URL when the frame is not one, nothing has been found for it, or the
+  // setting is off. The art loader asks this for every frame it draws.
+  Q_INVOKABLE QUrl albumCoverFor(const QUrl &frame) const;
+  // A track's cover as something outside the window should show it, at a
+  // size that suits a media widget.
+  QString displayArt(const QVariantMap &track) const;
   bool animatedArtwork() const { return m_settings.value("animatedArtwork",true).toBool(); }
   void setAnimatedArtwork(bool value) { if(animatedArtwork()==value)return;m_settings.setValue("animatedArtwork",value);emit settingsChanged(); }
   bool motion() const { return m_settings.value("motion", true).toBool(); }
@@ -563,6 +576,7 @@ public:
   QMediaPlayer *media() { return &m_media(); }
 signals:
   void onlineArtworkChanged();
+  void videoCoversChanged();
   void viewAboutToChange();
   void localImportChanged();
   void listPaneChanged();
@@ -593,6 +607,11 @@ signals:
 private:
   void updateOnlineArtwork();
   void fetchOnlineArtwork();
+  bool motionLookupWanted() const;
+  bool coverLookupWanted() const;
+  void rememberVideoCover(const QString &videoId,const QString &cover);
+  void forgetVideoCover(const QString &videoId);
+  QVariantMap m_videoCovers;
   QString artworkChoice() const;
   void saveArtworkChoice(const QString &value);
   QString m_artworkPage, m_artworkStatus;

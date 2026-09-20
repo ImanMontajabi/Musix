@@ -69,6 +69,12 @@ public:
   Q_INVOKABLE QColor seedColor() const;
   static void clearCaches();
   static std::function<QNetworkRequest(const QUrl &)> resolveServerArt;
+  // What to draw for one of YouTube's video frames: the album cover the
+  // backend has matched to it, or an empty URL to draw the frame itself.
+  static std::function<QUrl(const QUrl &)> resolveVideoFrame;
+  // After what a frame resolves to has changed, every live surface drawing one
+  // fetches again, with a crossfade where the surface has one.
+  static void refreshFrames();
 signals:
   void animationChanged();
   void sourceChanged();
@@ -83,6 +89,7 @@ signals:
 
 private:
   void reload(bool preserve=false);
+  void refresh();
   void imageReady();
   void soften();
   const QImage &shown() const;

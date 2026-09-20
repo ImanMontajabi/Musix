@@ -236,6 +236,22 @@ private slots:
     RoundedArt fallback;fallback.setPixels(800);fallback.setSource(plain);QTRY_VERIFY_WITH_TIMEOUT(fallback.ready(),5000);
     QVERIFY(fallback.m_originalSizeFallback);QVERIFY(fallback.m_image.pixelColor(10,10).green()>200);
   }
+  void videoFrameResolvesToAlbumCover() {
+    const QUrl frame("https://i.ytimg.com/vi/frameTest03/hqdefault.jpg?sqp=-oaymwE");
+    seed(frame,solid(400,225,Qt::red));seed(QUrl("https://i.ytimg.com/vi/frameTest03/maxresdefault.jpg"),solid(1280,720,Qt::blue));
+    seed(QUrl("https://is1-ssl.mzstatic.com/image/thumb/Test/800x800bb.jpg"),solid(800,800,Qt::green));
+    const auto cover=[](const QUrl &url){return artworkurl::videoId(url)=="frameTest03"?QUrl("https://is1-ssl.mzstatic.com/image/thumb/Test/100x100bb.jpg"):QUrl();};
+    RoundedArt::resolveVideoFrame=cover;
+    RoundedArt art;art.setPixels(800);art.setSource(frame);QTRY_VERIFY_WITH_TIMEOUT(art.ready(),5000);
+    QCOMPARE(art.m_image.size(),QSize(800,800));QVERIFY(art.m_image.pixelColor(10,10).green()>200);
+    // What a frame stands for can change after it was drawn: live surfaces fetch again.
+    RoundedArt::resolveVideoFrame=nullptr;RoundedArt::refreshFrames();
+    QTRY_VERIFY_WITH_TIMEOUT(art.ready()&&art.m_image.pixelColor(10,10).blue()>200,5000);QCOMPARE(art.m_image.size(),QSize(800,450));
+    art.setCrossfade(true);RoundedArt::resolveVideoFrame=cover;RoundedArt::refreshFrames();
+    QVERIFY(art.transitioning());QTRY_VERIFY_WITH_TIMEOUT(!art.transitioning(),3000);QVERIFY(art.m_image.pixelColor(10,10).green()>200);
+    RoundedArt other;other.setPixels(800);other.setSource(QUrl("https://sung-test.invalid/plain.png"));
+    RoundedArt::resolveVideoFrame=nullptr;RoundedArt::refreshFrames();QVERIFY(!other.ready());
+  }
 };
 QTEST_MAIN(ArtworkTest)
 #include "artwork_test.moc"

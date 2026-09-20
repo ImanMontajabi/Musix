@@ -1,4 +1,5 @@
 #include "backend.h"
+#include "artworkurl.h"
 #include <QDir>
 #include <QFileInfo>
 #include <QSet>
@@ -70,8 +71,38 @@ void Backend::rejectArtwork(){saveArtworkChoice("disabled");}
 void Backend::resetArtworkChoice(){saveArtworkChoice({});m_onlineArtworkAttempted=false;m_onlineArtworkRetries=0;updateOnlineArtwork();}
 void Backend::retryArtwork(){
   if(current().value("videoId").toString().isEmpty())return;
+  forgetVideoCover(current().value("videoId").toString());
   resetArtworkChoice();m_artworkForce=true;
   if(playing())updateOnlineArtwork();
+}
+// Covers found for video frames are kept by video id, so every surface that
+// draws the frame can swap the cover in without a lookup of its own. An empty
+// entry records that nothing matched; "Find cover again" clears it. The map
+// is a cache with a ceiling, not a library: past 2,000 songs it starts over
+// and refills one song at a time as they play.
+void Backend::rememberVideoCover(const QString &videoId,const QString &cover){
+  if(videoId.isEmpty())return;
+  if(m_videoCovers.contains(videoId) && m_videoCovers.value(videoId).toString()==cover)return;
+  if(m_videoCovers.size()>=2000 && !m_videoCovers.contains(videoId))m_videoCovers.clear();
+  m_videoCovers[videoId]=cover;m_settings.setValue("videoCovers",m_videoCovers);emit videoCoversChanged();
+}
+void Backend::forgetVideoCover(const QString &videoId){
+  if(!m_videoCovers.contains(videoId))return;
+  m_videoCovers.remove(videoId);m_settings.setValue("videoCovers",m_videoCovers);emit videoCoversChanged();
+}
+void Backend::setAlbumCovers(bool value){
+  if(albumCovers()==value)return;
+  m_settings.setValue("albumCovers",value);emit settingsChanged();emit videoCoversChanged();
+}
+QUrl Backend::albumCoverFor(const QUrl &frame) const {
+  if(!albumCovers())return {};
+  const auto id=artworkurl::videoId(frame);if(id.isEmpty())return {};
+  const QUrl cover(m_videoCovers.value(id).toString());
+  return artworkurl::isAlbumCover(cover)?cover:QUrl();
+}
+QString Backend::displayArt(const QVariantMap &track) const {
+  const QUrl art(track.value("art").toString());const auto cover=albumCoverFor(art);
+  return artworkurl::sized(cover.isEmpty()?art:cover,600).toString();
 }
 void Backend::chooseArtwork(const QUrl &url,const QString &songId){
   if(songId.isEmpty() || songId!=current().value("id").toString() || !url.isLocalFile())return;

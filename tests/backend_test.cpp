@@ -1,4 +1,5 @@
 #include "backend.h"
+#include "artworkurl.h"
 #include "lrc.h"
 #include <QStandardPaths>
 #include <QDateTime>
@@ -171,6 +172,54 @@ private slots:
     b.setWatchMusicFolders(false);QVERIFY(b.m_folderWatcher.files().isEmpty());QVERIFY(b.m_folderWatcher.directories().isEmpty());
     QVERIFY(QFile::copy(original,music.filePath("Four.wav")));QTest::qWait(1800);QCOMPARE(b.m_localTracks.size(),3);
     b.forgetMusicFolder(music.path());b.m_localTracks.clear();b.clearQueue();
+  }
+  void videoFrameCovers() {
+    const auto oldHelper=qgetenv("SUNG_HELPER"),oldPython=qgetenv("SUNG_PYTHON"),oldBuffer=qgetenv("SUNG_BUFFER_FIXTURE");
+    qputenv("SUNG_HELPER",qgetenv("SUNG_FIXTURE_HELPER"));qputenv("SUNG_PYTHON","/usr/bin/python3");qputenv("SUNG_BUFFER_FIXTURE","1");
+    const auto restore=qScopeGuard([&]{qputenv("SUNG_HELPER",oldHelper);qputenv("SUNG_PYTHON",oldPython);qputenv("SUNG_BUFFER_FIXTURE",oldBuffer);});
+    Backend b;b.clearQueue();b.setVolume(0);b.setAutoplay(false);b.setPrepareNext(false);b.setUiActive(true);
+    b.m_settings.remove("videoCovers");b.m_videoCovers.clear();
+    b.setAlbumCovers(true);
+    const QUrl frame("https://i.ytimg.com/vi/coverTest01/hqdefault.jpg?sqp=-oaymwE");
+    const QUrl cover("https://is1-ssl.mzstatic.com/image/thumb/Fixture/100x100bb.jpg");
+    QVERIFY(b.albumCoverFor(frame).isEmpty());
+    // Asking for a cover is not asking for an animation: with every animation
+    // preference off, the lookup still runs for a song whose art is a frame.
+    b.setMotion(false);b.setAnimatedArtwork(false);b.setOnlineArtwork(false);
+    auto song=track("cover000001");song["videoId"]="coverTest01";song["artist"]="Fixture artist";song["art"]=frame.toString();
+    b.playItem(song);QTRY_VERIFY_WITH_TIMEOUT(b.playing(),5000);
+    QTRY_VERIFY_WITH_TIMEOUT(b.albumCoverFor(frame)==cover,6000);
+    QVERIFY(b.onlineMotionArt().isEmpty());QVERIFY(b.error().isEmpty());
+    // Everything that shows a cover outside the window follows the same answer.
+    QVERIFY(b.displayArt(song).startsWith("https://is1-ssl.mzstatic.com/"));
+    QVERIFY(b.displayArt(song).contains("600x600bb"));
+    // The preference decides whether the cover is used, not whether it is kept.
+    b.setAlbumCovers(false);QVERIFY(b.albumCoverFor(frame).isEmpty());
+    QCOMPARE(b.displayArt(song),artworkurl::sized(frame,600).toString());
+    b.setAlbumCovers(true);QCOMPARE(b.albumCoverFor(frame),cover);
+    // Playing it again answers from memory instead of asking the helper again.
+    b.stop();b.playItem(song);QTRY_VERIFY_WITH_TIMEOUT(b.playing(),5000);QTest::qWait(1600);
+    QVERIFY(!b.m_processes.contains("motion-artwork"));QCOMPARE(b.albumCoverFor(frame),cover);
+    // A song Apple has nothing for is remembered as such, and asked about once.
+    const QUrl other("https://i.ytimg.com/vi/coverTest02/hqdefault.jpg");
+    auto missing=track("cover000002");missing["videoId"]="coverTest02";missing["artist"]="Fixture artist";missing["title"]="no album cover";missing["art"]=other.toString();
+    b.playItem(missing);QTRY_VERIFY_WITH_TIMEOUT(b.playing(),5000);
+    QTRY_VERIFY_WITH_TIMEOUT(b.m_videoCovers.contains("coverTest02"),6000);
+    QVERIFY(b.albumCoverFor(other).isEmpty());
+    // Nothing is remembered for artwork that is not one of YouTube's frames.
+    QVERIFY(b.albumCoverFor(QUrl("https://yt3.googleusercontent.com/abc=w544-h544-l90-rj")).isEmpty());
+    // Looking again for one song drops only that song's answer.
+    b.stop();b.playItem(song);QTRY_VERIFY_WITH_TIMEOUT(b.playing(),5000);
+    b.retryArtwork();QVERIFY(!b.m_videoCovers.contains("coverTest01"));QVERIFY(b.m_videoCovers.contains("coverTest02"));
+    // A cache with a ceiling, not a library: it starts over rather than growing.
+    b.m_videoCovers.clear();
+    for(int i=0;i<2000;++i)b.rememberVideoCover(QString("pad%1").arg(i),QString());
+    QCOMPARE(b.m_videoCovers.size(),2000);
+    b.rememberVideoCover("oneMore",QString());QCOMPARE(b.m_videoCovers.size(),1);
+    // A song already in the cache is updated without emptying it.
+    b.rememberVideoCover("oneMore",cover.toString());QCOMPARE(b.m_videoCovers.size(),1);
+    b.stop();b.clearQueue();b.m_settings.remove("videoCovers");b.m_videoCovers.clear();
+    b.setMotion(true);b.setAnimatedArtwork(true);b.setOnlineArtwork(true);
   }
   void onlineArtworkLifecycle() {
     const auto oldHelper=qgetenv("SUNG_HELPER"),oldPython=qgetenv("SUNG_PYTHON"),oldBuffer=qgetenv("SUNG_BUFFER_FIXTURE");

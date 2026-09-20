@@ -133,6 +133,8 @@ int main(int argc, char **argv) {
   // them should have to dismiss the first-run flow.
   if (args.contains("--isolated")) backend.setOnboarded(true);
   RoundedArt::resolveServerArt=[&backend](const QUrl &url){return backend.server()->artworkRequest(url);};
+  RoundedArt::resolveVideoFrame=[&backend](const QUrl &frame){return backend.albumCoverFor(frame);};
+  QObject::connect(&backend,&Backend::videoCoversChanged,&app,[]{RoundedArt::refreshFrames();});
   QObject::connect(backend.server(),&MusicServer::accountChanged,&app,[]{RoundedArt::clearCaches();});
   DesktopTheme desktopTheme;
   QObject::connect(&backend,&Backend::artworkCacheCleared,&app,[]{RoundedArt::clearCaches();});

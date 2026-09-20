@@ -41,11 +41,14 @@ elif op=='online-artwork':
         marker.parent.mkdir(parents=True,exist_ok=True);counter=marker.parent/'attempt-count';counter.write_text(str(int(counter.read_text())+1 if counter.exists() else 1));data.update(status='retry',retryAfter=1)
     elif r.get('title')=='missing motion':data.update(status='unavailable')
     else:
-        path=Path(r['artworkCache'])/'123.mp4';path.parent.mkdir(parents=True,exist_ok=True)
-        source=os.environ.get('SUNG_MOTION_FIXTURE')
-        if source:path.write_bytes(Path(source).read_bytes())
-        else:path.write_bytes(b'fixture')
-        data.update(status='ready',motionArt=path.as_uri())
+        cover='' if r.get('title')=='no album cover' else 'https://is1-ssl.mzstatic.com/image/thumb/Fixture/100x100bb.jpg'
+        data.update(status='unavailable',art=cover,page='https://music.apple.com/us/album/123')
+        if r.get('motion'):
+            path=Path(r['artworkCache'])/'123.mp4';path.parent.mkdir(parents=True,exist_ok=True)
+            source=os.environ.get('SUNG_MOTION_FIXTURE')
+            if source:path.write_bytes(Path(source).read_bytes())
+            else:path.write_bytes(b'fixture')
+            data.update(status='ready',motionArt=path.as_uri())
 elif op=='local-lyrics':data.update(lyrics='',lines=[])
 elif op=='radio': data['items']=[song(i) for i in range(1,5)]
 elif op in ('resolve','buffer'):
