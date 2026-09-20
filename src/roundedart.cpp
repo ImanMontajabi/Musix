@@ -1,4 +1,5 @@
 #include "roundedart.h"
+#include "artworkurl.h"
 #include "m3shape.h"
 #include <QBuffer>
 #include <QFileInfo>
@@ -11,7 +12,6 @@
 #include <QPainterPath>
 #include <QStandardPaths>
 #include <utility>
-#include <QRegularExpression>
 
 std::function<QNetworkRequest(const QUrl &)> RoundedArt::resolveServerArt;
 static QCache<QString, QImage> cache(8 * 1024 * 1024);
@@ -166,11 +166,10 @@ void RoundedArt::reload(bool preserve) {
   const bool server=m_source.scheme()=="sungcover";
   QNetworkRequest serverRequest=server&&resolveServerArt?resolveServerArt(m_source):QNetworkRequest();
   QUrl url=server?serverRequest.url():m_source;
-  // Only resize known Google thumbnail transforms; other artwork URLs are untouched.
-  if(!m_originalSizeFallback && !server && (url.host()=="lh3.googleusercontent.com" || url.host()=="lh3.ggpht.com" || url.host()=="yt3.googleusercontent.com" || url.host()=="yt3.ggpht.com")){
-    auto path=url.path();static const QRegularExpression dimensions("=w(\\d+)-h(\\d+)");const auto match=dimensions.match(path);
-    if(match.hasMatch()){const int size=qMax(qMax(match.captured(1).toInt(),match.captured(2).toInt()),m_pixels);path.replace(match.capturedStart(),match.capturedLength(),QString("=w%1-h%1").arg(qMin(1600,size)));url.setPath(path);}
-  }
+  // Ask the image service for the size this surface draws rather than the
+  // thumbnail the catalogue handed out. A request that fails is retried once
+  // with the source untouched, which is also how a missing HD frame degrades.
+  if(!m_originalSizeFallback && !server)url=artworkurl::sized(url,m_pixels);
   if(url.isEmpty() || (url.scheme()!="https" && !(server&&url.scheme()=="http"))){finishTransition();return;}
   QNetworkRequest req=server?serverRequest:QNetworkRequest(url);
   if(server){req.setAttribute(QNetworkRequest::RedirectPolicyAttribute,QNetworkRequest::ManualRedirectPolicy);req.setAttribute(QNetworkRequest::CacheSaveControlAttribute,false);}

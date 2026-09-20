@@ -1298,7 +1298,7 @@ ApplicationWindow {
                 RowLayout {
                     anchors.fill: parent; anchors.leftMargin: 16; anchors.rightMargin: 16; spacing: 16
                     AbstractButton { id: nowButton; objectName: "nowButton"; Layout.preferredWidth: 64; Layout.preferredHeight: 64; enabled: app.currentIndex>=0; focusPolicy: Qt.StrongFocus; Accessible.name: "Now playing"; onClicked: window.activateSide("now")
-                        contentItem: Artwork { id: nowArtwork; url: app.current.art || ""; motionUrl: app.currentMotionArt; crossfade:true; radius: Theme.shapeMedium; pixels: 150; fit:app.currentArtworkFit; opacity: window.coverFlying?0:1 }
+                        contentItem: Artwork { id: nowArtwork; objectName: "nowArtwork"; url: app.current.art || ""; motionUrl: app.currentMotionArt; crossfade:true; radius: Theme.shapeMedium; pixels: 150; fit:app.currentArtworkFit; opacity: window.coverFlying?0:1 }
                         background: Rectangle { anchors.fill: parent; anchors.margins: -3; color: "transparent"; radius: Theme.shapeLarge; border.width: parent.activeFocus?2:0; border.color: Theme.focusRing }
                     }
                     ColumnLayout {

@@ -8,6 +8,10 @@
 #include "roundedart.h"
 #include <QDir>
 #include <QDataStream>
+#include <QBuffer>
+#include <QNetworkCacheMetaData>
+#include <QNetworkDiskCache>
+#include <QStandardPaths>
 #include <qpa/qwindowsysteminterface.h>
 #include <QFile>
 #include <QQuickItem>
@@ -29,6 +33,19 @@ static QQuickItem *findItem(QQuickItem *root, const QString &name) {
     if (auto found = findItem(child, name))
       return found;
   return nullptr;
+}
+// A response the art loader takes from its network cache instead of the
+// network, so a stage can decide what a cover URL resolves to without going
+// online, and then check the pixels that were actually drawn.
+static void seedArt(const QUrl &url,const QByteArray &bytes,const char *type="image/png") {
+  QNetworkDiskCache disk;disk.setCacheDirectory(QStandardPaths::writableLocation(QStandardPaths::CacheLocation)+"/art");
+  QNetworkCacheMetaData meta;meta.setUrl(url);meta.setExpirationDate(QDateTime::currentDateTimeUtc().addDays(1));
+  meta.setRawHeaders({{"Content-Type",type},{"Cache-Control","max-age=86400"}});
+  if(auto device=disk.prepare(meta)){device->write(bytes);disk.insert(device);}
+}
+static QByteArray solidPng(int width,int height,Qt::GlobalColor color) {
+  QImage image(width,height,QImage::Format_RGB32);image.fill(color);
+  QByteArray bytes;QBuffer buffer(&bytes);buffer.open(QIODevice::WriteOnly);image.save(&buffer,"PNG");return bytes;
 }
 static bool validIconSizes(QQuickItem *item) {
   if (item->objectName()=="materialIcon" && (qAbs(item->width()-item->property("size").toReal())>.5 || qAbs(item->height()-item->property("size").toReal())>.5)) return false;
@@ -1455,6 +1472,19 @@ void runOnlineArtworkTests(Backend *b,QQuickWindow *w) {
     check(until([&]{return b->playing();}),"next song starts normally");QTest::qWait(1600);
     check(motion->source().isEmpty()&&b->onlineMotionArt().isEmpty()&&b->error().isEmpty(),"missing artwork falls back without retaining previous cover or showing an error");
   }
+  // A song whose only cover is a video frame. The player row draws it below
+  // its own size and keeps the catalogue's frame; the immersive view draws it
+  // far larger and is given YouTube's HD frame instead.
+  const auto centre=[&](const QString &name){auto item=findItem(w->contentItem(),name);if(!item)return QColor();const auto at=item->mapToScene(QPointF(item->width()/2,item->height()/2));return w->grabWindow().pixelColor(at.toPoint());};
+  const QUrl frame("https://i.ytimg.com/vi/frame000001/hqdefault.jpg?sqp=-oaymwE");
+  seedArt(frame,solidPng(400,225,Qt::red));seedArt(QUrl("https://i.ytimg.com/vi/frame000001/maxresdefault.jpg"),solidPng(1280,720,Qt::blue));
+  QVariantMap video{{"id","frame000001"},{"videoId","frame000001"},{"title","missing motion"},{"artist","Fixture artist"},{"kind","video"},{"art",frame.toString()}};
+  b->playItem(video);check(until([&]{return b->playing();}),"video song starts");
+  check(until([&]{const auto c=centre("nowArtwork");return c.isValid()&&c.red()>200&&c.blue()<60;}),"player row draws the catalogue frame");
+  QMetaObject::invokeMethod(w,"toggleImmersive");QTest::qWait(500);
+  check(until([&]{const auto c=centre("immersiveArtwork");return c.isValid()&&c.blue()>200&&c.red()<60;}),"immersive view draws the HD frame");
+  check(w->grabWindow().save(dir+"/05-hd-frame-immersive.png"),"HD frame capture");
+  QMetaObject::invokeMethod(w,"toggleImmersive");QTest::qWait(400);
   b->stop();fprintf(stdout,"RESULT %d failures\n",failures);fflush(stdout);QCoreApplication::exit(failures?1:0);
 }
 

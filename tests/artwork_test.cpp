@@ -1,4 +1,5 @@
 #include "roundedart.h"
+#include "artworkurl.h"
 #include <QBuffer>
 #include <QDateTime>
 #include <QNetworkCacheMetaData>
@@ -14,6 +15,19 @@
 #include <QMediaPlayer>
 #include <QMediaMetaData>
 #include <QVideoFrame>
+
+// A response the loader will take from the network cache instead of the
+// network, so what a surface fetches for a URL can be checked offline.
+static void seed(const QUrl &url,const QByteArray &bytes,const char *type="image/png") {
+  QNetworkDiskCache disk;disk.setCacheDirectory(QStandardPaths::writableLocation(QStandardPaths::CacheLocation)+"/art");
+  QNetworkCacheMetaData meta;meta.setUrl(url);meta.setExpirationDate(QDateTime::currentDateTimeUtc().addDays(1));
+  meta.setRawHeaders({{"Content-Type",type},{"Cache-Control","max-age=86400"}});
+  auto device=disk.prepare(meta);QVERIFY(device);device->write(bytes);disk.insert(device);
+}
+static QByteArray solid(int width,int height,Qt::GlobalColor color) {
+  QImage image(width,height,QImage::Format_RGB32);image.fill(color);
+  QByteArray bytes;QBuffer buffer(&bytes);buffer.open(QIODevice::WriteOnly);image.save(&buffer,"PNG");return bytes;
+}
 
 class ArtworkTest : public QObject {
   Q_OBJECT
@@ -185,6 +199,42 @@ private slots:
     RoundedArt transparent;transparent.setPixels(64);transparent.setSource(alphaUrl);QTRY_VERIFY_WITH_TIMEOUT(transparent.ready(),5000);
     QVERIFY(transparent.m_image.hasAlphaChannel());QCOMPARE(transparent.m_image.convertToFormat(QImage::Format_ARGB32),alpha);
     RoundedArt::clearCaches();QVERIFY(views.back()->ready());QCOMPARE(views.back()->m_image.convertToFormat(QImage::Format_RGB32),original);
+  }
+  void coverRequestSizes() {
+    const QUrl frame("https://i.ytimg.com/vi/abcDEF123_-/hqdefault.jpg?sqp=-oaymwE&rs=AOn4");
+    QCOMPARE(artworkurl::videoId(frame),QString("abcDEF123_-"));
+    QVERIFY(artworkurl::videoId(QUrl("https://i.ytimg.com/vi/short/hqdefault.jpg")).isEmpty());
+    QVERIFY(artworkurl::videoId(QUrl("https://ytimg.com.evil.example/vi/abcDEF123_-/hqdefault.jpg")).isEmpty());
+    QVERIFY(artworkurl::videoId(QUrl("http://i.ytimg.com/vi/abcDEF123_-/hqdefault.jpg")).isEmpty());
+    // A row draws the frame below its own 225 pixels; anything larger asks for the HD frame.
+    QCOMPARE(artworkurl::sized(frame,150),frame);
+    QCOMPARE(artworkurl::sized(frame,384),QUrl("https://i.ytimg.com/vi/abcDEF123_-/maxresdefault.jpg"));
+    const QUrl google("https://yt3.googleusercontent.com/abc=w544-h544-l90-rj");
+    QCOMPARE(artworkurl::sized(google,120),google);
+    QCOMPARE(artworkurl::sized(google,800),QUrl("https://yt3.googleusercontent.com/abc=w800-h800-l90-rj"));
+    QCOMPARE(artworkurl::sized(google,3000),QUrl("https://yt3.googleusercontent.com/abc=w1600-h1600-l90-rj"));
+    const QUrl apple("https://is1-ssl.mzstatic.com/image/thumb/Music/ab/cd/100x100bb.jpg");
+    QVERIFY(artworkurl::isAlbumCover(apple));
+    QCOMPARE(artworkurl::sized(apple,384),QUrl("https://is1-ssl.mzstatic.com/image/thumb/Music/ab/cd/384x384bb.jpg"));
+    for(const auto bad:{"http://is1-ssl.mzstatic.com/image/thumb/x/100x100bb.jpg","https://mzstatic.com.evil.example/image/thumb/x/100x100bb.jpg",
+                        "https://is1-ssl.mzstatic.com/image/thumb/x/100x100bb.jpg?x=1","https://is1-ssl.mzstatic.com/image/thumb/x/cover.jpg","https://user@is1-ssl.mzstatic.com/image/thumb/x/100x100bb.jpg"})
+      QVERIFY2(!artworkurl::isAlbumCover(QUrl(bad)),bad);
+    QCOMPARE(artworkurl::sized(QUrl("https://example.com/cover.jpg"),800),QUrl("https://example.com/cover.jpg"));
+  }
+  void videoFrameLoadsHdFrame() {
+    const QUrl frame("https://i.ytimg.com/vi/frameTest01/hqdefault.jpg?sqp=-oaymwE");
+    seed(QUrl("https://i.ytimg.com/vi/frameTest01/maxresdefault.jpg"),solid(1280,720,Qt::blue));
+    seed(frame,solid(400,225,Qt::red));
+    RoundedArt large;large.setPixels(800);large.setSource(frame);QTRY_VERIFY_WITH_TIMEOUT(large.ready(),5000);
+    QCOMPARE(large.m_image.size(),QSize(800,450));QVERIFY(large.m_image.pixelColor(10,10).blue()>200);
+    RoundedArt row;row.setPixels(150);row.setSource(frame);QTRY_VERIFY_WITH_TIMEOUT(row.ready(),5000);
+    QCOMPARE(row.m_image.size(),QSize(150,84));QVERIFY(row.m_image.pixelColor(10,10).red()>200);
+    // An upload with no HD frame: that request fails and the catalogue's frame is used.
+    const QUrl plain("https://i.ytimg.com/vi/frameTest02/hqdefault.jpg?sqp=-oaymwE");
+    seed(QUrl("https://i.ytimg.com/vi/frameTest02/maxresdefault.jpg"),QByteArray("not an image"),"image/jpeg");
+    seed(plain,solid(400,225,Qt::green));
+    RoundedArt fallback;fallback.setPixels(800);fallback.setSource(plain);QTRY_VERIFY_WITH_TIMEOUT(fallback.ready(),5000);
+    QVERIFY(fallback.m_originalSizeFallback);QVERIFY(fallback.m_image.pixelColor(10,10).green()>200);
   }
 };
 QTEST_MAIN(ArtworkTest)
