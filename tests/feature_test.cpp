@@ -4718,7 +4718,7 @@ void runMaterialControlsTests(Backend *b, QQuickWindow *w) {
   }
 
   // --- The action at the head of the rail ---
-  QMetaObject::invokeMethod(w, "chooseLibrary", Q_ARG(QVariant, QVariant("local-albums")));
+  QMetaObject::invokeMethod(w, "chooseLibrary", Q_ARG(QVariant, QVariant("playlists")));
   QTest::qWait(600);
   auto slot = shownItem(w->contentItem(), "railFabSlot");
   c.check(slot, "the rail carries the surface's primary action");
@@ -4744,8 +4744,50 @@ void runMaterialControlsTests(Backend *b, QQuickWindow *w) {
             QString("the rail still keeps its width (%1 wide, wants %2)")
                 .arg(rail->width()).arg(rail->implicitWidth()));
     c.shot("05-rail-extended-fab");
+    // The menu opens from the rail, which sits against the leading edge, so it
+    // has to open towards the content. Every action has to be separately
+    // readable and clickable: one that hangs off the window, or that lands on
+    // top of another, or that the content surface paints over, is none of those.
+    const auto menuOpensClear=[&](const char *state){
+      const auto before=w->grabWindow();
+      c.click("fab");
+      if(!c.until([&]{return shownItem(w->contentItem(),"fabMenuItem_0")!=nullptr;},3000)){
+        c.check(false,QString("the rail menu opens (%1)").arg(state));return;
+      }
+      QTest::qWait(700);
+      const auto container=c.themeColor("primaryContainer");
+      const auto after=w->grabWindow();
+      const auto apart=[](const QColor &a,const QColor &b){return qAbs(a.red()-b.red())+qAbs(a.green()-b.green())+qAbs(a.blue()-b.blue());};
+      double worstEdge=0;int drawn=0;QList<QRectF> placed;bool separate=true;
+      const int actions=fab->property("count").toInt();
+      for(int i=0;i<actions;++i){
+        auto item=shownItem(w->contentItem(),"fabMenuItem_"+QString::number(i));
+        if(!item){c.check(false,QString("action %1 is shown (%2)").arg(i).arg(state));continue;}
+        const auto at=item->mapToItem(w->contentItem(),QPointF(0,0));
+        const QRectF box(at,QSizeF(item->width(),item->height()));
+        worstEdge=qMax(worstEdge,qMax(-box.left(),box.right()-w->width()));
+        for(const auto &other:std::as_const(placed))if(other.intersects(box))separate=false;
+        placed.append(box);
+        // Inside the pill, above the row of icon and label. What was behind the menu has
+        // to have given way to the pill's own container colour: an action the
+        // content surface paints over leaves this pixel exactly as it was.
+        const QPoint probe(qRound(box.center().x()),qRound(box.top())+6);
+        if(apart(after.pixelColor(probe),before.pixelColor(probe))>24
+           && apart(after.pixelColor(probe),container)<apart(before.pixelColor(probe),container))++drawn;
+      }
+      c.check(worstEdge<=1,QString("every action stays inside the window (%1, worst %2 past the edge)").arg(state).arg(qRound(worstEdge)));
+      c.check(separate,QString("the actions are stacked rather than piled on one another (%1)").arg(state));
+      c.check(drawn==actions,QString("and each one is drawn over the content, not under it (%1, %2 of %3)").arg(state).arg(drawn).arg(actions));
+      c.shot(QString("06-rail-fab-menu-%1").arg(state));
+      c.click("fab");
+      c.check(c.until([&]{return !fab->property("open").toBool();},3000),
+              QString("pressing the button again closes them (%1)").arg(state));
+    };
+    menuOpensClear("expanded");
     c.click("navigationMenuButton");
-    QTest::qWait(400);
+    c.check(c.until([&]{return !rail->property("expanded").toBool();},3000),"the rail closes again");
+    QTest::qWait(600);
+    menuOpensClear("collapsed");
   }
 
   // --- A segment marks a choice, so it takes the secondary container ---

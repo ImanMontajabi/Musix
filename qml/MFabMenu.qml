@@ -40,81 +40,100 @@ Item {
     z: 40
 
     function close() { open = false }
+    onOpenChanged: open ? menu.open() : menu.close()
 
-    // The scrim sits behind the menu so a click outside dismisses it, which is
-    // how the menu stays modal without becoming a dialog.
-    MouseArea {
-        objectName: "fabMenuScrim"
-        parent: root.parent
-        anchors.fill: parent
-        visible: root.open
-        onClicked: root.close()
-    }
+    // The menu is a temporary surface over the content, which is what Material
+    // calls it, so it is a Popup: that puts it in the window's overlay instead
+    // of inside whatever holds the FAB. In the rail the FAB sits in a 40dp
+    // slot beside the destinations, and a menu drawn there would be painted
+    // under the content surface and cut off at the rail's edge.
+    Popup {
+        id: menu
+        objectName: "fabMenuPopup"
+        parent: fab
+        padding: 0
+        background: null
+        // Blocks what is behind it and dismisses on a press there, without
+        // darkening it: the FAB menu shades nothing in the specification.
+        modal: true
+        dim: false
+        // A press anywhere else closes it, the FAB included: the menu blocks
+        // what is behind it, so that press never reaches the button, and
+        // pressing the button a second time reads as closing the menu.
+        closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
+        onClosed: root.open = false
+        // The menu opens from the FAB's own edge, towards the content.
+        x: root.leadingEdge ? 0 : fab.width - width
+        y: root.downward ? fab.height + 12 : -height - 12
+        // What keeps the actions reachable: a menu wider than the room on that
+        // side is moved back inside the window rather than hanging off it.
+        margins: 12
+        enter: Transition { NumberAnimation { property: "opacity"; from: 0; to: 1; duration: app.motion ? Theme.springFastEffectsMs : 0 } }
+        exit: Transition { NumberAnimation { property: "opacity"; from: 1; to: 0; duration: app.motion ? Theme.springFastEffectsMs : 0 } }
 
-    Column {
-        id: items
-        objectName: "fabMenuItems"
-        anchors.right: root.leadingEdge ? undefined : fab.right
-        anchors.left: root.leadingEdge ? fab.left : undefined
-        anchors.bottom: root.downward ? undefined : fab.top
-        anchors.top: root.downward ? fab.bottom : undefined
-        anchors.bottomMargin: 12
-        anchors.topMargin: 12
-        spacing: 8
-        visible: root.open || fadeOut.running
-        Repeater {
-            model: root.open ? root.actions : []
-            delegate: AbstractButton {
-                id: entry
-                required property var modelData
-                required property int index
-                objectName: "fabMenuItem_" + index
-                anchors.right: parent.right
-                height: 56
-                implicitWidth: entryLabel.implicitWidth + 72
-                hoverEnabled: true
-                focusPolicy: Qt.StrongFocus
-                Accessible.name: modelData.label
-                onClicked: { root.close(); if (modelData.action) modelData.action() }
-                background: Rectangle {
-                    radius: Theme.shapeFull(entry.height)
-                    color: Theme.primaryContainer
-                    Rectangle {
-                        anchors.fill: parent; radius: parent.radius
-                        color: Theme.containerText
-                        opacity: entry.down || entry.visualFocus ? Theme.pressedOpacity : entry.hovered ? Theme.hoverOpacity : 0
-                        Behavior on opacity { NumberAnimation { duration: Theme.springFastEffectsMs } }
-                    }
-                }
-                contentItem: Row {
-                    anchors.centerIn: parent
-                    spacing: 12
-                    Icon { anchors.verticalCenter: parent.verticalCenter; name: entry.modelData.symbol || ""; size: 24; ink: Theme.containerText }
-                    SungText {
-                        id: entryLabel
-                        anchors.verticalCenter: parent.verticalCenter
-                        text: entry.modelData.label; color: Theme.containerText
-                        // Material's menu items carry a plain label-large, not
-                        // an emphasized one; the icon beside it is the weight.
-                        font.pixelSize: Theme.labelLarge; labelRole: true
-                    }
-                }
-                // Items arrive from the FAB, nearest first.
-                opacity: 0
-                y: 16
-                Component.onCompleted: arrive.start()
-                ParallelAnimation {
-                    id: arrive
-                    NumberAnimation { target: entry; property: "opacity"; to: 1; duration: Theme.springFastEffectsMs }
+        contentItem: Column {
+            id: items
+            objectName: "fabMenuItems"
+            spacing: 8
+            // Items arrive from the FAB, nearest first. The column owns their
+            // y, so the arrival is its own add transition: an item that
+            // animates its own y fights the column, and every item lands on
+            // the first. The menu fades in as a whole above, so an item's
+            // opacity is left alone and cannot be stranded part way.
+            add: Transition {
+                enabled: app.motion
+                SequentialAnimation {
+                    PauseAnimation { duration: Math.min(3, ViewTransition.index) * 40 }
                     NumberAnimation {
-                        target: entry; property: "y"; to: 0
+                        property: "y"; from: ViewTransition.destination.y + (root.downward ? -16 : 16)
                         duration: Theme.springFastSpatialMs
                         easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.springFastSpatial
                     }
                 }
             }
+            Repeater {
+                model: root.open ? root.actions : []
+                delegate: AbstractButton {
+                    id: entry
+                    required property var modelData
+                    required property int index
+                    objectName: "fabMenuItem_" + index
+                    // The column places every item at its own leading edge, so
+                    // the row that is not the widest is aligned by hand,
+                    // towards the edge the menu opened from.
+                    x: root.leadingEdge ? 0 : parent.width - width
+                    height: 56
+                    implicitWidth: entryLabel.implicitWidth + 72
+                    hoverEnabled: true
+                    focusPolicy: Qt.StrongFocus
+                    Accessible.name: modelData.label
+                    onClicked: { root.close(); if (modelData.action) modelData.action() }
+                    background: Rectangle {
+                        radius: Theme.shapeFull(entry.height)
+                        color: Theme.primaryContainer
+                        Rectangle {
+                            anchors.fill: parent; radius: parent.radius
+                            color: Theme.containerText
+                            opacity: entry.down || entry.visualFocus ? Theme.pressedOpacity : entry.hovered ? Theme.hoverOpacity : 0
+                            Behavior on opacity { NumberAnimation { duration: Theme.springFastEffectsMs } }
+                        }
+                    }
+                    contentItem: Row {
+                        anchors.centerIn: parent
+                        spacing: 12
+                        Icon { anchors.verticalCenter: parent.verticalCenter; name: entry.modelData.symbol || ""; size: 24; ink: Theme.containerText }
+                        SungText {
+                            id: entryLabel
+                            anchors.verticalCenter: parent.verticalCenter
+                            text: entry.modelData.label; color: Theme.containerText
+                            // Material's menu items carry a plain label-large, not
+                            // an emphasized one; the icon beside it is the weight.
+                            font.pixelSize: Theme.labelLarge; labelRole: true
+                        }
+                    }
+                }
+            }
         }
-        NumberAnimation { id: fadeOut; target: items; property: "opacity"; to: 1; duration: 0 }
     }
 
     AbstractButton {
