@@ -112,6 +112,31 @@ class CatalogTests(unittest.TestCase):
         self.assertEqual(data['lyrics'],'First\nSecond')
         self.assertEqual(catalog.normalize_lyrics({'lyrics':'Plain'})['lines'],[])
         self.assertEqual(catalog.normalize_lyrics(None),{'lyrics':'','lines':[]})
+    def test_streaming_quality_formats(self):
+        standard=catalog.audio_format('standard')
+        saver=catalog.audio_format('saver')
+        # Standard takes Opus in WebM first, which is what YouTube serves best.
+        self.assertTrue(standard.startswith('bestaudio[ext=webm]/'))
+        self.assertNotIn('abr', standard)
+        # Data saver caps the bitrate on every choice, and still ends somewhere.
+        self.assertTrue(all('[abr<=80]' in c for c in saver.split('/')[:-1]))
+        self.assertTrue(saver.endswith('/worstaudio'))
+        # A retry asks a different container, not the same stream again.
+        self.assertTrue(catalog.audio_format('standard',True).startswith('bestaudio[ext=m4a]/'))
+        self.assertTrue(catalog.audio_format('saver',True).startswith('bestaudio[ext=m4a][abr<=80]/'))
+        # Anything that is not a quality this build knows streams normally.
+        for unknown in ('','lossless',None):
+            self.assertEqual(catalog.audio_format(unknown),standard)
+
+    def test_streaming_quality_reaches_ytdlp(self):
+        from unittest.mock import patch, MagicMock
+        for quality,expected in [('saver',catalog.audio_format('saver')),('standard',catalog.audio_format('standard'))]:
+            downloader=MagicMock();downloader.__enter__.return_value=downloader
+            downloader.extract_info.return_value={'url':'https://example.invalid/a','duration':1}
+            with patch.dict('sys.modules',{'yt_dlp':MagicMock(YoutubeDL=MagicMock(return_value=downloader))}) as mods:
+                catalog.run({'op':'resolve','id':'abcdefghijk','quality':quality})
+                self.assertEqual(mods['yt_dlp'].YoutubeDL.call_args[0][0]['format'],expected)
+
     def test_image_size(self):
         self.assertEqual(catalog.artwork({'thumbnails':[{'url':'https://yt3.googleusercontent.com/a=w60-h60-l90-rj'}]}),'https://yt3.googleusercontent.com/a=w544-h544-l90-rj')
 

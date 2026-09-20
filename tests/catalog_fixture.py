@@ -1,7 +1,11 @@
 """Deterministic transport fixture. Never used by the shipped application."""
-import json, sys, time
+import json, os, sys, time
 r = json.load(sys.stdin)
 op=r.get('op')
+# A stage that needs to prove what the application asked for, rather than what
+# it did with the answer, reads this back.
+if os.environ.get('SUNG_REQUEST_LOG'):
+    with open(os.environ['SUNG_REQUEST_LOG'],'a') as log: log.write(json.dumps(r)+'\n')
 def song(i):
     return dict(id=f'{i:011d}', videoId=f'{i:011d}', title=f'Track {i}',kind='song',artist='Test artist',seconds=120,available=True)
 data={'ok':True}

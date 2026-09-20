@@ -492,6 +492,14 @@ private slots:
     {Backend b;b.setLyricTextSize(28);QCOMPARE(b.lyricTextSize(),28);}
     Backend b;QCOMPARE(b.lyricTextSize(),28);b.setLyricTextSize(2);QCOMPARE(b.lyricTextSize(),20);b.setLyricTextSize(100);QCOMPARE(b.lyricTextSize(),32);b.setLyricTextSize(25);
   }
+  void streamingQualityPreference() {
+    Backend b;
+    QCOMPARE(b.streamingQuality(),QString("standard"));
+    b.setStreamingQuality("saver");QCOMPARE(b.streamingQuality(),QString("saver"));
+    for(const auto &bad:{"","lossless","SAVER"})b.setStreamingQuality(bad);
+    QCOMPARE(b.streamingQuality(),QString("saver"));
+    b.setStreamingQuality("standard");QCOMPARE(b.streamingQuality(),QString("standard"));
+  }
   void listeningPreferences() {
     {Backend b;QVERIFY(!b.historyPaused());b.setHistoryPaused(true);b.setKeepCompletedLyrics(false);b.setVolumeStep(2);b.setVolumeStep(7);QCOMPARE(b.volumeStep(),2);}
     Backend b;QVERIFY(!b.historyPaused());QVERIFY(!b.keepCompletedLyrics());QCOMPARE(b.volumeStep(),2);b.setKeepCompletedLyrics(true);b.setVolumeStep(5);

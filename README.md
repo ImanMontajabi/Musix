@@ -22,7 +22,7 @@ A minimal Material 3 player built with C++ and Qt Quick, designed for CachyOS an
 
 ## Features
 
-- **YouTube Music**: search songs, albums, artists and playlists; play audio without an embedded browser or ad interface.
+- **YouTube Music**: search songs, albums, artists and playlists; play audio without an embedded browser or ad interface, at standard quality or a data saver setting.
 - **Navidrome / Subsonic**: browse and search your server, play original or transcoded audio, edit server playlists, rate songs, sync favorites and listening history, and display server lyrics.
 - **Jellyfin**: browse music libraries, albums, artists and genres; search, stream original or transcoded audio, manage permitted server playlists, sync favorites and display synchronized lyrics.
 - **Your music**: import FLAC, MP3 and other supported audio files or folders; browse albums and artists, search paths and group songs by folder. Mix local and YouTube songs in the same playlists.
@@ -188,6 +188,8 @@ Connection settings include audio quality and server listening history. Original
 Tested against Navidrome 0.63.2 and Jellyfin 10.11.11 / 12.0. Other servers must support Subsonic 1.16.1 token authentication and JSON responses. OpenSubsonic lyrics and form POST are detected when available. Jellyfin 10.11 removes duplicate playlist additions on the server; 12.0 preserves them. Jellyfin collections are paginated; a single opened collection is limited to 20,000 items. Server administration, video, podcasts, remote-device control and permanent offline downloads are outside this music integration.
 
 ### Accounts and saved data
+
+**Settings → Connections → YouTube → Streaming quality** chooses what a song costs to download. Standard takes the best stream YouTube offers, which is Opus at about 130 kbps. Data saver caps it, which lands on Opus at about 67 kbps and a little over half the bytes. Sung buffers the whole song before playing it, so this is the download either way. No account or sign-in is involved, and neither setting is a lossless one; for lossless audio use local files or a music server set to Original.
 
 YouTube browsing is anonymous. YouTube likes, local playlists and local history are stored locally and **do not sync with your Google account**. Settings offers library JSON import/export; audio files, custom cover images and imported LRC files are not bundled into exports.
 

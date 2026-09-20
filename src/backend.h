@@ -208,6 +208,7 @@ class Backend : public QObject {
   Q_PROPERTY(QVariantMap collectionItem READ collectionItem NOTIFY catalogChanged)
   Q_PROPERTY(bool liked READ liked NOTIFY libraryChanged)
   Q_PROPERTY(QString cookies READ cookies NOTIFY settingsChanged)
+  Q_PROPERTY(QString streamingQuality READ streamingQuality WRITE setStreamingQuality NOTIFY settingsChanged)
   Q_PROPERTY(QStringList musicFolders READ musicFolders NOTIFY libraryChanged)
   Q_PROPERTY(bool cleanupBusy READ cleanupBusy NOTIFY cleanupChanged)
   Q_PROPERTY(QVariantList cleanupItems READ cleanupItems NOTIFY cleanupChanged)
@@ -445,6 +446,12 @@ public:
   QString theme() const { return m_settings.value("theme", "system").toString(); }
   void setTheme(const QString &);
   QString cookies() const { return m_settings.value("cookies").toString(); }
+  // How much of the network a YouTube song is allowed to cost. Standard takes
+  // the best stream YouTube offers, which is Opus at about 130 kbps; data
+  // saver caps it, which lands on the Opus rung at about 67 kbps. The whole
+  // song is buffered before it plays, so this is the download either way.
+  QString streamingQuality() const { const auto v=m_settings.value("streamingQuality","standard").toString();return v=="saver"?v:"standard"; }
+  void setStreamingQuality(const QString &value) { if(streamingQuality()==value || (value!="saver" && value!="standard"))return;m_settings.setValue("streamingQuality",value);emit settingsChanged(); }
   // Overlap between one song and the next, in seconds. Zero plays them in turn.
   int crossfadeSeconds() const {return qBound(0,m_settings.value("crossfadeSeconds",0).toInt(),12);}
   void setCrossfadeSeconds(int seconds);

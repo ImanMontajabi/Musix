@@ -1981,12 +1981,22 @@ ApplicationWindow {
                 ColumnLayout {
                     id: settingsGroup3; objectName:"settingsGroup3"
                     Layout.fillWidth:true;Layout.minimumWidth:0; spacing:12
-                    property bool hasMatches: settingsDialog.matches("Music server library") || settingsDialog.matches("YouTube cookies import replace remove sign in")
+                    property bool hasMatches: settingsDialog.matches("Music server library") || settingsDialog.matches("YouTube cookies import replace remove sign in") || settingsDialog.matches("YouTube streaming quality standard data saver bitrate")
                     visible: settingsDialog.searchQuery.trim() ? hasMatches : settingsDialog.category===3
                     SungText {heading: true;text:"Connections";font.pixelSize:Theme.titleLarge;font.weight:Font.Medium;Layout.bottomMargin:8}
                     ColumnLayout {id:options3;objectName:"settingsRows3";Layout.fillWidth:true;Layout.minimumWidth:0;spacing:12
                 MSettingRow {opens:true;objectName:"musicServerButton";text:"Music server";visible:settingsDialog.matches("Music server library");onClicked:{settingsDialog.close();serverConnection.open()}}
-                SungText { visible: settingsDialog.matches("YouTube cookies import replace remove sign in"); text: "YouTube"; font.pixelSize: Theme.labelLarge; font.weight: Font.Medium; color: Theme.muted; Layout.topMargin: 12 }
+                SungText { visible: settingsDialog.matches("YouTube cookies import replace remove sign in") || settingsDialog.matches("YouTube streaming quality standard data saver bitrate"); text: "YouTube"; font.pixelSize: Theme.labelLarge; font.weight: Font.Medium; color: Theme.muted; Layout.topMargin: 12 }
+                SungText { visible: settingsDialog.matches("YouTube streaming quality standard data saver bitrate"); text: "Streaming quality"; font.pixelSize: Theme.bodyLarge; font.weight: Font.Medium }
+                MSegmentedControl {Layout.fillWidth:true;Layout.minimumWidth:0;
+                    objectName:"streamingQualityControl"
+                    visible: settingsDialog.matches("YouTube streaming quality standard data saver bitrate")
+                    accessibleName:"Streaming quality"
+                    options:[{key:"standard",label:"Standard",name:"qualityStandard"},
+                             {key:"saver",label:"Data saver",name:"qualitySaver"}]
+                    value:app.streamingQuality; onChosen:value=>app.streamingQuality=value
+                }
+                SungText { visible: settingsDialog.matches("YouTube streaming quality standard data saver bitrate"); text: "Standard takes the best stream YouTube offers. Data saver takes about half the data, for a slow or limited connection."; wrapMode: Text.Wrap; Layout.fillWidth: true;Layout.minimumWidth:0; color: Theme.muted; font.pixelSize: Theme.bodyMedium }
                 MSettingRow {opens:true;objectName:"cookieButton";text:app.cookies?"Replace cookies":"Import cookies";visible:settingsDialog.matches("YouTube cookies import replace remove sign in");onClicked:window.openFileDialog("cookies")}
                 MSettingRow {text:"Remove cookies";visible:!!app.cookies && settingsDialog.matches("YouTube cookies import replace remove sign in");onClicked:app.clearCookies()}
                 SungText { visible: settingsDialog.matches("YouTube cookies import replace remove sign in"); text: "Optional cookies.txt for tracks that require sign-in. Your library stays on this device."; wrapMode: Text.Wrap; Layout.fillWidth: true;Layout.minimumWidth:0; color: Theme.muted; font.pixelSize: Theme.bodyMedium }

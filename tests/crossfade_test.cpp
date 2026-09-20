@@ -73,6 +73,43 @@ private slots:
       files << music.filePath(name);
   }
 
+  // Standard streaming quality takes Opus in a WebM container, where this used
+  // to take AAC in MP4. Decoding it is one thing; reporting a length and
+  // seeking inside it are what the rest of the player needs, and WebM carries
+  // its timing differently from MP4. A buffered YouTube song is played from
+  // the file the helper wrote, which is what this drives.
+  void opusInWebmPlaysAndSeeks() {
+    QVERIFY(encode("stream one.webm", "Stream one", 8, 440));
+    Backend b;
+    b.setVolume(0.8);b.setLyricsFallback(false);b.setAutoplay(false);b.setWatchMusicFolders(false);
+    b.setOnlineArtwork(false);b.setPrepareNext(false);b.clearQueue();
+    b.localTestSource(QUrl::fromLocalFile(music.filePath("stream one.webm")));
+    QTRY_VERIFY_WITH_TIMEOUT(b.playing() && b.position() > 800, 15000);
+    QVERIFY2(b.duration() > 6000, qPrintable(QString("duration %1").arg(b.duration())));
+    QVERIFY(b.error().isEmpty());
+    // The decoder reports what it is actually playing, which Track details shows.
+    QString codec, rate;
+    for (const auto &entry : b.trackDetails(b.current())) {
+      const auto row = entry.toMap();
+      if (row.value("label") == "Playback codec") codec = row.value("value").toString();
+      if (row.value("label") == "Decoded sample rate") rate = row.value("value").toString();
+    }
+    QVERIFY2(codec.contains("opus", Qt::CaseInsensitive), qPrintable("codec: " + codec));
+    QVERIFY2(!rate.isEmpty(), "the decoder reports a sample rate");
+    b.seek(6000);
+    QTRY_VERIFY_WITH_TIMEOUT(b.position() > 6200 && b.playing(), 10000);
+    b.pause();
+    const auto held = b.position();
+    QTest::qWait(400);
+    QVERIFY(qAbs(b.position() - held) < 250);
+    // Resumed on the deck itself: this recording is not in a queue, because
+    // the library does not import .webm, which is an animated cover there.
+    b.media()->play();
+    QTRY_VERIFY_WITH_TIMEOUT(b.position() > held + 500, 10000);
+    QVERIFY(b.error().isEmpty());
+    b.stop();
+  }
+
   // Nothing changes for anyone who has not asked for it.
   void overlapIsOffUntilAskedFor() {
     Backend b;

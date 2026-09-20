@@ -1573,6 +1573,44 @@ void runProductPolishTests(Backend *b,QQuickWindow *w) {
   b->chooseArtwork(QUrl::fromLocalFile(motionFile),"different-song");QTest::qWait(200);check(b->currentMotionArt()==chosen,"stale song picker rejected");
   check(b->playing()&&b->error().isEmpty(),"artwork controls preserve playback");
   QTest::keyClick(w,Qt::Key_Escape);b->stop();b->deletePlaylist(playlist);
+  // What a YouTube song costs to download is a setting, and the setting is
+  // what the resolver is actually asked for. Both halves are checked here:
+  // the row moves the preference, and the next play carries it.
+  const auto requests=dir+"/helper-requests.jsonl";QFile::remove(requests);
+  qputenv("SUNG_REQUEST_LOG",requests.toUtf8());
+  const auto lastQuality=[&]{
+    QFile log(requests);QString quality;
+    if(log.open(QIODevice::ReadOnly))for(const auto &line:QString::fromUtf8(log.readAll()).split('\n',Qt::SkipEmptyParts)){
+      const auto row=QJsonDocument::fromJson(line.toUtf8()).object();
+      if(row.value("op").toString()=="buffer")quality=row.value("quality").toString();
+    }
+    return quality;
+  };
+  auto settings=w->findChild<QObject*>("settingsDialog");
+  // The step before closed a dialog and deleted a playlist, so the overlay and
+  // the undo bar are both still up. Clicking through either of them is what
+  // the person would have to wait for too.
+  if(auto controls=w->findChild<QObject*>("artworkControls"))until([&]{return !controls->property("opened").toBool();},4000);
+  QTest::qWait(5000);
+  click("settingsButton");
+  check(until([&]{return settings&&settings->property("opened").toBool();},3000),"the settings button opens Settings");
+  if(auto search=findItem(w->contentItem(),"settingsSearch")){search->setProperty("text","Streaming quality");QMetaObject::invokeMethod(search,"textEdited");}
+  QTest::qWait(350);
+  check(findItem(w->contentItem(),"streamingQualityControl"),"Settings offers a streaming quality for YouTube");
+  shot("streaming-quality");
+  click("qualitySaver");
+  check(b->streamingQuality()=="saver","choosing data saver is remembered");
+  QTest::keyClick(w,Qt::Key_Escape);QTest::qWait(300);
+  b->stop();QFile::remove(requests);
+  b->playItem({{"id","quality00001"},{"videoId","quality00001"},{"title","Saver song"},{"artist","Fixture artist"},{"kind","song"}});
+  check(until([&]{return b->playing();}),"a song plays on data saver");
+  check(lastQuality()=="saver","and the resolver is asked for the data saver stream");
+  b->setStreamingQuality("standard");b->stop();QFile::remove(requests);
+  b->playItem({{"id","quality00002"},{"videoId","quality00002"},{"title","Standard song"},{"artist","Fixture artist"},{"kind","song"}});
+  check(until([&]{return b->playing();}),"a song plays on standard");
+  check(lastQuality()=="standard","and standard asks for the standard stream");
+  b->stop();qunsetenv("SUNG_REQUEST_LOG");
+
   fprintf(stdout,"RESULT %d failures\n",failures);fflush(stdout);QCoreApplication::exit(failures?1:0);
 }
 

@@ -322,6 +322,24 @@ def local_files(req):
     return {'items':items,'failed':errors}
 
 
+# What each streaming quality asks YouTube for.
+#
+# Standard prefers Opus in WebM, which YouTube serves at about 130 kbps: the
+# same bytes as the AAC this used to ask for, at better quality per bit. Data
+# saver caps the bitrate instead, and YouTube's next Opus rung down is about
+# 67 kbps, a little over half the download. A retry after a failed stream
+# swaps the container, so it genuinely tries something else.
+def audio_format(quality, fallback=False):
+    cap = '[abr<=80]' if quality == 'saver' else ''
+    containers = ('m4a', 'webm') if fallback else ('webm', 'm4a')
+    choices = ['bestaudio[ext=%s]%s' % (c, cap) for c in containers]
+    choices.append('bestaudio' + cap)
+    if cap:
+        # Nothing under the cap means a recording YouTube only offers above it.
+        choices.append('worstaudio')
+    return '/'.join(choices)
+
+
 def run(req):
     op = req.get('op', '')
     if op == 'choose-artwork':
@@ -348,7 +366,7 @@ def run(req):
         if not re.fullmatch(r'[A-Za-z0-9_-]{11}', vid):
             raise ValueError('Invalid YouTube video ID')
         opts = {'quiet': True, 'noprogress': True, 'no_warnings': True, 'noplaylist': True,
-                'format': ('bestaudio[ext=webm]/bestaudio[ext=m4a]/bestaudio' if req.get('fallback') else 'bestaudio[ext=m4a]/bestaudio'), 'socket_timeout': 18,
+                'format': audio_format(req.get('quality', 'standard'), req.get('fallback')), 'socket_timeout': 18,
                 'retries': 2, 'extractor_retries': 2, 'cachedir': False,
                 'js_runtimes': {'node': {}}, 'skip_download': True}
         if req.get('cookies'):

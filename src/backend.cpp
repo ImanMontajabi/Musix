@@ -718,7 +718,7 @@ void Backend::resolveCurrent(bool retry) {
   if(!retry && m_media().source().isEmpty() && m_savedPosition>0)m_restorePosition=m_savedPosition;
   m_audioCache=audioDirectory();
   if(!m_audioCache||!m_audioCache->isValid()){m_resolving=false;m_wantPlay=false;notifyError("Could not create the audio buffer.");emit playbackChanged();return;}
-  request("play", {{"op", "buffer"}, {"id", id}, {"cookies", cookies()},
+  request("play", {{"op", "buffer"}, {"id", id}, {"cookies", cookies()}, {"quality", streamingQuality()},
                     {"fallback",m_recoveryAttempts>0},{"directory",m_audioCache->path()}},
           apply,m_audioCache);
 }
@@ -1981,7 +1981,7 @@ void Backend::updatePreparation(){
   m_preparationAttempt=nextId;const auto generation=m_preparationGeneration;
   auto directory=audioDirectory();if(!directory||!directory->isValid())return;
   m_preparedDirectory=directory;
-  request("prepare",{{"op","buffer"},{"id",nextId},{"directory",directory->path()},{"cookies",cookies()}},[this,generation,nextId,directory](const QVariantMap &data){
+  request("prepare",{{"op","buffer"},{"id",nextId},{"directory",directory->path()},{"cookies",cookies()},{"quality",streamingQuality()}},[this,generation,nextId,directory](const QVariantMap &data){
     if(generation!=m_preparationGeneration||m_preparedId!=nextId)return;
     const QFileInfo file(data.value("file").toString());
     // Preload failures and oversized/direct streams leave normal playback in charge.
