@@ -24,15 +24,31 @@ inline QString videoId(const QUrl &url) {
   return match.hasMatch() ? match.captured(1) : QString();
 }
 
-// True for a cover on Apple's image service in the form its search API
-// returns it: an https URL on an isN-ssl.mzstatic.com host whose last path
-// segment names the size, with no query to smuggle anything else in.
-inline bool isAlbumCover(const QUrl &url) {
+// Nothing may carry a query or a fragment, so a cover URL cannot smuggle
+// anything else along with it.
+inline bool plainHttps(const QUrl &url) {
+  return url.scheme() == "https" && !url.hasQuery() && !url.hasFragment() && url.userInfo().isEmpty();
+}
+
+// A cover on Apple's image service in the form its search API returns it: an
+// isN-ssl.mzstatic.com host whose last path segment names the size.
+inline bool isAppleCover(const QUrl &url) {
   static const QRegularExpression host("^is\\d+-ssl\\.mzstatic\\.com$");
   static const QRegularExpression size("/\\d+x\\d+bb\\.(?:jpg|png|webp)$");
-  return url.scheme() == "https" && !url.hasQuery() && !url.hasFragment() && url.userInfo().isEmpty()
-      && host.match(url.host()).hasMatch() && size.match(url.path()).hasMatch();
+  return plainHttps(url) && host.match(url.host()).hasMatch() && size.match(url.path()).hasMatch();
 }
+
+// A release group's front cover in the Cover Art Archive. The archive serves
+// the picture from the Internet Archive, so fetching one ends up on a
+// different host; that redirect is the network layer's business, not this.
+inline bool isArchiveCover(const QUrl &url) {
+  static const QRegularExpression path("^/release-group/[0-9a-f-]{36}/front$");
+  return plainHttps(url) && url.host() == "coverartarchive.org" && path.match(url.path()).hasMatch();
+}
+
+// A cover from a service this build asked, and so a URL it may remember and
+// draw in place of a video frame.
+inline bool isAlbumCover(const QUrl &url) { return isAppleCover(url) || isArchiveCover(url); }
 
 // The URL to fetch for `source` when it will be drawn `pixels` wide. Known
 // services are asked for at least that size, never above 1600, which is the
@@ -51,11 +67,17 @@ inline QUrl sized(const QUrl &source, int pixels) {
       path.replace(match.capturedStart(), match.capturedLength(), QString("=w%1-h%1").arg(grow(match)));
       url.setPath(path);
     }
-  } else if (isAlbumCover(url)) {
+  } else if (isAppleCover(url)) {
     static const QRegularExpression dimensions("/(\\d+)x(\\d+)bb\\.");
     const auto match = dimensions.match(path);
     path.replace(match.capturedStart(), match.capturedLength(), QString("/%1x%1bb.").arg(grow(match)));
     url.setPath(path);
+  } else if (isArchiveCover(url)) {
+    // The archive keeps three sizes beside whatever was uploaded. Above the
+    // largest of them the upload itself is the only bigger picture there is,
+    // and a release that is missing a size falls back to it the same way.
+    if (pixels <= 1200)
+      url.setPath(path + (pixels <= 250 ? "-250" : pixels <= 500 ? "-500" : "-1200"));
   } else if (const auto id = videoId(url); !id.isEmpty() && pixels > 240) {
     // The catalogue's frame is 225 pixels tall, so anything drawn larger is
     // enlarging it. The HD frame exists only for HD uploads; when it is

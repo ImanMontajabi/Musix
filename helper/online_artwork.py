@@ -20,6 +20,16 @@ HOSTS = {'itunes.apple.com', 'music.apple.com', 'mvod.itunes.apple.com'}
 # A cover on Apple's image service in the shape its search API returns it. The
 # player rewrites the size segment for whatever surface draws it.
 APPLE_ART = re.compile(r'^https://is\d+-ssl\.mzstatic\.com/image/thumb/[^?#@]+/\d+x\d+bb\.(?:jpg|png|webp)$')
+# The second place to look when Apple has no album for a song. MusicBrainz
+# names the release group; the Cover Art Archive holds the picture and serves
+# it from the Internet Archive, so a redirect there is expected.
+COVER_HOSTS = {'musicbrainz.org', 'coverartarchive.org'}
+ARCHIVE_HOST = re.compile(r'^(?:[a-z0-9-]+\.)*archive\.org$')
+# MusicBrainz asks every client to identify itself and to name a contact.
+COVER_AGENT = 'Sung/0.12.0 ( https://github.com/yappologistic/Sung )'
+# Its covers are scans people uploaded, so they run from postage stamps to
+# full sleeves. Below this a video frame is the better picture of the two.
+COVER_FLOOR = 500
 
 
 def safe_url(url):
@@ -29,9 +39,21 @@ def safe_url(url):
     return url
 
 
+def safe_cover_url(url):
+    p = urlsplit(url)
+    host = p.hostname or ''
+    if (p.scheme != 'https' or p.username or p.password or p.port not in (None, 443)
+            or not (host in COVER_HOSTS or ARCHIVE_HOST.match(host))):
+        raise ValueError('Unsupported cover URL')
+    return url
+
+
 class Redirects(HTTPRedirectHandler):
+    def __init__(self, guard=None):
+        self.guard = guard or safe_url
+
     def redirect_request(self, req, fp, code, msg, headers, newurl):
-        return super().redirect_request(req, fp, code, msg, headers, safe_url(newurl))
+        return super().redirect_request(req, fp, code, msg, headers, self.guard(newurl))
 
 
 def fetch(url, limit=2 * 1024 * 1024):
@@ -43,6 +65,48 @@ def fetch(url, limit=2 * 1024 * 1024):
         if len(data) > limit:
             raise ValueError('Artwork response too large')
         return data
+
+
+def fetch_cover(url, limit):
+    """The MusicBrainz and Cover Art Archive side, which has its own hosts."""
+    with build_opener(Redirects(safe_cover_url)).open(Request(safe_cover_url(url), headers={
+            'User-Agent': COVER_AGENT, 'Accept-Encoding': 'identity'}), timeout=10) as response:
+        if int(response.headers.get('Content-Length', 0)) > limit:
+            raise ValueError('Cover response too large')
+        data = response.read(limit + 1)
+        if len(data) > limit:
+            raise ValueError('Cover response too large')
+        return data
+
+
+def image_size(data):
+    """Width and height from a JPEG or PNG header, or None when neither."""
+    if data[:8] == b'\x89PNG\r\n\x1a\n' and len(data) >= 24:
+        width, height = int.from_bytes(data[16:20], 'big'), int.from_bytes(data[20:24], 'big')
+        return (width, height) if width and height else None
+    if data[:2] != b'\xff\xd8':
+        return None
+    at = 2
+    while at < len(data) - 9:
+        if data[at] != 0xFF:
+            at += 1
+            continue
+        marker = data[at + 1]
+        # The frame headers carry the dimensions; everything else is skipped by
+        # its own length, which is how the comment and thumbnail blocks pass by.
+        if marker in (0xC0, 0xC1, 0xC2, 0xC3, 0xC5, 0xC6, 0xC7, 0xC9, 0xCA, 0xCB, 0xCD, 0xCE, 0xCF):
+            height = int.from_bytes(data[at + 5:at + 7], 'big')
+            width = int.from_bytes(data[at + 7:at + 9], 'big')
+            return (width, height) if width and height else None
+        if marker in (0xD8, 0xD9) or 0xD0 <= marker <= 0xD7:
+            at += 2
+            continue
+        at += 2 + int.from_bytes(data[at + 2:at + 4], 'big')
+    return None
+
+
+def lucene(value):
+    return re.sub(r'([+\-&|!(){}\[\]^"~*?:\\/])', r'\\\1', str(value))
 
 
 def normal(value):
@@ -146,6 +210,49 @@ def still_art(candidate):
     """The album cover a search result links, or '' when it is not one of Apple's images."""
     url = str(candidate.get('artworkUrl100', ''))
     return url if APPLE_ART.match(url) else ''
+
+
+def archive_cover(track):
+    """The album cover the Cover Art Archive holds for this recording, or ''.
+
+    The same rule as the Apple side decides what counts as the right recording:
+    the artist and the title have to match once normalised, and the length has
+    to agree. A cover smaller than the video frame it would replace is left
+    alone, because swapping a frame for a thumbnail is not an improvement."""
+    artist = re.sub(r'\s+- Topic$', '', track.get('artist', ''), flags=re.I)
+    title = title_key(track.get('title', ''))
+    seconds = float(track.get('seconds') or 0)
+    if not normal(artist) or not title or not 1 <= seconds <= 3600:
+        return ''
+    query = urlencode({'query': 'artist:"%s" AND recording:"%s"' % (lucene(artist), lucene(title)),
+                       'fmt': 'json', 'limit': 8})
+    found = json.loads(fetch_cover('https://musicbrainz.org/ws/2/recording?' + query, 262144))
+    groups = []
+    for recording in found.get('recordings', [])[:8]:
+        if normal(recording.get('title', '')) != normal(title):
+            continue
+        if not any(normal(c.get('artist', {}).get('name', '')) == normal(artist)
+                   for c in recording.get('artist-credit', [])):
+            continue
+        if abs(float(recording.get('length') or 0) / 1000 - seconds) > 5:
+            continue
+        for release in recording.get('releases', [])[:4]:
+            group = (release.get('release-group') or {}).get('id', '')
+            if re.fullmatch(r'[0-9a-f-]{36}', group) and group not in groups:
+                groups.append(group)
+    for group in groups[:3]:
+        url = 'https://coverartarchive.org/release-group/%s/front' % group
+        try:
+            size = image_size(fetch_cover(url, 262144))
+        except HTTPError as error:
+            if error.code in (404, 400):
+                continue
+            raise
+        except (OSError, ValueError):
+            continue
+        if size and min(size) >= COVER_FLOOR:
+            return url
+    return ''
 
 
 def album_motion(raw, candidate):
@@ -257,7 +364,8 @@ def lookup(req):
     cache.mkdir(parents=True, exist_ok=True, mode=0o700)
     scratch.mkdir(parents=True, exist_ok=True, mode=0o700)
     motion = bool(req.get('motion', True))
-    key = hashlib.sha256(json.dumps([3]+[req.get(k, '') for k in ('title', 'artist', 'album', 'seconds')]).encode()).hexdigest()
+    covers = bool(req.get('covers', True))
+    key = hashlib.sha256(json.dumps([4]+[req.get(k, '') for k in ('title', 'artist', 'album', 'seconds')]).encode()).hexdigest()
     record = cache / (key + '.json')
     now = time.time()
     try:
@@ -276,12 +384,12 @@ def lookup(req):
                     path.unlink()
                 if not motion:
                     return {'status': 'unavailable', **still}
-            elif not motion or saved.get('motion', True):
+            elif (not motion or saved.get('motion', True)) and (still['art'] or not covers or saved.get('covers', True)):
                 return {'status': 'unavailable', **still}
     except (OSError, ValueError, KeyError, TypeError):
         pass
     result = {'status': 'unavailable', 'art': '', 'page': ''}
-    saved = {'expires': now + 86400, 'motion': motion}
+    saved = {'expires': now + 86400, 'motion': motion, 'covers': covers}
     try:
         blocked = cache / 'retry-after-v2'
         if blocked.exists() and float(blocked.read_text()) > now:
@@ -296,6 +404,13 @@ def lookup(req):
                 result.update(art=still_art(candidate), page='https://music.apple.com/us/album/' + str(candidate['collectionId']))
                 saved['expires'] = now + 7 * 86400
                 break
+        if covers and not result['art']:
+            # Apple knows nothing about a good deal of what plays here: game
+            # soundtracks, fan uploads, releases that never reached a store.
+            # MusicBrainz and its Cover Art Archive carry some of them.
+            result['art'] = archive_cover(req)
+            if result['art']:
+                saved['expires'] = now + 7 * 86400
         for candidate in (matches if motion else []):
             album_id = str(candidate['collectionId'])
             page = 'https://music.apple.com/us/album/' + album_id

@@ -67,6 +67,92 @@ class OnlineArtworkTests(unittest.TestCase):
             self.assertEqual(art.lookup(self.track)['status'],'retry')
             self.assertEqual(fetch.call_count,1)
 
+    def test_cover_hosts_and_redirects(self):
+        for good in ['https://musicbrainz.org/ws/2/recording?query=x',
+                     'https://coverartarchive.org/release-group/abc/front',
+                     'https://ia800207.us.archive.org/12/items/mbid-x/mbid-x-1.jpg']:
+            self.assertEqual(art.safe_cover_url(good), good)
+        for bad in ['http://coverartarchive.org/x', 'https://coverartarchive.org.evil.example/x',
+                    'https://archive.org.evil.example/x', 'https://user@musicbrainz.org/x',
+                    'https://musicbrainz.org:8443/x', 'https://itunes.apple.com/search?x=1']:
+            with self.assertRaises(ValueError, msg=bad): art.safe_cover_url(bad)
+            with self.assertRaises(ValueError, msg=bad):
+                art.Redirects(art.safe_cover_url).redirect_request(None, None, 302, '', {}, bad)
+        # The two sides keep their own hosts: neither will follow into the other.
+        with self.assertRaises(ValueError): art.safe_url('https://coverartarchive.org/x')
+        with self.assertRaises(ValueError): art.safe_cover_url('https://itunes.apple.com/search')
+
+    def test_image_size_reads_real_headers(self):
+        import subprocess
+        # Even numbers only: the generator rounds an odd size down to one.
+        for name, size in [('probe.jpg', (640, 480)), ('probe.png', (320, 122))]:
+            path = self.root/name
+            subprocess.run(['ffmpeg', '-nostdin', '-v', 'error', '-f', 'lavfi',
+                            '-i', 'testsrc2=size=%dx%d' % size, '-frames:v', '1', str(path)],
+                           check=True, capture_output=True, timeout=20)
+            self.assertEqual(art.image_size(path.read_bytes()), size, name)
+        self.assertIsNone(art.image_size(b'not an image at all'))
+        self.assertIsNone(art.image_size(b''))
+
+    def test_archive_cover_verifies_the_recording_and_the_size(self):
+        from unittest.mock import patch
+        import subprocess
+        big, small = self.root/'big.jpg', self.root/'small.jpg'
+        for path, size in [(big, 900), (small, 250)]:
+            subprocess.run(['ffmpeg', '-nostdin', '-v', 'error', '-f', 'lavfi',
+                            '-i', 'testsrc2=size=%dx%d' % (size, size), '-frames:v', '1', str(path)],
+                           check=True, capture_output=True, timeout=20)
+        group = '11111111-2222-3333-4444-555555555555'
+        recording = dict(title='A Song', length=200000, **{'artist-credit': [dict(artist=dict(name='An Artist'))]},
+                         releases=[dict(**{'release-group': dict(id=group)})])
+        track = dict(title='A Song', artist='An Artist', seconds=200)
+        front = 'https://coverartarchive.org/release-group/%s/front' % group
+        def answer(recordings, image):
+            def fetch(url, limit):
+                if 'musicbrainz.org' in url: return json.dumps(dict(recordings=recordings)).encode()
+                return image.read_bytes()
+            return fetch
+        with patch.object(art, 'fetch_cover', side_effect=answer([recording], big)):
+            self.assertEqual(art.archive_cover(track), front)
+        # A cover smaller than the frame it would replace is left where it is.
+        with patch.object(art, 'fetch_cover', side_effect=answer([recording], small)):
+            self.assertEqual(art.archive_cover(track), '')
+        # The recording itself has to be the right one.
+        for wrong in [dict(recording, title='A Song (Live)'),
+                      dict(recording, length=260000),
+                      dict(recording, **{'artist-credit': [dict(artist=dict(name='Someone Else'))]}),
+                      dict(recording, releases=[dict(**{'release-group': dict(id='not-an-mbid')})])]:
+            with patch.object(art, 'fetch_cover', side_effect=answer([wrong], big)):
+                self.assertEqual(art.archive_cover(track), '')
+        # And a song with no length to check cannot be matched at all.
+        with patch.object(art, 'fetch_cover', side_effect=answer([recording], big)) as fetch:
+            self.assertEqual(art.archive_cover(dict(track, seconds=0)), '')
+            fetch.assert_not_called()
+
+    def test_archive_is_the_fallback_not_the_first_stop(self):
+        from unittest.mock import patch
+        with patch.object(art, 'fetch', return_value=json.dumps(dict(results=[self.candidate])).encode()):
+            with patch.object(art, 'archive_cover', return_value='') as archive:
+                found = art.lookup(dict(self.track, motion=False))
+                self.assertEqual(found['art'], self.cover)
+                archive.assert_not_called()
+        # Apple knows nothing: the archive is asked, and only when covers are wanted.
+        self.track['title'] = 'Something Else'
+        front = 'https://coverartarchive.org/release-group/11111111-2222-3333-4444-555555555555/front'
+        with patch.object(art, 'fetch', return_value=b'{"results":[]}'):
+            with patch.object(art, 'archive_cover', return_value=front) as archive:
+                self.assertEqual(art.lookup(dict(self.track, motion=False))['art'], front)
+                self.assertEqual(archive.call_count, 1)
+                # Remembered, so the next play asks neither service.
+                self.assertEqual(art.lookup(dict(self.track, motion=False))['art'], front)
+                self.assertEqual(archive.call_count, 1)
+            self.track['title'] = 'A Third Thing'
+            with patch.object(art, 'archive_cover', return_value=front) as archive:
+                self.assertEqual(art.lookup(dict(self.track, motion=False, covers=False))['art'], '')
+                archive.assert_not_called()
+                # A run that skipped the archive does not stand in for one that wants it.
+                self.assertEqual(art.lookup(dict(self.track, motion=False))['art'], front)
+
     def test_only_verified_album_header(self):
         self.assertEqual(art.album_motion(self.page(),self.candidate),self.base+'master.m3u8')
         self.assertEqual(art.album_motion(self.page(),dict(self.candidate,collectionId=124)),'')

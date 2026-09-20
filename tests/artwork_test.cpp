@@ -220,6 +220,22 @@ private slots:
                         "https://is1-ssl.mzstatic.com/image/thumb/x/100x100bb.jpg?x=1","https://is1-ssl.mzstatic.com/image/thumb/x/cover.jpg","https://user@is1-ssl.mzstatic.com/image/thumb/x/100x100bb.jpg"})
       QVERIFY2(!artworkurl::isAlbumCover(QUrl(bad)),bad);
     QCOMPARE(artworkurl::sized(QUrl("https://example.com/cover.jpg"),800),QUrl("https://example.com/cover.jpg"));
+    // The Cover Art Archive keeps three sizes beside the upload itself.
+    const QUrl front("https://coverartarchive.org/release-group/11111111-2222-3333-4444-555555555555/front");
+    QVERIFY(artworkurl::isArchiveCover(front));
+    QVERIFY(artworkurl::isAlbumCover(front));
+    QVERIFY(!artworkurl::isAppleCover(front));
+    QCOMPARE(artworkurl::sized(front,120),QUrl(front.toString()+"-250"));
+    QCOMPARE(artworkurl::sized(front,384),QUrl(front.toString()+"-500"));
+    QCOMPARE(artworkurl::sized(front,800),QUrl(front.toString()+"-1200"));
+    // Past the largest of them the upload is the only bigger picture there is.
+    QCOMPARE(artworkurl::sized(front,1600),front);
+    for(const auto bad:{"http://coverartarchive.org/release-group/11111111-2222-3333-4444-555555555555/front",
+                        "https://coverartarchive.org.evil.example/release-group/11111111-2222-3333-4444-555555555555/front",
+                        "https://coverartarchive.org/release-group/11111111-2222-3333-4444-555555555555/back",
+                        "https://coverartarchive.org/release-group/short/front",
+                        "https://coverartarchive.org/release-group/11111111-2222-3333-4444-555555555555/front?x=1"})
+      QVERIFY2(!artworkurl::isArchiveCover(QUrl(bad)),bad);
   }
   void videoFrameLoadsHdFrame() {
     const QUrl frame("https://i.ytimg.com/vi/frameTest01/hqdefault.jpg?sqp=-oaymwE");
@@ -240,6 +256,7 @@ private slots:
     const QUrl frame("https://i.ytimg.com/vi/frameTest03/hqdefault.jpg?sqp=-oaymwE");
     seed(frame,solid(400,225,Qt::red));seed(QUrl("https://i.ytimg.com/vi/frameTest03/maxresdefault.jpg"),solid(1280,720,Qt::blue));
     seed(QUrl("https://is1-ssl.mzstatic.com/image/thumb/Test/800x800bb.jpg"),solid(800,800,Qt::green));
+    seed(QUrl("https://coverartarchive.org/release-group/99999999-8888-7777-6666-555555555555/front-1200"),solid(900,900,Qt::yellow));
     const auto cover=[](const QUrl &url){return artworkurl::videoId(url)=="frameTest03"?QUrl("https://is1-ssl.mzstatic.com/image/thumb/Test/100x100bb.jpg"):QUrl();};
     RoundedArt::resolveVideoFrame=cover;
     RoundedArt art;art.setPixels(800);art.setSource(frame);QTRY_VERIFY_WITH_TIMEOUT(art.ready(),5000);
@@ -251,6 +268,16 @@ private slots:
     QVERIFY(art.transitioning());QTRY_VERIFY_WITH_TIMEOUT(!art.transitioning(),3000);QVERIFY(art.m_image.pixelColor(10,10).green()>200);
     RoundedArt other;other.setPixels(800);other.setSource(QUrl("https://sung-test.invalid/plain.png"));
     RoundedArt::resolveVideoFrame=nullptr;RoundedArt::refreshFrames();QVERIFY(!other.ready());
+    // A frame answered by the archive rather than by Apple draws the same way.
+    RoundedArt::resolveVideoFrame=[](const QUrl &url){return artworkurl::videoId(url)=="frameTest03"
+        ?QUrl("https://coverartarchive.org/release-group/99999999-8888-7777-6666-555555555555/front"):QUrl();};
+    // A size of its own, so this reads the archive rather than the decoded
+    // frame the surfaces above already put in the shared cache.
+    RoundedArt archive;archive.setCrossfade(false);archive.setPixels(900);archive.setSource(frame);
+    QTRY_VERIFY_WITH_TIMEOUT(archive.ready(),5000);
+    QCOMPARE(archive.m_image.size(),QSize(900,900));
+    QVERIFY(archive.m_image.pixelColor(10,10).red()>200&&archive.m_image.pixelColor(10,10).green()>200&&archive.m_image.pixelColor(10,10).blue()<80);
+    RoundedArt::resolveVideoFrame=nullptr;
   }
 };
 QTEST_MAIN(ArtworkTest)

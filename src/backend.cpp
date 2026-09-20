@@ -2393,7 +2393,7 @@ void Backend::fetchOnlineArtwork() {
   if(motionWanted){m_artworkStatus="Looking for a cover…";emit onlineArtworkChanged();}
   const auto directory=audioDirectory();if(!directory || !directory->isValid())return;
   const auto root=QStandardPaths::writableLocation(QStandardPaths::CacheLocation)+"/motion-art";
-  auto args=current();args["op"]="online-artwork";args["artworkCache"]=root;args["scratch"]=directory->path();args["refresh"]=m_artworkForce;args["motion"]=motionWanted;m_artworkForce=false;
+  auto args=current();args["op"]="online-artwork";args["artworkCache"]=root;args["scratch"]=directory->path();args["refresh"]=m_artworkForce;args["motion"]=motionWanted;args["covers"]=coverLookupWanted();m_artworkForce=false;
   const auto generation=++m_onlineArtworkGeneration;
   const auto videoId=current().value("videoId").toString();
   request("motion-artwork",args,[this,generation,root,motionWanted,videoId](const QVariantMap &data){

@@ -1516,6 +1516,15 @@ void runOnlineArtworkTests(Backend *b,QQuickWindow *w) {
   check(until([&]{const auto c=centre("nowArtwork");return c.isValid()&&c.red()>200&&c.green()<60;}),"and the video frame comes back");
   b->setAlbumCovers(true);
   check(until([&]{const auto c=centre("nowArtwork");return c.isValid()&&c.green()>200&&c.red()<60;}),"turning them on restores the album cover without asking again");
+  // The same again for a cover the Cover Art Archive answered rather than
+  // Apple, because the player asks it for a size of its own.
+  const QUrl archiveFrame("https://i.ytimg.com/vi/frame000003/hqdefault.jpg?sqp=-oaymwE");
+  seedArt(archiveFrame,solidPng(400,225,Qt::red));
+  seedArt(QUrl("https://coverartarchive.org/release-group/12345678-1234-1234-1234-123456789abc/front-250"),solidPng(500,500,Qt::cyan));
+  QVariantMap archived{{"id","frame000003"},{"videoId","frame000003"},{"title","archive cover"},{"artist","Fixture artist"},{"kind","video"},{"art",archiveFrame.toString()}};
+  b->playItem(archived);check(until([&]{return b->playing();}),"the song Apple does not have starts");
+  check(until([&]{const auto c=centre("nowArtwork");return c.isValid()&&c.green()>180&&c.blue()>180&&c.red()<90;},12000),"the archive cover replaces the video frame");
+  check(w->grabWindow().save(dir+"/08-archive-cover.png"),"archive cover capture");
   b->setAnimatedArtwork(true);
   b->stop();fprintf(stdout,"RESULT %d failures\n",failures);fflush(stdout);QCoreApplication::exit(failures?1:0);
 }
