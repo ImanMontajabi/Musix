@@ -4784,6 +4784,22 @@ void runMaterialControlsTests(Backend *b, QQuickWindow *w) {
               QString("pressing the button again closes them (%1)").arg(state));
     };
     menuOpensClear("expanded");
+    // Reachable without a mouse: the actions take focus in turn, Escape puts
+    // the menu away, and focus comes back to the button that opened it rather
+    // than being stranded inside a surface that is no longer there.
+    c.click("fab");
+    if(c.until([&]{return shownItem(w->contentItem(),"fabMenuItem_0")!=nullptr;},3000)){
+      QTest::qWait(600);
+      QTest::keyClick(w,Qt::Key_Tab);QTest::qWait(250);
+      auto focused=[&]{for(int i=0;i<fab->property("count").toInt();++i)
+          if(auto item=shownItem(w->contentItem(),"fabMenuItem_"+QString::number(i));item&&item->hasActiveFocus())return i;
+        return -1;};
+      c.check(focused()>=0,QString("tab reaches the actions (landed on %1)").arg(focused()));
+      QTest::keyClick(w,Qt::Key_Escape);
+      c.check(c.until([&]{return !fab->property("open").toBool();},3000),"escape closes the menu");
+      auto button=shownItem(fab,"fab");
+      c.check(button&&button->hasActiveFocus(),"and focus returns to the button");
+    } else c.check(false,"the menu opens for the keyboard checks");
     // With motion off the arrival transitions do not run at all, so the items
     // have to be in place and visible without them.
     b->setMotion(false);

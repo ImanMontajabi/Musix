@@ -57,6 +57,10 @@ Item {
         // darkening it: the FAB menu shades nothing in the specification.
         modal: true
         dim: false
+        // The menu takes the keyboard while it is open, which is what lets Tab
+        // walk the actions and Escape put it away. Qt hands focus back to
+        // whatever held it when the menu closes, which is the button itself.
+        focus: true
         // A press anywhere else closes it, the FAB included: the menu blocks
         // what is behind it, so that press never reaches the button, and
         // pressing the button a second time reads as closing the menu.
