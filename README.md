@@ -22,16 +22,17 @@ A minimal Material 3 player built with C++ and Qt Quick, designed for CachyOS an
 
 ## Features
 
-- **YouTube Music** — search songs, albums, artists and playlists; play audio without an embedded browser or ad interface.
-- **Navidrome / Subsonic** — browse and search your server, play original or transcoded audio, edit server playlists, rate songs, sync favorites and listening history, and display server lyrics.
-- **Jellyfin** — browse music libraries, albums, artists and genres; search, stream original or transcoded audio, manage permitted server playlists, sync favorites and display synchronized lyrics.
-- **Your music** — import FLAC, MP3 and other supported audio files or folders; browse albums and artists, search paths and group songs by folder. Mix local and YouTube songs in the same playlists.
-- **Animated artwork** — local animated covers and automatic online covers for matching YouTube songs, shared across the player, immersive view and mini player; lists use still covers.
-- **Appearance** — light and dark themes, a pickable Material accent color, artwork-derived color, an ambient cover backdrop, an expandable navigation rail, density and per-view layouts.
-- **Lyrics** — synchronized lyrics, an immersive view, timing adjustments, LRC import, seek previews and search with jump-to-line playback.
-- **Library tools** — likes, listening history, smart mixes, custom smart playlists, M3U playlist import and export, custom playlist covers, playlist cleanup, multi-selection, drag reordering and Undo.
-- **Playback controls** — mini player, queue editing with source headings, an immersive up-next carousel, volume normalization, shuffle, repeat, sleep timer, playback speed and audio-device selection.
-- **Desktop integration** — media keys through MPRIS, optional notifications, light/dark themes and Noctalia palette support.
+- **YouTube Music**: search songs, albums, artists and playlists; play audio without an embedded browser or ad interface.
+- **Navidrome / Subsonic**: browse and search your server, play original or transcoded audio, edit server playlists, rate songs, sync favorites and listening history, and display server lyrics.
+- **Jellyfin**: browse music libraries, albums, artists and genres; search, stream original or transcoded audio, manage permitted server playlists, sync favorites and display synchronized lyrics.
+- **Your music**: import FLAC, MP3 and other supported audio files or folders; browse albums and artists, search paths and group songs by folder. Mix local and YouTube songs in the same playlists.
+- **Animated artwork**: local animated covers and automatic online covers for matching YouTube songs, shared across the player, immersive view and mini player; lists use still covers.
+- **Appearance**: light and dark themes, a pickable Material accent color, artwork-derived color, an ambient cover backdrop, an expandable navigation rail, density and per-view layouts.
+- **Lyrics**: synchronized lyrics, an immersive view, timing adjustments, LRC import, seek previews and search with jump-to-line playback.
+- **Library tools**: likes, listening history, smart mixes, custom smart playlists, M3U playlist import and export, custom playlist covers, playlist cleanup, multi-selection, drag reordering and Undo.
+- **Playback controls**: mini player, queue editing with source headings, an immersive up-next carousel, volume normalization, shuffle, repeat, sleep timer, playback speed and audio-device selection.
+- **Keyboard and assistive use**: every control takes focus and shows it, sections are marked as headings, and colors are solved to keep 4.5:1 contrast in both themes and at either contrast setting.
+- **Desktop integration**: media keys through MPRIS, optional notifications, light/dark themes and Noctalia palette support.
 
 Native rendering and bounded artwork caches keep Sung lightweight. Animated covers share one additional decoder, released when the player is hidden. Animations can be disabled in Settings.
 
@@ -121,11 +122,13 @@ The same **…** menu offers **Up next covers**: a carousel of the queue below t
 
 The sleep timer can stop at the **end of the queue** as well as after a set time or the current track. It is offered only when the queue can actually finish, so it is unavailable while shuffle or repeat is on.
 
-**Settings → Playback → Resume long recordings** returns to where you left a recording of 20 minutes or more — mixes, sets and live shows. The mark is written when you pause or move on, dropped once the recording finishes or if you stop near either end, and up to 400 are kept locally.
+**Settings → Playback → Resume long recordings** returns to where you left a recording of 20 minutes or more: mixes, sets and live shows. The mark is written when you pause or move on, dropped once the recording finishes or if you stop near either end, and up to 400 are kept locally.
 
 A song’s menu offers **Adjust volume…** to trim that one song by up to 12 dB. The trim is kept for that song, applies whether or not volume normalization is on, and appears in **Track details**.
 
 **Settings → Playback → Fade out before sleep** lowers the audio over the last 30 seconds of a timed or end-of-track sleep timer. Your chosen volume stays saved and is restored when the timer ends or is cancelled.
+
+Drag a queue row sideways to remove it; the row lifts into its own color while you carry it, and the gap it will fall into is drawn as you drag it up or down. Undo restores it.
 
 Queue headings distinguish songs added manually, collection tracks and autoplay recommendations when their origin is known. These labels preserve playback order, including after dragging songs. Older queues without origin information retain source headings.
 
