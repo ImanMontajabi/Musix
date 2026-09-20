@@ -67,7 +67,7 @@ MDialog {
                 MButton { objectName: "smartPlayed"; text: dialog.daysFilter===0?"Any time":dialog.daysFilter===-1?"Never":"Over "+dialog.daysFilter+" days ago"; tonal: true; onClicked: played.popup(this,0,height) }
             }
             MSwitch { id: likedSwitch; objectName: "smartLiked"; text: "Liked songs only" }
-            SungText { text: "Matches saved music. All rules apply. A year or length rule skips songs that have no year or duration."; color: Theme.muted; font.pixelSize: 12; wrapMode: Text.Wrap; Layout.fillWidth: true }
+            SungText { text: "Matches saved music. All rules apply. A year or length rule skips songs that have no year or duration."; color: Theme.muted; font.pixelSize: Theme.bodySmall; wrapMode: Text.Wrap; Layout.fillWidth: true }
         }
     }
     MMenu { id: sources; Repeater { model: [{key:"any",title:"Any source"},{key:"local",title:"Local files"},{key:"youtube",title:"YouTube Music"},{key:"subsonic",title:"Music server"}]; MMenuItem { required property var modelData; text: modelData.title; checkable: true; checked: dialog.sourceFilter===modelData.key; onTriggered: dialog.sourceFilter=modelData.key } } }

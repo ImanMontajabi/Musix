@@ -40,7 +40,7 @@ MDialog {
             SungText {text:"Zoom"; Layout.preferredWidth:82}
             SettingSlider {id:zoom; objectName:"coverCropZoom"; Layout.fillWidth:true; from:1;to:3;value:1;Accessible.name:"Cover zoom"}
         }
-        SungText {text:dialog.failure; visible:!!text; Layout.fillWidth:true; wrapMode:Text.Wrap; font.pixelSize:12; color:Theme.muted}
+        SungText {text:dialog.failure; visible:!!text; Layout.fillWidth:true; wrapMode:Text.Wrap; font.pixelSize:Theme.bodySmall; color:Theme.muted}
         RowLayout {Layout.fillWidth:true
             MButton {text:"Choose image…"; onClicked:dialog.chooseFile()}
             Item {Layout.fillWidth:true}

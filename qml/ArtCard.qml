@@ -45,5 +45,5 @@ Item {
         onClicked: app.togglePin(card.track)
     }
     MatchText { anchors.top: art.bottom; anchors.topMargin: 12; width: parent.width; revealFocused: openCard.activeFocus; sourceText: card.track.title || ""; font.pixelSize: Theme.bodyLarge; font.weight: Font.Medium }
-    MatchText { anchors.top: art.bottom; anchors.topMargin: 36; width: parent.width; sourceText: card.track.count!==undefined ? ((card.track.artist?card.track.artist+" · ":"")+card.track.count+" tracks") : card.track.artist || (card.track.kind === "album" ? "Album" : (card.track.kind === "artist" || card.track.kind === "local-artist") ? "Artist" : "Playlist"); font.pixelSize: 12; color: Theme.muted }
+    MatchText { anchors.top: art.bottom; anchors.topMargin: 36; width: parent.width; sourceText: card.track.count!==undefined ? ((card.track.artist?card.track.artist+" · ":"")+card.track.count+" tracks") : card.track.artist || (card.track.kind === "album" ? "Album" : (card.track.kind === "artist" || card.track.kind === "local-artist") ? "Artist" : "Playlist"); font.pixelSize: Theme.bodySmall; color: Theme.muted }
 }

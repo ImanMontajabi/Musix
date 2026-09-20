@@ -738,8 +738,9 @@ void runHomeRailTests(Backend *b, QQuickWindow *w) {
   c.check(c.until([&] { return b->libraryId() == playlist; }), "a pinned destination opens its collection");
   c.shot("05-rail-pinned");
 
-  // M3 puts the expanded rail beside content, so a narrow window collapses it.
-  w->resize(980, 800);
+  // M3 puts the expanded rail beside content, so a window below the expanded
+  // class collapses it whatever the preference says.
+  w->resize(780, 800);
   QTest::qWait(500);
   c.check(!rail->property("expanded").toBool() && qAbs(rail->width() - 96) < 1,
           "a narrow window collapses the rail even while the preference is on");

@@ -122,7 +122,7 @@ ListView {
                 TapHandler {onTapped:list.toggleGroup(heading.section)}
                 Accessible.ignored:true
             }
-            SungText {visible:!list.foldable;Layout.fillWidth:true;Layout.leftMargin:12;text:heading.section;color:Theme.muted;font.pixelSize:12;elide:Text.ElideRight}
+            SungText {objectName:"groupHeading";visible:!list.foldable;Layout.fillWidth:true;Layout.leftMargin:12;text:heading.section;color:Theme.muted;font.pixelSize:Theme.titleSmall;typeRole:"titleSmall";elide:Text.ElideRight}
             MButton {objectName:"playGroup_"+heading.section;visible:list.foldable;symbol:"play";tip:"Play "+heading.section;onClicked:app.playGroup(heading.section,list.groupFolders)}
         }
     }

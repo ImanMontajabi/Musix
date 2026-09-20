@@ -40,9 +40,9 @@ MDialog {
         delegate: RowLayout {
             required property var modelData
             width: shortcuts.width-12; height: Math.max(48,description.implicitHeight+16); spacing: 16
-            SungText { id: description; text: modelData[0]; Layout.fillWidth: true; wrapMode: Text.Wrap; font.pixelSize: 14 }
-            SungText { text: modelData[1]; Layout.preferredWidth: 155; horizontalAlignment: Text.AlignRight; color: Theme.primary; font.pixelSize: 14 }
+            SungText { id: description; text: modelData[0]; Layout.fillWidth: true; wrapMode: Text.Wrap; font.pixelSize: Theme.bodyMedium }
+            SungText { text: modelData[1]; Layout.preferredWidth: 155; horizontalAlignment: Text.AlignRight; color: Theme.primary; font.pixelSize: Theme.labelLarge; labelRole: true }
         }
-        footer: SungText { width: shortcuts.width-16; text: "¹ Outside text fields and controls. ² With the song list focused."; wrapMode: Text.Wrap; color: Theme.muted; font.pixelSize: 12; topPadding: 16 }
+        footer: SungText { width: shortcuts.width-16; text: "¹ Outside text fields and controls. ² With the song list focused."; wrapMode: Text.Wrap; color: Theme.muted; font.pixelSize: Theme.bodySmall; topPadding: 16 }
     }
 }

@@ -103,7 +103,7 @@ ColumnLayout {
             Layout.fillWidth: true; Layout.minimumWidth: 0
             horizontalAlignment: Text.AlignHCenter
             elide: Text.ElideRight
-            color: Theme.muted; font.pixelSize: 12
+            color: Theme.muted; font.pixelSize: Theme.bodySmall
             text: {
                 const item=app.queue.get(covers.currentIndex);
                 return covers.currentIndex<0 ? "" : item.title || "";

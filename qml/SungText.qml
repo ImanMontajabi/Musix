@@ -25,14 +25,14 @@ Text {
     font.family: Theme.fontFamily
     font.variableAxes: ({"wdth": label.emphasized ? Theme.emphasizedWidth : Theme.regularWidth})
     color: Theme.text
-    font.pixelSize: 14
+    font.pixelSize: Theme.bodyMedium
     font.weight: Theme.weightFor(emphasized, labelRole, metricSize, typeRole)
     // A role carries its line height and letter spacing, not only its size.
     // Letter spacing cannot read the size from a binding: font.letterSpacing
     // and font.pixelSize live in one grouped property, so a binding that sets
     // the first while reading the second re-enters itself. The size is
     // assigned across instead, which settles where a binding would loop.
-    property real metricSize: 14
+    property real metricSize: Theme.bodyMedium
     onFontChanged: if (metricSize !== label.font.pixelSize) metricSize = label.font.pixelSize
     Component.onCompleted: metricSize = font.pixelSize
     font.letterSpacing: Theme.trackingFor(metricSize, labelRole, typeRole, emphasized)

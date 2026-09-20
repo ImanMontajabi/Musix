@@ -3259,7 +3259,8 @@ void runMaterialSizingTests(Backend *b, QQuickWindow *w) {
   QTest::qWait(700);
   c.check(panel && panel->isVisible() && !w->property("sheetMode").toBool(),
           "a wide window sets the queue beside the page");
-  w->resize(880, 860);
+  // Below the expanded class there is no room for a pane beside the content.
+  w->resize(780, 860);
   QTest::qWait(900);
   c.check(w->property("sheetMode").toBool(), "a narrower one has no room for that");
   c.check(sheet && sheet->isVisible(), "so the pane arrives as a bottom sheet");
@@ -3287,6 +3288,41 @@ void runMaterialSizingTests(Backend *b, QQuickWindow *w) {
     QTest::qWait(700);
     c.check(w->property("side").toString().isEmpty(), "and pushing it down closes the pane");
   }
+
+  // --- Layout decisions come off Material's window size classes ---
+  // The five classes were already worked out and then not used: the rail was
+  // offered at 1080 and the supporting pane dropped into a sheet below 1000,
+  // neither of which is a breakpoint. Both read the expanded class now.
+  w->resize(900, 860);
+  QTest::qWait(700);
+  c.check(w->property("sizeClass").toString() == "expanded",
+          QString("900px is the expanded class (%1)").arg(w->property("sizeClass").toString()));
+  c.check(w->property("atLeastExpanded").toBool() && !w->property("sheetMode").toBool(),
+          "where the supporting pane sits beside the content rather than in a sheet");
+  if (auto rail = shownItem(w->contentItem(), "navigationRail"))
+    c.check(rail->property("roomToExpand").toBool(),
+            "and the rail can be opened, because there is room for one beside it");
+  w->resize(800, 860);
+  QTest::qWait(700);
+  c.check(w->property("sizeClass").toString() == "medium" &&
+              !w->property("atLeastExpanded").toBool(),
+          "800px is the medium class");
+  c.check(w->property("sheetMode").toBool(), "where the pane becomes a sheet");
+  if (auto rail = shownItem(w->contentItem(), "navigationRail"))
+    c.check(!rail->property("roomToExpand").toBool(), "and the rail stays collapsed");
+
+  // --- An app bar's trailing actions are the variant ink ---
+  // Material keeps the surface ink for the leading icon and gives the trailing
+  // side the variant. An icon button takes the ink of what it sits on, so the
+  // bar is what says which.
+  w->resize(1400, 900);
+  QTest::qWait(700);
+  for (auto action : w->findChildren<QQuickItem *>())
+    if (action->objectName().startsWith("appBarAction_") && action->isVisible()) {
+      c.check(action->property("ambientInk").value<QColor>() == c.themeColor("muted"),
+              "an app bar action is drawn in the variant ink");
+      break;
+    }
 
   // --- A window too narrow for a rail ---
   w->resize(520, 860);
@@ -3785,8 +3821,9 @@ void runMaterialGrainTests(Backend *b, QQuickWindow *w) {
   }
 
   // --- A sheet that takes the screen over scrims what it covers ---
+  // Below the expanded class the supporting pane arrives as a sheet.
   w->setProperty("side", "queue");
-  w->resize(880, 860);
+  w->resize(780, 860);
   QTest::qWait(900);
   auto sheet = anyItem(w->contentItem(), "panelSheet");
   c.check(sheet && sheet->isVisible() && sheet->property("modal").toBool(),
@@ -3929,6 +3966,15 @@ void runMaterialEmphasisTests(Backend *b, QQuickWindow *w) {
     c.check(c.themeColor("surface") != c.themeColor("container"),
             "which is a container, not nothing");
     c.shot("04-group-expander");
+    // Material sets a section heading in title small. All three in the app,
+    // here and in the rail and the drawer, were a label style.
+    const auto headings = w->findChildren<QQuickItem *>("groupHeading");
+    c.check(!headings.isEmpty(), "a grouped list carries section headings");
+    for (auto heading : headings) {
+      c.check(heading->property("typeRole").toString() == "titleSmall",
+              "a section heading is set in title small");
+      break;
+    }
     QTest::mouseClick(w, Qt::LeftButton, Qt::NoModifier, point);
     QTest::qWait(400);
   }

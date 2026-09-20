@@ -22,7 +22,7 @@ Item {
         MButton { objectName: "closeLyricSearch"; symbol: "back"; tip: "Back to lyrics"; onClicked: lyricPane.closeSearch() }
         MSearchField {
             id: lyricSearch; objectName: "lyricSearchField"; Layout.fillWidth: true; Layout.minimumWidth: 0; implicitHeight: 48
-            placeholderText: "Find in lyrics"; selectByMouse: true; font.family: Theme.fontFamily; font.pixelSize: 14; color: Theme.text; placeholderTextColor: Theme.muted
+            placeholderText: "Find in lyrics"; selectByMouse: true; font.family: Theme.fontFamily; font.pixelSize: Theme.bodyMedium; color: Theme.text; placeholderTextColor: Theme.muted
             Accessible.name: "Find in lyrics"
             onTextChanged: searchDelay.restart()
             Keys.onDownPressed: {lyricResults.currentIndex=Math.min(lyricPane.matches.length-1,lyricResults.currentIndex+1);}
@@ -30,7 +30,7 @@ Item {
             Keys.onReturnPressed: {if(searchDelay.running){searchDelay.stop();lyricPane.refreshSearch();}else if(lyricResults.currentIndex<0)lyricPane.refreshSearch();lyricPane.jumpMatch(lyricResults.currentIndex);}
             Keys.onEscapePressed: lyricPane.closeSearch()
         }
-        SungText { text: lyricPane.matches.length; visible: lyricSearch.text.length>0; color: Theme.muted; font.pixelSize: 12 }
+        SungText { text: lyricPane.matches.length; visible: lyricSearch.text.length>0; color: Theme.muted; font.pixelSize: Theme.labelMedium; labelRole: true }
     }
     Timer { id: searchDelay; interval: 90; onTriggered: lyricPane.refreshSearch() }
     ListView {
@@ -44,13 +44,13 @@ Item {
             Accessible.name: modelData.text; Accessible.description: modelData.start>=0 ? "Seek to "+app.formatTime(Math.max(0,modelData.start-app.lyricOffset)) : "Untimed lyric"
             onClicked: lyricPane.jumpMatch(index)
             background: Rectangle { radius: Theme.shapeMedium; color: parent.ListView.isCurrentItem?Theme.high:"transparent" }
-            SungText { font.features: {"tnum": 1}; anchors.right: parent.right; anchors.rightMargin: 12; anchors.verticalCenter: parent.verticalCenter; visible: modelData.start>=0; text: app.formatTime(Math.max(0,modelData.start-app.lyricOffset)); color: Theme.muted; font.pixelSize: 12 }
+            SungText { font.features: {"tnum": 1}; anchors.right: parent.right; anchors.rightMargin: 12; anchors.verticalCenter: parent.verticalCenter; visible: modelData.start>=0; text: app.formatTime(Math.max(0,modelData.start-app.lyricOffset)); color: Theme.muted; font.pixelSize: Theme.labelMedium; labelRole: true }
             contentItem: MatchText { id: matchText; sourceText: modelData.text; query: lyricSearch.text; leftPadding: 12; rightPadding: modelData.start>=0?64:12; topPadding: 12; bottomPadding: 12; wrapMode: Text.Wrap; font.pixelSize: Theme.bodyLarge; color: Theme.text }
         }
         SungText { anchors.centerIn: parent; visible: lyricPane.matches.length===0; text: "No matches"; color: Theme.muted }
     }
     readonly property int gapSeconds: {app.position;app.lyricLines;app.lyricOffset;return visible && following && !searchOpen && !app.lyricsBusy ? app.lyricGapSeconds : 0;}
-    SungText {id:gapCue;objectName:"lyricGapCue";anchors.horizontalCenter:parent.horizontalCenter;anchors.bottom:parent.bottom;height:visible?36:0;visible:lyricPane.gapSeconds>0;text:"Lyrics in "+lyricPane.gapSeconds+" s";color:Theme.muted;font.pixelSize:14;verticalAlignment:Text.AlignVCenter;Accessible.name:text}
+    SungText {id:gapCue;objectName:"lyricGapCue";anchors.horizontalCenter:parent.horizontalCenter;anchors.bottom:parent.bottom;height:visible?36:0;visible:lyricPane.gapSeconds>0;text:"Lyrics in "+lyricPane.gapSeconds+" s";color:Theme.muted;font.pixelSize:Theme.labelLarge;labelRole:true;verticalAlignment:Text.AlignVCenter;Accessible.name:text}
     property bool expanded: false
     property bool following: true
     onFollowingChanged: { if(following)liveLyrics.centerCurrent(); }

@@ -65,12 +65,17 @@ AbstractButton {
     // role itself. The unselected ink stays the surface ink rather than the
     // variant Material names, so a toggle in a row of plain icon buttons reads
     // the same as the ones beside it.
+    // The ink of whatever this button sits on. An icon button takes the
+    // ambient content colour rather than forcing one of its own, so a
+    // container that sets a different one, such as an app bar's trailing
+    // side, says so here.
+    property color ambientInk: Theme.text
     property color ink: dimmed ? Theme.muted
                       : filled ? Theme.primaryText
                       : elevated ? Theme.primary
                       : outlined ? Theme.muted
                       : tonal ? (toggle && selected ? Theme.secondaryText : Theme.secondaryContainerText)
-                      : toggle ? (selected ? Theme.primary : Theme.text)
+                      : toggle ? (selected ? Theme.primary : ambientInk)
                       : selected ? Theme.primary
                       // Material's text button labels itself in the accent. The
                       // generated token says the variant ink, but Compose sets
@@ -80,7 +85,7 @@ AbstractButton {
                       // left aligned one is how this app builds a list row,
                       // where the label is the row's own ink rather than an
                       // offer to act.
-                      : text.length && !leftAligned ? Theme.primary : Theme.text
+                      : text.length && !leftAligned ? Theme.primary : ambientInk
     // Material draws the container at the size's own height and keeps a 48dp
     // touch target around it, so a small button is a 40dp shape you can still
     // hit comfortably. The target is the footprint the layout sees.

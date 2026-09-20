@@ -20,8 +20,8 @@ MDialog {
                 RowLayout {anchors.fill:parent;anchors.margins:12;spacing:8
                     ColumnLayout {Layout.fillWidth:true;spacing:3
                         SungText {text:modelData.title;Layout.fillWidth:true;font.weight:Font.Medium}
-                        SungText {text:modelData.song || "";Layout.fillWidth:true;color:Theme.muted;font.pixelSize:12}
-                        SungText {text:modelData.count+(modelData.count===1?" track · ":" tracks · ")+Math.floor(modelData.position/60000)+":"+String(Math.floor(modelData.position/1000)%60).padStart(2,"0");color:Theme.muted;font.pixelSize:12}
+                        SungText {text:modelData.song || "";Layout.fillWidth:true;color:Theme.muted;font.pixelSize:Theme.bodySmall}
+                        SungText {text:modelData.count+(modelData.count===1?" track · ":" tracks · ")+Math.floor(modelData.position/60000)+":"+String(Math.floor(modelData.position/1000)%60).padStart(2,"0");color:Theme.muted;font.pixelSize:Theme.bodySmall}
                     }
                     MButton {objectName:"resumeSessionButton";symbol:"play";tip:"Resume session";onClicked:{dialog.selectedSession=modelData;dialog.action="resume";sessionConfirmDialog.open();}}
                     MButton {symbol:"more";tip:"Session actions";onClicked:{dialog.selectedSession=modelData;actions.popup(this);}}

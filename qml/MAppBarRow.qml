@@ -72,6 +72,9 @@ Item {
                 text: modelData.text || ""
                 tip: modelData.tip || modelData.label
                 enabled: modelData.enabled !== false
+                // Material draws an app bar's trailing actions in the variant
+                // ink and keeps the surface ink for the leading one.
+                ambientInk: Theme.muted
                 toggle: modelData.toggle === true
                 selected: modelData.checked === true
                 onClicked: modelData.trigger()
@@ -82,6 +85,7 @@ Item {
             objectName: "appBarOverflow"
             visible: bar.overflowing
             symbol: "more"
+            ambientInk: Theme.muted
             tip: "More actions"
             selected: overflowMenu.opened
             onClicked: overflowMenu.popup(overflowButton, 0, overflowButton.height)
