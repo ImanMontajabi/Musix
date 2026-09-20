@@ -1924,7 +1924,6 @@ ApplicationWindow {
                 MSwitch { Layout.fillWidth:true;Layout.minimumWidth:0; objectName: "animatedArtworkSwitch"; visible: settingsDialog.matches("Animated album artwork"); text: "Animated album artwork"; checked: app.animatedArtwork; onToggled: app.animatedArtwork=checked }
                 MSwitch { Layout.fillWidth:true;Layout.minimumWidth:0; objectName: "onlineArtworkSwitch"; visible: settingsDialog.matches("Online animated covers YouTube Apple Music"); text: "Online animated covers"; checked: app.onlineArtwork; onToggled: app.onlineArtwork=checked }
                 MSwitch { Layout.fillWidth:true;Layout.minimumWidth:0; objectName: "albumCoversSwitch"; visible: settingsDialog.matches("Album covers for music videos YouTube Apple Music"); text: "Album covers for music videos"; checked: app.albumCovers; onToggled: app.albumCovers=checked }
-                SungText { visible: settingsDialog.matches("Album covers for music videos YouTube Apple Music"); text: "A music video has a frame from the video for a cover. Look for the album's own cover on Apple Music instead."; wrapMode: Text.Wrap; Layout.fillWidth: true;Layout.minimumWidth:0; color: Theme.muted; font.pixelSize: Theme.bodyMedium }
                 MSwitch { Layout.fillWidth:true;Layout.minimumWidth:0; visible: settingsDialog.matches("Animations"); text: "Animations"; checked: app.motion; onToggled: app.motion=checked }
                     }
                 }
@@ -2004,7 +2003,6 @@ ApplicationWindow {
                              {key:"saver",label:"Data saver",name:"qualitySaver"}]
                     value:app.streamingQuality; onChosen:value=>app.streamingQuality=value
                 }
-                SungText { visible: settingsDialog.matches("YouTube streaming quality standard data saver bitrate"); text: "Standard takes the best stream YouTube offers. Data saver takes about half the data, for a slow or limited connection."; wrapMode: Text.Wrap; Layout.fillWidth: true;Layout.minimumWidth:0; color: Theme.muted; font.pixelSize: Theme.bodyMedium }
                 MSettingRow {opens:true;objectName:"cookieButton";text:app.cookies?"Replace cookies":"Import cookies";visible:settingsDialog.matches("YouTube cookies import replace remove sign in");onClicked:window.openFileDialog("cookies")}
                 MSettingRow {text:"Remove cookies";visible:!!app.cookies && settingsDialog.matches("YouTube cookies import replace remove sign in");onClicked:app.clearCookies()}
                 SungText { visible: settingsDialog.matches("YouTube cookies import replace remove sign in"); text: "Optional cookies.txt for tracks that require sign-in. Your library stays on this device."; wrapMode: Text.Wrap; Layout.fillWidth: true;Layout.minimumWidth:0; color: Theme.muted; font.pixelSize: Theme.bodyMedium }
