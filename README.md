@@ -4,13 +4,13 @@
 
 # Musix
 
-**YouTube Music, your music files, and your music server. Native on Linux.**
+**YouTube Music, your music files, and your music server. Native on Linux and macOS.**
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-![Linux](https://img.shields.io/badge/platform-Linux-blue.svg)
+![Linux | macOS](https://img.shields.io/badge/platform-Linux%20%7C%20macOS-blue.svg)
 ![Qt 6](https://img.shields.io/badge/built_with-Qt_6-41CD52.svg)
 
-A minimal Material 3 player built with C++ and Qt Quick, designed for CachyOS and Wayland.
+A minimal Material 3 player built with C++ and Qt Quick, running natively on Linux (Wayland) and macOS (Apple Silicon).
 
 [Install](#install) · [Features](#features) · [Development](#development)
 
