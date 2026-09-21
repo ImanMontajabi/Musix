@@ -4,7 +4,7 @@ import QtQuick.Layouts
 Window {
     id: mini
     objectName: "miniPlayerWindow"
-    title: "Sung · Mini player"
+    title: "Musix · Mini player"
     transientParent: null
     flags: Qt.Window | Qt.FramelessWindowHint
     readonly property bool hasTimedLyrics: app.lyricLines.length>0
@@ -37,7 +37,7 @@ Window {
                     SungText { text: presentation.shown.artist || ""; opacity: presentation.fade; transform: Translate { x: presentation.offset } Layout.fillWidth: true; font.pixelSize: Theme.bodyMedium; color: Theme.muted }
                 }
                 MButton { objectName: "miniRestoreButton"; symbol: "expand"; tip: "Full player · Ctrl+M"; onClicked: mini.restoreRequested() }
-                MButton { symbol: "close"; tip: "Quit Sung"; onClicked: Qt.quit() }
+                MButton { symbol: "close"; tip: "Quit Musix"; onClicked: Qt.quit() }
             }
             Item {
                 id: lyricLine; objectName:"miniLyricContainer"

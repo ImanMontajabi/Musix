@@ -17,8 +17,8 @@ public:
   explicit RootAdaptor(Backend *b) : QDBusAbstractAdaptor(b), b(b) {}
   bool yes() const { return true; }
   bool no() const { return false; }
-  QString identity() const { return "Sung"; }
-  QString desktop() const { return "sung"; }
+  QString identity() const { return "Musix"; }
+  QString desktop() const { return "musix"; }
   QStringList schemes() const { return {"https"}; }
   QStringList types() const { return {}; }
 public slots:

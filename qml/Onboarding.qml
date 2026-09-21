@@ -14,7 +14,7 @@ MDialog {
     property bool folderAdded: false
     signal browseRequested()
     signal serverRequested()
-    title: ["Welcome to Sung","Add your music","Where should Sung open?"][step]
+    title: ["Welcome to Musix","Add your music","Where should Musix open?"][step]
     modal: true
     closePolicy: Popup.NoAutoClose
     anchors.centerIn: parent
@@ -42,9 +42,9 @@ MDialog {
             objectName: "onboardingBlurb"
             Layout.fillWidth: true; Layout.minimumWidth: 0
             text: [
-                "Pick how Sung should look. You can change any of this later in Settings.",
-                "Point Sung at a folder of music and it will keep it up to date. Skip this if you only stream.",
-                "Choose the page Sung opens on. That is everything — enjoy."
+                "Pick how Musix should look. You can change any of this later in Settings.",
+                "Point Musix at a folder of music and it will keep it up to date. Skip this if you only stream.",
+                "Choose the page Musix opens on. That is everything — enjoy."
             ][root.step]
             color: Theme.muted; font.pixelSize: Theme.bodyMedium; wrapMode: Text.Wrap
         }

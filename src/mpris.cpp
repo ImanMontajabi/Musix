@@ -45,7 +45,7 @@ void registerMpris(Backend *b) {
   new RootAdaptor(b);
   new PlayerAdaptor(b);
   auto bus = QDBusConnection::sessionBus();
-  if (bus.registerService("org.mpris.MediaPlayer2.sung"))
+  if (bus.registerService("org.mpris.MediaPlayer2.musix"))
     bus.registerObject("/org/mpris/MediaPlayer2", b,
                        QDBusConnection::ExportAdaptors);
 }

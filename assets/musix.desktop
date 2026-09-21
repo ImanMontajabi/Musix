@@ -1,10 +1,10 @@
 [Desktop Entry]
 Type=Application
-Name=Sung
+Name=Musix
 Comment=YouTube Music, native on Linux
-Exec=sung %u
-Icon=sung
+Exec=musix %u
+Icon=musix
 Terminal=false
 Categories=AudioVideo;Audio;Player;
-StartupWMClass=sung
-MimeType=x-scheme-handler/sung;
+StartupWMClass=musix
+MimeType=x-scheme-handler/musix;

@@ -244,14 +244,14 @@ void Backend::request(const QString &channel, QVariantMap args, Callback done, s
   if (helper.isEmpty())
     helper = QCoreApplication::applicationDirPath() + "/../helper/catalog.py";
   if (!QFile::exists(helper))
-    helper = QCoreApplication::applicationDirPath() + "/../lib/sung/catalog.py";
+    helper = QCoreApplication::applicationDirPath() + "/../lib/musix/catalog.py";
   QString python = qEnvironmentVariable("SUNG_PYTHON");
   if (python.isEmpty()) {
     auto bundled =
         QCoreApplication::applicationDirPath() + "/../runtime/bin/python";
     if (!QFile::exists(bundled))
       bundled = QCoreApplication::applicationDirPath() +
-                "/../lib/sung/runtime/bin/python";
+                "/../lib/musix/runtime/bin/python";
     python = QFile::exists(bundled) ? bundled : QStringLiteral("python3");
   }
   auto timer = new QTimer(p);
@@ -1609,9 +1609,9 @@ void Backend::exportLibrary(const QUrl &url) {
 }
 void Backend::importLibrary(const QUrl &url) {
   if(!url.isLocalFile())return;
-  QFile file(url.toLocalFile());if(!file.open(QIODevice::ReadOnly)||file.size()>10*1024*1024){notifyError("Choose a Sung library JSON file smaller than 10 MB.");return;}
+  QFile file(url.toLocalFile());if(!file.open(QIODevice::ReadOnly)||file.size()>10*1024*1024){notifyError("Choose a Musix library JSON file smaller than 10 MB.");return;}
   auto d=QJsonDocument::fromJson(file.readAll());auto map=d.object().toVariantMap();
-  if(!d.isObject()||map.value("sung").toInt()!=1){notifyError("This isn’t a Sung library export.");return;}
+  if(!d.isObject()||map.value("sung").toInt()!=1){notifyError("This isn’t a Musix library export.");return;}
   for(const auto &v:playable(map.value("localTracks").toList()))if(!v.toMap().value("localPath").toString().isEmpty())mergeLocalTrack(v.toMap());
   for(const auto &path:map.value("musicFolders").toStringList())if(QDir::isAbsolutePath(path)&&!m_musicFolders.contains(path)&&m_musicFolders.size()<64)m_musicFolders.append(path);
   invalidateUndo("playlists");

@@ -34,8 +34,8 @@ void PlaybackNotifier::flush() {
   const auto track=m_queued;m_queued.clear();m_pending=true;
   const auto generation=m_generation;
   auto request=message("Notify");
-  const QVariantMap hints{{"desktop-entry","sung"},{"category","music"},{"transient",true},{"suppress-sound",true},{"urgency",QVariant::fromValue(uchar(0))}};
-  request<<QString("Sung")<<m_id<<QString("sung")<<track.value("title").toString()<<track.value("artist").toString().toHtmlEscaped()<<QStringList{}<<hints<<5000;
+  const QVariantMap hints{{"desktop-entry","musix"},{"category","music"},{"transient",true},{"suppress-sound",true},{"urgency",QVariant::fromValue(uchar(0))}};
+  request<<QString("Musix")<<m_id<<QString("musix")<<track.value("title").toString()<<track.value("artist").toString().toHtmlEscaped()<<QStringList{}<<hints<<5000;
   auto pending=new QDBusPendingCallWatcher(QDBusConnection::sessionBus().asyncCall(request,2000),this);
   connect(pending,&QDBusPendingCallWatcher::finished,this,[this,generation](QDBusPendingCallWatcher *call){
     QDBusPendingReply<uint> result=*call;

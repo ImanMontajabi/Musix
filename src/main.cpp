@@ -94,16 +94,16 @@ int main(int argc, char **argv) {
     qputenv("QT_FFMPEG_ENCODING_HW_DEVICE_TYPES", ",");
   QGuiApplication app(argc, argv);
   app.setApplicationName("sung");
-  app.setApplicationDisplayName("Sung");
+  app.setApplicationDisplayName("Musix");
   app.setOrganizationName("Sung");
   app.setApplicationVersion("0.12.0");
-  app.setDesktopFileName("sung");
+  app.setDesktopFileName("musix");
 #ifdef SUNG_DIAGNOSTICS
-  if(app.arguments().contains("--immersive-polish-test"))app.setDesktopFileName("sung-immersive-test");
+  if(app.arguments().contains("--immersive-polish-test"))app.setDesktopFileName("musix-immersive-test");
 #endif
   const auto args = app.arguments();
   if (args.contains("--version")) {
-    fprintf(stdout, "Sung 0.12.0\n");
+    fprintf(stdout, "Musix 0.12.0\n");
     return 0;
   }
   QLocalSocket peer;

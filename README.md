@@ -1,12 +1,8 @@
 <div align="center">
 
-<img src="assets/readme-banner.png" alt="Sung showing music collections and synchronized lyrics" width="100%">
+<img src="assets/readme-banner.png" alt="Musix showing music collections and synchronized lyrics" width="100%">
 
-<a href="https://buymeacoffee.com/e_gurl">
-  <img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Support Sung on Buy Me a Coffee" width="217" height="60">
-</a>
-
-# Sung
+# Musix
 
 **YouTube Music, your music files, and your music server. Native on Linux.**
 
@@ -34,7 +30,7 @@ A minimal Material 3 player built with C++ and Qt Quick, designed for CachyOS an
 - **Keyboard and assistive use**: every control takes focus and shows it, sections are marked as headings, and colors are solved to keep 4.5:1 contrast in both themes and at either contrast setting.
 - **Desktop integration**: media keys through MPRIS, optional notifications, light/dark themes and Noctalia palette support.
 
-Native rendering and bounded artwork caches keep Sung lightweight. Animated covers share one additional decoder, released when the player is hidden. Animations can be disabled in Settings.
+Native rendering and bounded artwork caches keep Musix lightweight. Animated covers share one additional decoder, released when the player is hidden. Animations can be disabled in Settings.
 
 ## Install
 
@@ -46,18 +42,18 @@ Install the build and runtime dependencies:
 sudo pacman -S --needed git base-devel cmake ninja python nodejs ffmpeg qt6-base qt6-declarative qt6-multimedia qt6-svg qt6-wayland qt6-imageformats
 ```
 
-Download and install Sung:
+Download and install Musix:
 
 ```bash
-git clone https://github.com/yappologistic/Sung.git
-cd Sung
+git clone https://github.com/ImanMontajabi/Musix.git
+cd Musix
 ./scripts/install.sh
 ```
 
-Open **Sung** from your application menu, or run:
+Open **Musix** from your application menu, or run:
 
 ```bash
-~/.local/bin/sung
+~/.local/bin/musix
 ```
 
 Installation is per-user in `~/.local`; do not run the install script with `sudo`. Python dependencies are installed in an isolated environment. Internet access is needed during installation and for YouTube playback.
@@ -66,13 +62,13 @@ Installation is per-user in `~/.local`; do not run the install script with `sudo
 
 Install the equivalent development packages for **Qt 6.8+** (Core, Gui, Quick, Qml, QuickControls2, Multimedia, Network, DBus, Svg and Wayland), a C++20 compiler, CMake 3.24+, Ninja, Python 3 with `venv`/`pip`, Node.js 20+ and FFmpeg. Install the Qt image-format plugins for WebP artwork. Then follow the clone and install commands above.
 
-Sung uses Google Sans Flex when installed and otherwise falls back to a system font. Noctalia is optional.
+Musix uses Google Sans Flex when installed and otherwise falls back to a system font. Noctalia is optional.
 
 ## Getting started
 
 ### Music library
 
-Search for music or paste a YouTube song or playlist link. Use **Library → Local files → +** to add files, or **Folders → Add folder…** for a whole music folder. Enter its absolute path (or `~/Music`), or use **Browse…**, then choose **Add folder**. This also works for network shares mounted as local folders and does not depend on the system folder picker. Subfolders are scanned recursively. Saved folders update automatically while Sung is running. Settings can disable automatic updates; the refresh button also rescans them. Missing files remain listed as unavailable; files and playlist entries are never deleted by a scan. Folder monitoring uses filesystem notifications and is bounded to 4,096 directories and 10,000 audio files; use manual rescan for larger libraries or mounts that do not deliver notifications.
+Search for music or paste a YouTube song or playlist link. Use **Library → Local files → +** to add files, or **Folders → Add folder…** for a whole music folder. Enter its absolute path (or `~/Music`), or use **Browse…**, then choose **Add folder**. This also works for network shares mounted as local folders and does not depend on the system folder picker. Subfolders are scanned recursively. Saved folders update automatically while Musix is running. Settings can disable automatic updates; the refresh button also rescans them. Missing files remain listed as unavailable; files and playlist entries are never deleted by a scan. Folder monitoring uses filesystem notifications and is bounded to 4,096 directories and 10,000 audio files; use manual rescan for larger libraries or mounts that do not deliver notifications.
 
 In **Local files**, open **Find and sort songs → Folder** to group songs by their parent directory, with natural filename order inside each group. The filter also searches folder paths.
 
@@ -84,13 +80,13 @@ Create an automatic playlist from **Library → Playlists → Smart playlist**. 
 
 **Library → Playlists → Import M3U** reads an `.m3u` or `.m3u8` file, imports the audio it names and saves it as a playlist. Relative entries resolve against the playlist file’s own folder. A playlist’s menu offers **Export as M3U…** in return. Only local files can travel this way: streaming ids mean nothing to other players, and server URLs would carry credentials that library exports deliberately leave out, so those songs are skipped and counted.
 
-In a playlist’s menu, choose **Change cover…** to crop a PNG, JPEG or WebP. Sung saves a 512px copy; the original stays untouched. **Restore cover collage** returns to automatic artwork.
+In a playlist’s menu, choose **Change cover…** to crop a PNG, JPEG or WebP. Musix saves a 512px copy; the original stays untouched. **Restore cover collage** returns to automatic artwork.
 
 ### Artwork and appearance
 
 The navigation rail on the left can expand. Use the menu button at its top to switch between icons and a wider list that also shows your pinned collections. The choice is remembered, and windows narrower than 1080px stay collapsed because the expanded rail sits beside the content rather than over it.
 
-On first run Sung offers a three-step setup: theme and accent color, a music folder, and the page to open on. Every step can be skipped, and each control also lives in Settings.
+On first run Musix offers a three-step setup: theme and accent color, a music folder, and the page to open on. Every step can be skipped, and each control also lives in Settings.
 
 Open **Home → Customize Home** to reorder or hide sections; **Reset layout** restores them. **Settings → Library → Start page** chooses Home, Local, Server or Liked for future launches. Direct launch links still take priority.
 
@@ -100,7 +96,7 @@ Open **Home → Customize Home** to reorder or hide sections; **Reset layout** r
 
 For animated artwork, place a **GIF, animated WebP, MP4 or WebM** beside your music, named `cover`, `folder`, `front` or `artwork` (for example, `cover.mp4`). A matching song filename, such as `Song.gif` beside `Song.flac`, takes priority. Names are case-insensitive. JPG, PNG and static WebP sidecars also work as still covers. Import or rescan the folder after changing its artwork. Covers are limited to 128 MiB and 4096 × 4096 pixels; unreadable covers fall back to embedded artwork. Animation is silent, pauses with playback, and respects **Settings → Appearance → Animations** and **Animated album artwork**. No artwork service account is needed.
 
-A song that is a music video or an upload has a video frame for a cover rather than album art. Wherever that cover is drawn larger than a list row, Sung asks YouTube for the 1280 × 720 frame and keeps the small one only when the upload has no HD version.
+A song that is a music video or an upload has a video frame for a cover rather than album art. Wherever that cover is drawn larger than a list row, Musix asks YouTube for the 1280 × 720 frame and keeps the small one only when the upload has no HD version.
 
 **Settings → Appearance → Album covers for music videos** goes further and looks for the album's own cover on Apple Music's public pages, using the same unofficial, best-effort match as animated covers. When Apple has no album for a song, which is common for game soundtracks, fan uploads and releases that never reached a store, MusicBrainz and its Cover Art Archive are asked next; those covers are scans people uploaded, so anything below 500 pixels is left alone, because a thumbnail is no improvement on a video frame. The setting is on by default and works whether or not animations are enabled. The cover replaces the frame everywhere, including the desktop's own media controls. A song neither service has keeps its frame, and is not looked up again; **Find cover again** in the artwork controls asks once more. Up to 2,000 answers are kept locally.
 
@@ -110,7 +106,7 @@ Open **Settings → Appearance → Current artwork** to preview the current cove
 
 **Settings → Appearance → Use artwork accent** colors controls from the current cover. It is off by default; desktop surfaces and Noctalia integration are preserved. Monochrome or missing covers use the normal theme.
 
-**Settings → Appearance → Accent color** picks a Material source color for buttons, highlights and progress. Sung solves each seed against the current surfaces, so the resulting color always clears 4.5:1 contrast in both themes. **Default** restores the built-in palette. Artwork accent takes priority while it is on.
+**Settings → Appearance → Accent color** picks a Material source color for buttons, highlights and progress. Musix solves each seed against the current surfaces, so the resulting color always clears 4.5:1 contrast in both themes. **Default** restores the built-in palette. Artwork accent takes priority while it is on.
 
 **Settings → Appearance → Ambient artwork backdrop** draws the current cover, softened and dimmed, behind Home, the immersive player and the Now playing panel. Home has no cover of its own, so it borrows the playing track’s, or the first artwork on its shelves when nothing is playing. It is on by default. The cover is decoded small and blurred once when it loads, so the wash costs one small texture and no per-frame effect, and a scrim keeps text contrast unchanged. In the immersive player the backdrop drifts slowly and, with **Backdrop follows the music**, swells gently with the decoded low end of the track; it holds still on rounded surfaces such as Home and the Now playing panel, because swelling there would square off their corners. Everything stops when **Animations** is off. Hiding either surface releases the decoded cover.
 
@@ -140,7 +136,7 @@ Hold **Shift while dragging the seek bar** for fine seeking; the new position ap
 
 Click the volume icon for a slider and an exact percentage. Enter a value from 0 to 100 and press Enter or Apply. This works in the main, mini and immersive players. In the main and immersive players, **Ctrl+Up / Down** adjusts volume and **M** toggles mute; shortcuts show brief playback feedback.
 
-Timed lyrics show a countdown during intros and explicit gaps of at least five seconds. Sung uses supplied line boundaries or blank timed lines; it does not infer instrumental passages from a long lyric line. Timing adjustments apply to the countdown.
+Timed lyrics show a countdown during intros and explicit gaps of at least five seconds. Musix uses supplied line boundaries or blank timed lines; it does not infer instrumental passages from a long lyric line. Timing adjustments apply to the countdown.
 
 The queue shows remaining time and a finish estimate during uninterrupted playback. Unknown durations, random shuffle, repeat, autoplay or a sleep timer can make a finish estimate unavailable.
 
@@ -154,7 +150,7 @@ The arrow beside the player’s volume controls opens an audio-output picker. It
 
 **Settings → Playback → Volume normalization** evens out loudness between recordings. ReplayGain and R128 tags are read when a file is imported; everything else, including YouTube and server audio, is measured from the decoded stream and levelled from the next play onward. Recordings shorter than 45 seconds of playback are never treated as measured. Gain is limited to -15 dB and +6 dB, and the mixer cannot amplify past full scale, so a quiet track is only lifted while your own volume leaves headroom. Your chosen volume is never rewritten, and **Track details** shows the correction in use. Up to 2,000 measurements are kept locally. Existing imports need a rescan to pick up their tags.
 
-**Pause when audio output disconnects** is optional. Sung pauses when the selected device disappears; wired headphone-port detection uses `pactl` from `libpulse`. Reconnecting does not automatically resume playback.
+**Pause when audio output disconnects** is optional. Musix pauses when the selected device disappears; wired headphone-port detection uses `pactl` from `libpulse`. Reconnecting does not automatically resume playback.
 
 **Track details** shows playback codec, bitrate and decoded sample rate/channels when reported by the decoder. Local file metadata is labeled separately. Missing values are omitted.
 
@@ -191,25 +187,25 @@ Tested against Navidrome 0.63.2 and Jellyfin 10.11.11 / 12.0. Other servers must
 
 ### Accounts and saved data
 
-**Settings → Connections → YouTube → Streaming quality** chooses what a song costs to download. Standard takes the best stream YouTube offers, which is Opus at about 130 kbps. Data saver caps it, which lands on Opus at about 67 kbps and a little over half the bytes. Sung buffers the whole song before playing it, so this is the download either way. No account or sign-in is involved, and neither setting is a lossless one; for lossless audio use local files or a music server set to Original.
+**Settings → Connections → YouTube → Streaming quality** chooses what a song costs to download. Standard takes the best stream YouTube offers, which is Opus at about 130 kbps. Data saver caps it, which lands on Opus at about 67 kbps and a little over half the bytes. Musix buffers the whole song before playing it, so this is the download either way. No account or sign-in is involved, and neither setting is a lossless one; for lossless audio use local files or a music server set to Original.
 
 YouTube browsing is anonymous. YouTube likes, local playlists and local history are stored locally and **do not sync with your Google account**. Settings offers library JSON import/export; audio files, custom cover images and imported LRC files are not bundled into exports.
 
-For streams requiring sign-in, Settings can import a user-selected Netscape-format cookie file. Sung does not read your browser profile. Cookies can be removed in Settings.
+For streams requiring sign-in, Settings can import a user-selected Netscape-format cookie file. Musix does not read your browser profile. Cookies can be removed in Settings.
 
-Library data is stored in `~/.local/share/Sung/sung/`, settings in `~/.config/Sung/`, and cache in `~/.cache/Sung/sung/`. Standard XDG directory overrides are respected. Sung has no analytics or telemetry. Optional LRCLIB lyric lookups send the song’s title, artist and duration; they can be disabled in Settings.
+Library data is stored in `~/.local/share/Sung/sung/`, settings in `~/.config/Sung/`, and cache in `~/.cache/Sung/sung/`. Standard XDG directory overrides are respected. Musix has no analytics or telemetry. Optional LRCLIB lyric lookups send the song’s title, artist and duration; they can be disabled in Settings.
 
 ### Troubleshooting
 
-Playback depends on YouTube availability, region and network conditions. Sung buffers audio before playing, so starting a song can take a moment. It does not remove sponsor segments embedded in recordings or promise gapless playback.
+Playback depends on YouTube availability, region and network conditions. Musix buffers audio before playing, so starting a song can take a moment. It does not remove sponsor segments embedded in recordings or promise gapless playback.
 
 If YouTube playback stops working after an upstream change, update the resolver:
 
 ```bash
-~/.local/lib/sung/runtime/bin/python -m pip install --upgrade 'yt-dlp[default]' ytmusicapi
+~/.local/lib/musix/runtime/bin/python -m pip install --upgrade 'yt-dlp[default]' ytmusicapi
 ```
 
-To update Sung, quit the player, then run `git pull` and `./scripts/install.sh` from this checkout. To uninstall, run `./scripts/uninstall.sh`; your library and settings are kept.
+To update Musix, quit the player, then run `git pull` and `./scripts/install.sh` from this checkout. To uninstall, run `./scripts/uninstall.sh`; your library and settings are kept.
 
 ## Development
 
@@ -231,7 +227,7 @@ Run automated tests:
 The offline suite includes immersive-player checks at normal and high DPI, plus process-restart checks for saved layout preferences. To run just these checks against a build configured with `-DSUNG_DIAGNOSTICS=ON`:
 
 ```bash
-python3 tests/immersive_regression.py --binary /path/to/diagnostics/sung --output verification/immersive
+python3 tests/immersive_regression.py --binary /path/to/diagnostics/musix --output verification/immersive
 ```
 
 Use a new output directory. These checks run offscreen with generated silent music and isolated settings.
@@ -246,23 +242,25 @@ To test the server integration, build the test targets and provide a Navidrome e
 ./scripts/test.sh
 python3 tests/navidrome_integration.py \
   --navidrome /path/to/navidrome \
-  --test-binary build-tests/sung-subsonic-tests \
+  --test-binary build-tests/musix-subsonic-tests \
   --output verification/navidrome
 ```
 
-The script starts a loopback-only server, creates a temporary account and 105 generated audio fixtures, and tests browsing, playback, seeking, lyrics, playlist edits, ratings, favorites, queue restoration and scrobbling. It stops the server and removes its temporary data afterward. Use a new output directory for each run. With a diagnostics build, add `--ui-binary /path/to/sung` to exercise the rendered interface too.
+The script starts a loopback-only server, creates a temporary account and 105 generated audio fixtures, and tests browsing, playback, seeking, lyrics, playlist edits, ratings, favorites, queue restoration and scrobbling. It stops the server and removes its temporary data afterward. Use a new output directory for each run. With a diagnostics build, add `--ui-binary /path/to/musix` to exercise the rendered interface too.
 
 To test Jellyfin with generated music and disposable accounts:
 
 ```bash
 python3 tests/jellyfin_integration.py \
   --server-binary /path/to/jellyfin \
-  --test-binary build-tests/sung-jellyfin-tests \
+  --test-binary build-tests/musix-jellyfin-tests \
   --output verification/jellyfin
 ```
 
-The server binds to loopback only and stops after testing. Test data and credentials stay in the private output directory; remove it when finished. Add `--ui-binary /path/to/sung` for rendered UI checks, or additionally `--native-ui` to use Hyprland workspace 2. The normal test suite also checks malformed responses, redirects, cancellation, credential persistence and failed downloads using a local mock server.
+The server binds to loopback only and stops after testing. Test data and credentials stay in the private output directory; remove it when finished. Add `--ui-binary /path/to/musix` for rendered UI checks, or additionally `--native-ui` to use Hyprland workspace 2. The normal test suite also checks malformed responses, redirects, cancellation, credential persistence and failed downloads using a local mock server.
 
 ## License
 
-[MIT](LICENSE). Material Symbols are licensed under Apache-2.0; see [NOTICE](NOTICE) for third-party acknowledgments. Sung is an independent project and is not affiliated with Google or YouTube.
+[MIT](LICENSE). Material Symbols are licensed under Apache-2.0; see [NOTICE](NOTICE) for third-party acknowledgments.
+
+Musix is a fork of [Sung](https://github.com/yappologistic/Sung) by yappologistic, used under the MIT License. Musix is an independent project and is not affiliated with Google or YouTube.

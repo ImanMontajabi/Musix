@@ -13,7 +13,7 @@ ApplicationWindow {
     width: 1180; height: 800
     minimumWidth: 480; minimumHeight: 580
     font.family: Theme.fontFamily
-    title: app.current.title ? app.current.title + " · Sung" : "Sung"
+    title: app.current.title ? app.current.title + " · Musix" : "Musix"
     color: Theme.background
     RoundedArt {
         id: accentSample; objectName: "accentSample"; visible: false; pixels: 48
@@ -2011,7 +2011,7 @@ ApplicationWindow {
                 ColumnLayout {
                     id: settingsGroup4; objectName:"settingsGroup4"
                     Layout.fillWidth:true;Layout.minimumWidth:0; spacing:12
-                    property bool hasMatches: settingsDialog.matches("Pause history this session privacy") || settingsDialog.matches("Clear artwork cache") || settingsDialog.matches("Clear history") || settingsDialog.matches("Export library backup") || settingsDialog.matches("Import library restore") || settingsDialog.matches("Sung version")
+                    property bool hasMatches: settingsDialog.matches("Pause history this session privacy") || settingsDialog.matches("Clear artwork cache") || settingsDialog.matches("Clear history") || settingsDialog.matches("Export library backup") || settingsDialog.matches("Import library restore") || settingsDialog.matches("Musix version")
                     visible: settingsDialog.searchQuery.trim() ? hasMatches : settingsDialog.category===4
                     SungText {heading: true;text:"Privacy & data";font.pixelSize:Theme.titleLarge;font.weight:Font.Medium;Layout.bottomMargin:8}
                     ColumnLayout {id:options4;objectName:"settingsRows4";Layout.fillWidth:true;Layout.minimumWidth:0;spacing:12
@@ -2020,7 +2020,7 @@ ApplicationWindow {
                 MSettingRow {objectName:"clearHistoryButton";text:"Clear history";visible:settingsDialog.matches("Clear history");onClicked:app.clearHistory()}
                 MSettingRow {opens:true;objectName:"exportLibraryButton";text:"Export library";visible:settingsDialog.matches("Export library backup");onClicked:window.openFileDialog("export")}
                 MSettingRow {opens:true;objectName:"importLibraryButton";text:"Import library";visible:settingsDialog.matches("Import library restore");onClicked:window.openFileDialog("import")}
-                SungText { objectName:"settingsVersion"; visible: settingsDialog.matches("Sung version"); text: "Sung " + Qt.application.version; color: Theme.muted; font.pixelSize: Theme.labelMedium; Layout.topMargin: 12 }
+                SungText { objectName:"settingsVersion"; visible: settingsDialog.matches("Musix version"); text: "Musix " + Qt.application.version; color: Theme.muted; font.pixelSize: Theme.labelMedium; Layout.topMargin: 12 }
                     }
                 }
                 SungText { objectName: "settingsNoResults"; text: "No settings found"; color: Theme.muted; visible: {settingsDialog.searchQuery;return !!settingsDialog.searchQuery.trim() && !settingsGroup0.hasMatches && !settingsGroup1.hasMatches && !settingsGroup2.hasMatches && !settingsGroup3.hasMatches && !settingsGroup4.hasMatches;} }
