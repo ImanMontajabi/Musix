@@ -31,7 +31,7 @@ find_package(Qt6 6.8 REQUIRED COMPONENTS ${SUNG_QT_COMPONENTS})
 qt_policy(SET QTP0004 NEW)
 # The backend every executable shares. mpris.cpp is deliberately absent: only
 # the app exposes MPRIS, and only where there is a bus to expose it on.
-set(SUNG_BACKEND_SOURCES src/scrobbler.cpp src/scrobbler.h src/m3color.cpp src/m3color.h src/m3shape.cpp src/m3shape.h src/musicserver.cpp src/musicserver.h src/jellyfin.cpp src/jellyfin.h src/backendserver.cpp src/subsonic.cpp src/subsonic.h src/backend.cpp src/productfeatures.cpp src/presentationfeatures.cpp src/backend.h src/collectionview.h src/rowselection.h src/playbacknotifier.cpp src/playbacknotifier.h)
+set(SUNG_BACKEND_SOURCES src/scrobbler.cpp src/scrobbler.h src/m3color.cpp src/m3color.h src/m3shape.cpp src/m3shape.h src/musicserver.cpp src/musicserver.h src/jellyfin.cpp src/jellyfin.h src/backendserver.cpp src/subsonic.cpp src/subsonic.h src/backend.cpp src/productfeatures.cpp src/presentationfeatures.cpp src/runtimeenv.cpp src/backend.h src/collectionview.h src/rowselection.h src/playbacknotifier.cpp src/playbacknotifier.h)
 set(SUNG_BACKEND_LIBS Qt6::Core Qt6::Gui Qt6::Multimedia Qt6::Network)
 if(SUNG_DBUS)
  list(APPEND SUNG_BACKEND_LIBS Qt6::DBus)

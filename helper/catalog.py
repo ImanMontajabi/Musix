@@ -1,9 +1,18 @@
 #!/usr/bin/env python3
 """One request per process. No server, browser, telemetry, or idle worker."""
 import json
+import os
 import re
 import sys
 from urllib.parse import urlparse, parse_qs
+
+# A packaged app ships its own ffmpeg; nothing put it on PATH. Bare names
+# stay the fallback so a checkout keeps working.
+_FFMPEG_DIR = os.environ.get('SUNG_FFMPEG_DIR', '')
+
+
+def _tool(name):
+    return os.path.join(_FFMPEG_DIR, name) if _FFMPEG_DIR else name
 
 
 def artwork(item):
@@ -177,7 +186,7 @@ def cover_poster(cover, directory):
     try:
         st = cover.stat()
         if st.st_size > 128*1024*1024: return '', ''
-        probe = subprocess.run(['ffprobe','-v','error','-protocol_whitelist','file,crypto,data',
+        probe = subprocess.run([_tool('ffprobe'),'-v','error','-protocol_whitelist','file,crypto,data',
                                 '-select_streams','v:0','-show_entries','stream=width,height',
                                 '-of','json',str(cover)], capture_output=True, timeout=5)
         streams = json.loads(probe.stdout).get('streams', []) if not probe.returncode and len(probe.stdout)<16384 else []
@@ -191,7 +200,7 @@ def cover_poster(cover, directory):
             if sum(f.stat().st_size for f in directory.glob('*.jpg')) >= 48*1024*1024 and not target.exists(): return '', ''
             temporary = target.with_suffix('.tmp.jpg')
             try:
-                result = subprocess.run(['ffmpeg','-nostdin','-v','error','-threads','1',
+                result = subprocess.run([_tool('ffmpeg'),'-nostdin','-v','error','-threads','1',
                     '-protocol_whitelist','file,crypto,data','-i',str(cover),'-map','0:v:0',
                     '-frames:v','1','-vf','scale=512:512:force_original_aspect_ratio=decrease',
                     '-threads','1','-q:v','4','-y',str(temporary)],capture_output=True,timeout=5)
@@ -290,7 +299,7 @@ def local_files(req):
         path = Path(name).resolve()
         try:
             if path.suffix.lower() not in allowed or not path.is_file(): raise ValueError('Missing or unsupported audio file')
-            probe = subprocess.run(['ffprobe','-v','error','-protocol_whitelist','file,crypto,data','-show_entries','format=duration:format_tags=title,artist,album,album_artist,albumartist,track,disc,date,year,genre,composer,replaygain_track_gain,replaygain_album_gain,r128_track_gain:stream=codec_type,codec_name,sample_rate,bit_rate,channels,bits_per_raw_sample,sample_fmt:stream_tags=genre,composer,replaygain_track_gain,replaygain_album_gain,r128_track_gain:stream_disposition=attached_pic','-of','json',str(path)],capture_output=True,timeout=5)
+            probe = subprocess.run([_tool('ffprobe'),'-v','error','-protocol_whitelist','file,crypto,data','-show_entries','format=duration:format_tags=title,artist,album,album_artist,albumartist,track,disc,date,year,genre,composer,replaygain_track_gain,replaygain_album_gain,r128_track_gain:stream=codec_type,codec_name,sample_rate,bit_rate,channels,bits_per_raw_sample,sample_fmt:stream_tags=genre,composer,replaygain_track_gain,replaygain_album_gain,r128_track_gain:stream_disposition=attached_pic','-of','json',str(path)],capture_output=True,timeout=5)
             if probe.returncode or len(probe.stdout)>262144: raise ValueError('Could not read audio metadata')
             data = json.loads(probe.stdout)
             if not any(stream.get('codec_type')=='audio' for stream in data.get('streams',[])): raise ValueError('No audio stream')
@@ -311,7 +320,7 @@ def local_files(req):
                 target=directory/(identity+'.jpg')
                 if target.exists() or sum(f.stat().st_size for f in directory.glob('*.jpg'))<48*1024*1024:
                     try:
-                        extraction=subprocess.run(['ffmpeg','-nostdin','-v','error','-threads','1','-protocol_whitelist','file,crypto,data','-i',str(path),'-map','0:v:0','-frames:v','1','-vf',"scale=512:512:force_original_aspect_ratio=decrease",'-threads','1','-q:v','4','-y',str(target)],capture_output=True,timeout=5)
+                        extraction=subprocess.run([_tool('ffmpeg'),'-nostdin','-v','error','-threads','1','-protocol_whitelist','file,crypto,data','-i',str(path),'-map','0:v:0','-frames:v','1','-vf',"scale=512:512:force_original_aspect_ratio=decrease",'-threads','1','-q:v','4','-y',str(target)],capture_output=True,timeout=5)
                         if extraction.returncode==0 and target.is_file() and target.stat().st_size<=262144: art=target.as_uri()+"?v="+str(path.stat().st_mtime_ns)
                         elif target.exists(): target.unlink()
                     except (OSError, subprocess.TimeoutExpired):

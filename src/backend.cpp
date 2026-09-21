@@ -208,6 +208,8 @@ Backend::Backend(QObject *parent) : QObject(parent) {
   load();
   setupServer();
   setupFolderWatching();
+  seedRuntime();
+  updateResolver(false);
 }
 Backend::~Backend() {
   m_portMonitor.kill();m_portProbe.kill();m_portMonitor.waitForFinished(500);m_portProbe.waitForFinished(500);
@@ -240,19 +242,14 @@ void Backend::request(const QString &channel, QVariantMap args, Callback done, s
   if(lifetime) connect(p,&QObject::destroyed,[lifetime]{});
   m_processes.insert(channel, p);
   p->setChildProcessModifier([] { ::setsid(); });
-  QString helper = qEnvironmentVariable("SUNG_HELPER");
-  if (helper.isEmpty())
-    helper = QCoreApplication::applicationDirPath() + "/../helper/catalog.py";
-  if (!QFile::exists(helper))
-    helper = QCoreApplication::applicationDirPath() + "/../lib/musix/catalog.py";
-  QString python = qEnvironmentVariable("SUNG_PYTHON");
-  if (python.isEmpty()) {
-    auto bundled =
-        QCoreApplication::applicationDirPath() + "/../runtime/bin/python";
-    if (!QFile::exists(bundled))
-      bundled = QCoreApplication::applicationDirPath() +
-                "/../lib/musix/runtime/bin/python";
-    python = QFile::exists(bundled) ? bundled : QStringLiteral("python3");
+  const QString helper = helperScript();
+  const QString python = pythonExecutable();
+  // A packaged app carries its own ffmpeg, which the helper must reach by path
+  // because nothing put it on this machine's PATH.
+  if (const auto ffmpeg = ffmpegDirectory(); !ffmpeg.isEmpty()) {
+    auto environment = QProcessEnvironment::systemEnvironment();
+    environment.insert("SUNG_FFMPEG_DIR", ffmpeg);
+    p->setProcessEnvironment(environment);
   }
   auto timer = new QTimer(p);
   timer->setSingleShot(true);
@@ -308,6 +305,14 @@ void Backend::notifyError(const QString &message, const QString &retryTarget) {
     m_error = "This track isn’t available. Try another upload.";
   m_error = m_error.left(350);
   emit errorChanged();
+  // A resolver that has fallen behind YouTube looks exactly like this. Try a
+  // newer one once per run, and repeat the request if it arrives healthy.
+  if (retryTarget == "play" && !m_resolverRetried && !m_resolverBusy &&
+      QFileInfo::exists(writableRuntime() + "/bin/python3")) {
+    m_resolverRetried = true;
+    m_retryAfterUpdate = true;
+    updateResolver(true);
+  }
 }
 QVariantMap Backend::snapshot() const {
   return {{"viewKey",m_viewKey}, {"page", m_page},          {"title", m_title},

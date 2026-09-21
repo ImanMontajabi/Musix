@@ -641,6 +641,18 @@ private:
   void recoverStream();
   void restorePlaybackPosition();
   void applyAudioDevice();
+  // Where the catalogue helper, its Python and its ffmpeg actually live. A
+  // packaged app carries all three; a checkout keeps using what the scripts
+  // export. The runtime is copied out of the read-only bundle so that the
+  // resolver inside it can be updated without breaking the signature.
+  QString helperScript() const;
+  QString pythonExecutable() const;
+  QString ffmpegDirectory() const;
+  QString writableRuntime() const;
+  QString bundledRuntime() const;
+  void seedRuntime();
+  void updateResolver(bool force);
+  void finishResolverUpdate(bool ok);
   void outputsChanged();
   void setupDisconnectMonitor();
   void refreshOutputPort();
@@ -649,6 +661,11 @@ private:
   QByteArray m_outputId;
   QString m_outputDescription,m_outputPort;
   QProcess m_portMonitor,m_portProbe;
+  QProcess m_seedProcess,m_resolverProcess;
+  // The versions to reinstall if an upgraded resolver will not import.
+  QString m_resolverRollback;
+  bool m_resolverBusy=false,m_resolverRetried=false,m_retryAfterUpdate=false;
+  bool m_resolverReseeded=false;
   QTimer m_portDebounce,m_portTimeout;
   bool m_portDirty=false;
   int m_decodeRate=0,m_decodeChannels=0;

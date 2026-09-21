@@ -14,6 +14,15 @@ import unicodedata
 from urllib.parse import urlencode, urljoin, urlsplit
 from urllib.request import Request, HTTPRedirectHandler, build_opener
 
+# A packaged app ships its own ffmpeg; nothing put it on PATH. Bare names
+# stay the fallback so a checkout keeps working.
+_FFMPEG_DIR = os.environ.get('SUNG_FFMPEG_DIR', '')
+
+
+def _tool(name):
+    return os.path.join(_FFMPEG_DIR, name) if _FFMPEG_DIR else name
+
+
 MEDIA_LIMIT = 16 * 1024 * 1024
 CACHE_LIMIT = 64 * 1024 * 1024
 HOSTS = {'itunes.apple.com', 'music.apple.com', 'mvod.itunes.apple.com'}
@@ -318,7 +327,7 @@ def validate_movie(path):
     with path.open('rb') as source:
         if source.read(12)[4:8] != b'ftyp':
             raise ValueError('Not an MP4 cover')
-    result = subprocess.run(['ffprobe', '-v', 'error', '-protocol_whitelist', 'file',
+    result = subprocess.run([_tool('ffprobe'), '-v', 'error', '-protocol_whitelist', 'file',
         '-show_entries', 'stream=codec_type,codec_name,width,height,r_frame_rate:format=duration', '-of', 'json', str(path)],
         capture_output=True, timeout=8, check=True)
     info = json.loads(result.stdout)
