@@ -78,10 +78,24 @@ cmake --build "$build" --parallel "${SUNG_BUILD_JOBS:-8}"
 
 say "Python runtime with the resolver"
 runtime="$cache/python-runtime"
+# What a freshly built runtime contained, written when it was built. A cache
+# somebody has since pip-installed into is not the runtime this release is
+# supposed to ship, and reusing it puts whatever they added in the DMG --
+# which is how Pillow once got there, unlicensed and unmentioned. Anything
+# that does not match is treated as no cache at all.
+packages="$runtime/.packages"
+package_list() {
+  "$runtime/bin/python3" - <<'LIST'
+import importlib.metadata as m
+print('\n'.join(sorted('%s %s' % (d.metadata['Name'], d.version)
+                       for d in m.distributions())))
+LIST
+}
 python_ready() {
   [ -x "$runtime/bin/python3" ] && [ -f "$runtime/lib/python3.11/LICENSE.txt" ] &&
     "$runtime/bin/python3" -c "from yt_dlp import YoutubeDL
-from ytmusicapi import YTMusic" >/dev/null 2>&1
+from ytmusicapi import YTMusic" >/dev/null 2>&1 &&
+    [ -f "$packages" ] && diff -q <(package_list) "$packages" >/dev/null 2>&1
 }
 if ! python_ready; then
   archive="cpython-$python_version+$python_release-aarch64-apple-darwin-install_only_stripped.tar.gz"
@@ -92,6 +106,7 @@ if ! python_ready; then
   # pip stays: it is how the app updates its own resolver later.
   "$runtime/bin/python3" -m pip install --disable-pip-version-check --quiet \
     --no-warn-script-location -r "$root/helper/requirements.txt"
+  package_list > "$packages"
   python_ready || { echo "python runtime still incomplete after installing" >&2; exit 1; }
 fi
 
