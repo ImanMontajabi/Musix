@@ -24,16 +24,27 @@ say() { printf '\n== %s ==\n' "$1"; }
 # the runtime in it and a pile of install_name_tool failures, and neither run
 # had any way to tell. mkdir is atomic, so it is the lock.
 lock="$cache/.build-lock"
+# A live pid is not enough to believe the lock. Pids are reused, so a lock left
+# behind by kill -9 can come to name somebody else's process, and then no build
+# ever starts again and the message tells you to kill a stranger. The holder
+# only counts if it is itself a packaging run.
+holder_is_running() {
+  [ -n "${1:-}" ] && kill -0 "$1" 2>/dev/null &&
+    ps -o command= -p "$1" 2>/dev/null | grep -q 'package-dmg\.sh'
+}
 if ! mkdir "$lock" 2>/dev/null; then
   holder="$(cat "$lock/pid" 2>/dev/null || true)"
-  if [ -n "$holder" ] && kill -0 "$holder" 2>/dev/null; then
+  if holder_is_running "$holder"; then
     echo "Another packaging run is already going: pid $holder, started $(cat "$lock/started" 2>/dev/null || echo 'unknown')." >&2
     echo "Wait for it to finish, or stop it with:  kill $holder" >&2
     exit 1
   fi
-  # Nothing is holding it: a run was killed before it could clean up. A stale
-  # lock must never be the thing that stops the next build.
-  echo "Clearing a stale lock left by pid ${holder:-unknown}." >&2
+  # Whatever is in there is not a build, so it cannot be allowed to stop one.
+  if [ -n "$holder" ] && kill -0 "$holder" 2>/dev/null; then
+    echo "Clearing a lock naming pid $holder, which is not a packaging run." >&2
+  else
+    echo "Clearing a stale lock left by pid ${holder:-unknown}." >&2
+  fi
   rm -rf "$lock"
   mkdir "$lock" || { echo "Could not take the build lock at $lock" >&2; exit 1; }
 fi
