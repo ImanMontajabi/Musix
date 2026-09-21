@@ -7,10 +7,16 @@ mkdir -p "$here"
 ver="${FFMPEG_VERSION:-7.1}"
 src="$here/ffmpeg-$ver"
 out="$here/ffmpeg-out"
-[ -d "$src" ] || {
-  curl -fsSL "https://ffmpeg.org/releases/ffmpeg-$ver.tar.xz" -o "$here/ffmpeg-$ver.tar.xz"
-  tar -xf "$here/ffmpeg-$ver.tar.xz" -C "$here"
-}
+tarball="$here/ffmpeg-$ver.tar.xz"
+# The tarball is checked separately from the tree it was extracted into: the
+# release publishes it as the LGPL corresponding source, so a cache that kept
+# only the tree still has to fetch it back. Downloading to .part first means an
+# interrupted fetch cannot leave a truncated file that later looks cached.
+if [ ! -f "$tarball" ]; then
+  curl -fsSL "https://ffmpeg.org/releases/ffmpeg-$ver.tar.xz" -o "$tarball.part"
+  mv "$tarball.part" "$tarball"
+fi
+[ -d "$src" ] || tar -xf "$tarball" -C "$here"
 cd "$src"
 [ -f config.h ] || ./configure \
   --prefix="$out" \

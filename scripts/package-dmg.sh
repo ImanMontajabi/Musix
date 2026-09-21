@@ -26,7 +26,12 @@ cmake --build "$build" --parallel "${SUNG_BUILD_JOBS:-8}"
 
 say "Python runtime with the resolver"
 runtime="$cache/python-runtime"
-if [ ! -x "$runtime/bin/python3" ]; then
+python_ready() {
+  [ -x "$runtime/bin/python3" ] && [ -f "$runtime/lib/python3.11/LICENSE.txt" ] &&
+    "$runtime/bin/python3" -c "from yt_dlp import YoutubeDL
+from ytmusicapi import YTMusic" >/dev/null 2>&1
+}
+if ! python_ready; then
   archive="cpython-$python_version+$python_release-aarch64-apple-darwin-install_only_stripped.tar.gz"
   curl -fsSL -o "$cache/python.tar.gz" \
     "https://github.com/astral-sh/python-build-standalone/releases/download/$python_release/$archive"
@@ -37,10 +42,23 @@ if [ ! -x "$runtime/bin/python3" ]; then
     --no-warn-script-location -r "$root/helper/requirements.txt"
   find "$runtime" -name '__pycache__' -type d -prune -exec rm -rf {} + 2>/dev/null || true
   rm -rf "$runtime/lib/python3.11/"{idlelib,pydoc_data,test,tkinter} 2>/dev/null || true
+  python_ready || { echo "python runtime still incomplete after installing" >&2; exit 1; }
 fi
 
 say "ffmpeg"
-[ -x "$cache/ffmpeg-out/bin/ffprobe" ] || FFMPEG_VERSION="$ffmpeg_version" "$root/scripts/build-ffmpeg.sh"
+# Three separate things are taken out of this cache later: the two binaries,
+# the license text, and the tarball the release publishes as LGPL source. Any
+# one of them missing has to send the build back, because skipping it only
+# defers the failure to a cp further down.
+ffmpeg_ready() {
+  [ -x "$cache/ffmpeg-out/bin/ffmpeg" ] && [ -x "$cache/ffmpeg-out/bin/ffprobe" ] &&
+    [ -f "$cache/ffmpeg-$ffmpeg_version/COPYING.LGPLv2.1" ] &&
+    [ -f "$cache/ffmpeg-$ffmpeg_version.tar.xz" ]
+}
+if ! ffmpeg_ready; then
+  FFMPEG_VERSION="$ffmpeg_version" "$root/scripts/build-ffmpeg.sh"
+  ffmpeg_ready || { echo "ffmpeg cache still incomplete after building" >&2; exit 1; }
+fi
 
 say "Assembling Musix.app"
 rm -rf "$stage"; mkdir -p "$stage"
