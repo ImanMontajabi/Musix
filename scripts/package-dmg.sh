@@ -51,8 +51,6 @@ if ! python_ready; then
   # pip stays: it is how the app updates its own resolver later.
   "$runtime/bin/python3" -m pip install --disable-pip-version-check --quiet \
     --no-warn-script-location -r "$root/helper/requirements.txt"
-  find "$runtime" -name '__pycache__' -type d -prune -exec rm -rf {} + 2>/dev/null || true
-  rm -rf "$runtime/lib/python3.11/"{idlelib,pydoc_data,test,tkinter} 2>/dev/null || true
   python_ready || { echo "python runtime still incomplete after installing" >&2; exit 1; }
 fi
 
@@ -97,10 +95,16 @@ cp "$root/LICENSE" "$root/NOTICE" "$resources/"
 # revalidating them, and stripping $resources keeps this machine's directory
 # names out of every traceback the app can print.
 #
+# All of it runs against the staged copy rather than the cache, because a step
+# that only ran when the cache was cold made the bundle depend on whether it
+# had been built before. That is how idlelib and tkinter shipped in one build
+# and not the next.
+#
 # The helper scripts count too, and for the same reason: catalog.py does
 # "from online_artwork import lookup", which caches a sibling module next to
 # itself inside Contents/Resources on the first artwork lookup of any ordinary
 # session — seeded runtime or not.
+rm -rf "$resources/runtime/lib/python3.11/"{idlelib,pydoc_data,test,tkinter}
 find "$resources/runtime" "$resources/helper" -name __pycache__ -type d -prune \
   -exec rm -rf {} + 2>/dev/null || true
 "$resources/runtime/bin/python3" -m compileall -q -f \
@@ -128,6 +132,69 @@ say "Signing (ad-hoc)"
 # Unsigned arm64 code will not run at all; this is not notarization.
 codesign --force --deep -s - "$app"
 codesign --verify --deep "$app" && echo "signature ok"
+
+say "Checking the signature survives being used"
+# Python answers a missing .pyc by writing one, and Contents/Resources is
+# inside the signature's resource seal, so an uncompiled module anywhere in
+# the bundle turns a signed app into a damaged one the first time it is used.
+# That has been introduced twice by hand. It is checked now.
+"$resources/runtime/bin/python3" - "$app" <<'CHECK'
+import sys, pathlib, importlib.util
+app = pathlib.Path(sys.argv[1])
+sources = sorted(app.rglob('*.py'))
+missing = [str(p.relative_to(app)) for p in sources
+           if not pathlib.Path(importlib.util.cache_from_source(str(p))).exists()]
+if missing:
+    print("Sources with no compiled bytecode; Python would write it at runtime:",
+          file=sys.stderr)
+    for path in missing[:25]:
+        print("  " + path, file=sys.stderr)
+    if len(missing) > 25:
+        print("  ... and %d more" % (len(missing) - 25), file=sys.stderr)
+    sys.exit(1)
+print("%d .py files, all precompiled" % len(sources))
+CHECK
+
+# Anything in the bundle newer than this marker was written after signing.
+marker="$cache/.sealed"; : > "$marker"
+probe="$cache/seal-probe"; rm -rf "$probe"; mkdir -p "$probe/art" "$probe/scratch"
+"$resources/runtime/bin/python3" - "$probe" <<'FIXTURE'
+import sys, wave, struct, json, hashlib, time, pathlib
+probe = pathlib.Path(sys.argv[1])
+# A real WAV, so the metadata read reaches ffprobe instead of stopping at the
+# extension check. Silence is enough; nothing here listens to it.
+with wave.open(str(probe / 'tone.wav'), 'wb') as w:
+    w.setnchannels(1); w.setsampwidth(2); w.setframerate(8000)
+    w.writeframes(struct.pack('<800h', *([0] * 800)))
+# A cache record that is still fresh, so the artwork lookup answers from disk.
+# The import being tested happens at dispatch either way, and a build must not
+# depend on somebody else's web service being reachable.
+key = hashlib.sha256(json.dumps([4, '', '', '', '']).encode()).hexdigest()
+(probe / 'art' / (key + '.json')).write_text(
+    json.dumps({'expires': time.time() + 3600, 'status': 'retry'}))
+FIXTURE
+
+# The helper the way Backend::request runs it: one process, JSON in, JSON out,
+# with the bundle's ffmpeg named on the environment.
+helper() {
+  SUNG_FFMPEG_DIR="$resources/ffmpeg" "$resources/runtime/bin/python3" \
+    "$resources/helper/catalog.py" >/dev/null 2>&1 <<<"$1" || true
+}
+helper "{\"op\":\"local-files\",\"files\":[\"$probe/tone.wav\"],\"artDirectory\":\"$probe/art\"}"
+helper "{\"op\":\"online-artwork\",\"artworkCache\":\"$probe/art\",\"scratch\":\"$probe/scratch\"}"
+"$resources/runtime/bin/python3" -c "from yt_dlp import YoutubeDL
+from ytmusicapi import YTMusic" >/dev/null
+
+written="$(find "$app" -newer "$marker")"
+if [ -n "$written" ]; then
+  echo "Using the app wrote into the signed bundle:" >&2
+  printf '%s\n' "$written" | sed 's/^/  /' >&2
+  exit 1
+fi
+codesign --verify --deep --strict "$app" ||
+  { echo "The signature stopped verifying after ordinary use." >&2; exit 1; }
+rm -rf "$probe" "$marker"
+echo "helper, artwork and resolver all ran; nothing written, seal intact"
 
 say "DMG"
 ln -sf /Applications "$stage/Applications"
