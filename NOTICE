@@ -15,19 +15,97 @@ Visual references: Google Material Design 3 and Spun.
 Architecture reference: https://github.com/amiralibg/unstream.
 No Unstream source code is incorporated.
 
-Runtime dependencies carry their own licenses. Qt is dynamically linked;
+On Linux, where Musix is built against an installed Qt, those runtime
+dependencies carry their own licenses and are not redistributed with it.
 Qt licensing: https://www.qt.io/licensing/open-source-lgpl-obligations
 The installed Qt Multimedia and FFmpeg packages determine the media backend.
 Catalog requests use ytmusicapi (MIT); audio resolution uses yt-dlp (Unlicense).
 
-The macOS application bundle redistributes further works, and carries the full
-text of each of their licenses in Contents/Resources/licenses:
 
-  FFmpeg-LGPL-2.1.txt      FFmpeg
-  CPython-PSF.txt          CPython
-  yt-dlp-Unlicense.txt     yt-dlp
-  ytmusicapi-MIT.txt       ytmusicapi
-  MaterialSymbols-LICENSE.txt  Material Symbols
+THE macOS APPLICATION BUNDLE
+============================
+
+The macOS bundle is self-contained, so it redistributes all of the below and
+carries the full text of every one of their licenses in
+Musix.app/Contents/Resources/licenses.
+
+Payload Musix adds deliberately
+-------------------------------
+
+  FFmpeg 7.1                LGPL-2.1-or-later  FFmpeg-LGPL-2.1.txt
+  CPython 3.11.16           PSF                CPython-PSF.txt
+  yt-dlp                    Unlicense          yt-dlp-Unlicense.txt
+  ytmusicapi                MIT                ytmusicapi-MIT.txt
+  Material Symbols          Apache-2.0         MaterialSymbols-LICENSE.txt
+
+Qt, and the libraries Qt brings with it
+---------------------------------------
+
+Qt 6.11.2, from the Homebrew qt formula, redistributed under the GNU Lesser
+General Public License version 3.0 only. Qt is available under several
+licenses; LGPL-3.0-only is the one Musix relies on. LGPL-3.0 incorporates the
+GNU General Public License version 3, so both texts are included:
+
+  Qt 6.11.2                 LGPL-3.0-only      Qt-LGPL-3.0.txt
+                                               Qt-LGPL-3.0-incorporates-GPL-3.0.txt
+
+The bundle ships 24 Qt frameworks: QtConcurrent, QtCore, QtDBus, QtGui,
+QtMultimedia, QtNetwork, QtOpenGL, QtQml, QtQmlCore, QtQmlMeta, QtQmlModels,
+QtQmlWorkerScript, QtQuick, QtQuickControls2, QtQuickControls2Basic,
+QtQuickControls2BasicStyleImpl, QtQuickControls2Impl, QtQuickDialogs2,
+QtQuickDialogs2QuickImpl, QtQuickDialogs2Utils, QtQuickLayouts,
+QtQuickShapes, QtQuickTemplates2 and QtSvg, plus the Qt plugins those load.
+
+The remaining dynamic libraries are Qt's own dependencies, installed by
+Homebrew and copied into the bundle by macdeployqt. Versions are the ones
+actually bundled.
+
+  glib 2.90.0               LGPL-2.1-or-later  glib-LGPL-2.1.txt
+    libglib-2.0.0.dylib, libgthread-2.0.0.dylib; required by QtCore
+  gettext 1.0 (libintl)     LGPL-2.1-or-later  gettext-libintl-LGPL-2.1.txt
+    libintl.8.dylib; the gettext tools are GPL-3.0 and are not bundled
+  openssl 3.6.4             Apache-2.0         openssl-Apache-2.0.txt
+  icu4c 78.3                Unicode-3.0        icu-Unicode-3.0.txt
+  harfbuzz 14.4.0           MIT                harfbuzz-MIT.txt
+  freetype 2.14.3           FTL                freetype-FTL.txt
+                                               freetype-LICENSE.txt
+  libjpeg-turbo 3.2.0       IJG and BSD-3-Clause and Zlib
+                                               libjpeg-turbo-LICENSE.txt
+                                               libjpeg-turbo-IJG-README.txt
+  libpng 1.6.58             libpng-2.0         libpng-libpng-2.0.txt
+  libwebp 1.6.0             BSD-3-Clause       libwebp-BSD-3-Clause.txt
+    libwebp.7, libwebpdemux.2, libwebpmux.3, libsharpyuv.0
+  pcre2 10.48               BSD-3-Clause       pcre2-BSD-3-Clause.txt
+  brotli 1.2.0              MIT                brotli-MIT.txt
+  double-conversion 3.4.0   BSD-3-Clause       double-conversion-BSD-3-Clause.txt
+  md4c 0.5.3                MIT                md4c-MIT.txt
+  libb2 0.98.1              CC0-1.0            libb2-CC0-1.0.txt
+  dbus 1.16.2               AFL-2.1 (chosen)   dbus-AFL-2.1.txt
+                                               dbus-COPYING.txt
+  graphite2 1.3.15          MIT (chosen)       graphite2-LICENSE.txt
+  zstd 1.5.7                BSD-3-Clause (chosen)
+                                               zstd-BSD-3-Clause.txt
+
+Where a component is offered under more than one license, the option Musix
+takes is marked "chosen" above:
+
+  dbus       offered under AFL-2.1 or GPL-2.0-or-later; taken under AFL-2.1.
+             libdbus is required because Homebrew's QtGui links QtDBus, which
+             links libdbus, even though Musix builds with SUNG_DBUS off on
+             macOS and exposes no D-Bus interface there.
+  graphite2  offered under MIT, MPL-2.0, LGPL-2.1+ or GPL-2.0+ by SIL
+             International; taken under MIT. The full multi-license text is
+             in graphite2-LICENSE.txt.
+  zstd       dual licensed BSD-3-Clause or GPL-2.0-only; taken under
+             BSD-3-Clause.
+
+No GPL-licensed component is redistributed in the bundle.
+
+As the FreeType License requires of a binary redistribution: this software is
+based in part on the work of the FreeType Team (https://freetype.org).
+
+Corresponding source for the LGPL components
+--------------------------------------------
 
 FFmpeg (https://ffmpeg.org), used unmodified as the ffmpeg and ffprobe
 executables, under the GNU Lesser General Public License version 2.1 or later.
@@ -38,6 +116,36 @@ the upstream release it pins. As the LGPL requires, the corresponding source is
 published alongside each release as
 Musix-<version>-ffmpeg-<ffmpeg version>-source.tar.xz, which is the unmodified
 tarball the bundled binaries were built from.
+
+glib and gettext are LGPL-2.1-or-later. Section 6 of that license offers no
+equivalent of GPLv3 section 6(d), which is what permits a third-party server;
+its option 6(d) requires offering the source "from the same place". Their
+corresponding source is therefore published alongside each release too, as
+Musix-<version>-glib-<version>-source.tar.xz and
+Musix-<version>-gettext-<version>-source.tar.xz. scripts/fetch-lgpl-sources.sh
+builds them, pinned by checksum.
+
+Homebrew builds glib from a patched tree, so upstream alone would not be its
+corresponding source; the glib archive contains the upstream release, the
+Homebrew patch and the formula that supplies the build arguments, all from
+Homebrew/homebrew-core revision
+fad6cdb45503e4976aeb7b1c4c4e0ec972f66013 -- the revision whose formula
+declares the bottle digest recorded in the installed keg's sbom.spdx.json.
+Homebrew applies no patch to gettext, so that archive is the upstream release
+and the formula.
+
+Qt 6.11.2 is LGPL-3.0-only, which incorporates GPLv3, and GPLv3 section 6(d)
+permits conveying the Corresponding Source from a different server provided
+there are clear directions to it. These are those directions. The complete
+corresponding source for the bundled Qt is the unmodified upstream release:
+
+  https://download.qt.io/archive/qt/6.11/6.11.2/single/qt-everywhere-src-6.11.2.tar.xz
+
+Homebrew's qt formula applies no patches, so that release is the source the
+bundled frameworks were built from. Qt is dynamically linked as separate
+frameworks inside Musix.app/Contents/Frameworks and can be replaced with a
+modified build, and Musix's own source is published under the MIT License at
+https://github.com/ImanMontajabi/Musix.
 
 CPython (https://python.org), redistributed as a relocatable build from
 python-build-standalone (https://github.com/astral-sh/python-build-standalone),

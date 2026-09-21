@@ -231,14 +231,16 @@ On macOS, `./scripts/package-dmg.sh` produces the distributable `Musix-<version>
 
 macOS releases are cut from a clean tree; `package-dmg.sh` refuses to run otherwise, so that every DMG traces back to one commit.
 
-1. Commit everything. Bump `project(Musix VERSION ...)` in `CMakeLists.txt` and commit that too — the version names the DMG, the volume and the FFmpeg source tarball.
+1. Commit everything. Bump `project(Musix VERSION ...)` in `CMakeLists.txt` and commit that too — the version names the DMG, the volume and the three source tarballs.
 2. Build:
 
    ```bash
    ./scripts/package-dmg.sh
    ```
 
-   It prints the commit it is building, and finishes by printing the path, size and SHA-256 of both artifacts. Keep that output; the checksums go in the release notes.
+   It prints the commit it is building, and finishes by printing the path, size and SHA-256 of every artifact, and writing `SHA256SUMS.txt` covering them. Keep that output; the checksums go in the release notes.
+
+   The build fetches the LGPL corresponding source for glib and gettext the first time, into `build-packaging/lgpl-sources/`, and reuses it after that. `scripts/fetch-lgpl-sources.sh` pins every download by checksum and fails if Homebrew's glib patch stops applying to the pinned release.
 3. Test the DMG the way somebody receiving it would, from Finder rather than a terminal — open the image, drag Musix to Applications, launch it, and walk through **Privacy & Security → Open Anyway** once. A quarantined copy is the only way to see what a first launch actually does:
 
    ```bash
@@ -253,16 +255,19 @@ macOS releases are cut from a clean tree; `package-dmg.sh` refuses to run otherw
    git push origin main --follow-tags
    ```
 
-5. Create the release with both artifacts attached:
+5. Create the release with every artifact attached:
 
    ```bash
    gh release create v<version> \
      Musix-<version>-arm64.dmg \
      Musix-<version>-ffmpeg-<ffmpeg version>-source.tar.xz \
+     Musix-<version>-glib-<glib version>-source.tar.xz \
+     Musix-<version>-gettext-<gettext version>-source.tar.xz \
+     SHA256SUMS.txt \
      --title "Musix v<version>" --notes-file notes.md
    ```
 
-   Both files are required. The tarball is the corresponding source for the bundled LGPL ffmpeg, and the release is where that offer is met. The notes must carry both SHA-256 values and the one-time **Open Anyway** step.
+   The three tarballs are not optional. ffmpeg, glib and libintl are all LGPL-2.1, whose section 6 requires the corresponding source be offered from the same place as the binary, and the release page is that place. Qt is LGPL-3.0 and is met by the `download.qt.io` URL in `NOTICE` instead, which GPLv3 section 6(d) allows. The notes must carry the checksums and the one-time **Open Anyway** step.
 
 Run automated tests:
 
