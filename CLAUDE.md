@@ -50,7 +50,9 @@ Pass extra CMake args through `build.sh`, e.g. `./scripts/build.sh -DSUNG_DIAGNO
 
 **Single-instance behavior**: `main.cpp` uses a `QLocalServer`/`QLocalSocket` pair keyed on uid so a second launch (unless `--isolated`) hands its argv (a YouTube link, or a raise/`--mini` request) to the already-running instance and exits.
 
-**Desktop integration** lives in dedicated small classes: `mpris.cpp/h` (MPRIS2 D-Bus media-key/metadata interface), `playbacknotifier.cpp/h` (desktop notifications), `scrobbler.cpp/h` (ListenBrainz-compatible scrobbling, independent of any music server). The D-Bus pieces are gated on `SUNG_DBUS`, which is off on macOS.
+**Desktop integration** lives in dedicated small classes: `mpris.cpp/h` (MPRIS2 D-Bus media-key/metadata interface), `playbacknotifier.cpp/h` (desktop notifications), `scrobbler.cpp/h` (ListenBrainz-compatible scrobbling, independent of any music server). The D-Bus pieces are gated on `SUNG_DBUS`, which is off on macOS. `windowchrome.h` follows the same split: CMake compiles `windowchrome.mm` on macOS and `windowchrome.cpp` elsewhere, never both.
+
+**The macOS title bar is the window's own surface.** `Main.qml` sets `Qt::ExpandedClientAreaHint | Qt::NoTitleBarBackgroundHint` on macOS only, so the app's background runs the full height and the traffic lights sit on it. Qt Quick Controls already insets `contentItem` by the safe area, so nothing needs its own top padding — but the ambient wash is the window's `background` item rather than a child of the content, because a child would stop at that inset and put the seam back. `windowchrome.mm` hides the title text without clearing the title, and keeps the chrome's appearance matched to `window.color`. Linux is untouched: none of those flags exist there and `SafeArea` stays zero.
 
 **Data locations at runtime**: on Linux, library data in `~/.local/share/Sung/sung/`, settings in `~/.config/Sung/`, cache in `~/.cache/Sung/sung/` (XDG overrides respected); on macOS, `~/Library/Application Support/Sung/sung/` and a `com.sung.sung` plist.
 

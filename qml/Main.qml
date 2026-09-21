@@ -15,6 +15,14 @@ ApplicationWindow {
     font.family: Theme.fontFamily
     title: app.current.title ? app.current.title + " · Musix" : "Musix"
     color: Theme.background
+    // macOS draws its title bar over the window, so the app's own background
+    // can run the whole height and the traffic lights sit on it instead of on
+    // a grey strip of their own. Every other desktop keeps the frame it gives
+    // us. The title stays set either way: windowChrome hides the text without
+    // clearing the string, which Mission Control and VoiceOver still read.
+    flags: Qt.platform.os==="osx"
+           ? Qt.Window | Qt.ExpandedClientAreaHint | Qt.NoTitleBarBackgroundHint
+           : Qt.Window
     RoundedArt {
         id: accentSample; objectName: "accentSample"; visible: false; pixels: 48
         source: app.artworkAccent ? (app.current.art || "") : ""
@@ -189,7 +197,7 @@ ApplicationWindow {
     // canonical supporting pane proportion instead.
     Settings { id: geometry; category: "Window"; property int width: 1180; property int height: 800; property real panelWidth: 0 }
     Settings { id: railSettings; category: "Navigation"; property bool expanded: false }
-    Component.onCompleted: { windowResources.manage(window);width=geometry.width;height=geometry.height;geometryReady=true;app.setUiActive(uiActive);if(!app.onboarded)Qt.callLater(()=>{if(!app.onboarded)onboarding.open();}); }
+    Component.onCompleted: { windowResources.manage(window);windowChrome.blend(window);width=geometry.width;height=geometry.height;geometryReady=true;app.setUiActive(uiActive);if(!app.onboarded)Qt.callLater(()=>{if(!app.onboarded)onboarding.open();}); }
     onWidthChanged: {if(albumFlying)cancelAlbumFlight();if(geometryReady && !immersive && visibility===Window.Windowed)geometry.width=width;}
     onHeightChanged: {if(albumFlying)cancelAlbumFlight();if(geometryReady && !immersive && visibility===Window.Windowed)geometry.height=height;}
     property bool albumFlying: false
@@ -491,9 +499,12 @@ ApplicationWindow {
     // wash sits at the very back of the window and every panel floats over it,
     // so the colour of what is playing reaches the whole app rather than one
     // panel of it.
-    AmbientBackdrop {
+    // The window's background item rather than a child of its content: on
+    // macOS the content is inset to clear the title bar, and a wash that
+    // stopped at that line would put the seam back that the blended title bar
+    // is there to remove.
+    background: AmbientBackdrop {
         objectName: "windowBackdrop"
-        anchors.fill: parent
         visible: !window.compactMode && !window.immersive && active
         url: window.windowArtwork
         scrim: Theme.background

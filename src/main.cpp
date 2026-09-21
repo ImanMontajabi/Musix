@@ -5,6 +5,7 @@
 #include "mpris.h"
 #endif
 #include "roundedart.h"
+#include "windowchrome.h"
 #include "windowresources.h"
 #include <QDir>
 #include <QCache>
@@ -148,8 +149,10 @@ int main(int argc, char **argv) {
   if (exposeMpris) registerMpris(&backend);
 #endif
   WindowResources windowResources;
+  WindowChrome windowChrome;
   QQmlApplicationEngine engine;
   engine.rootContext()->setContextProperty("windowResources", &windowResources);
+  engine.rootContext()->setContextProperty("windowChrome", &windowChrome);
   engine.addImageProvider("symbols", new Symbols);
   engine.rootContext()->setContextProperty("app", &backend);
   engine.rootContext()->setContextProperty("motionArtwork", &motionArtwork);

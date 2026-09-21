@@ -17,6 +17,8 @@
 /src/*
 !/src/*.cpp
 !/src/*.h
+# Objective-C++, for the one file that has to talk to AppKit.
+!/src/*.mm
 /qml/*
 !/qml/*.qml
 /helper/*

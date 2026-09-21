@@ -1,5 +1,10 @@
 cmake_minimum_required(VERSION 3.24)
 project(Musix VERSION 0.12.0 LANGUAGES CXX)
+# The title-bar blending in src/windowchrome.mm is the only Objective-C++
+# in the tree, and only macOS compiles it.
+if(APPLE)
+ enable_language(OBJCXX)
+endif()
 if(NOT CMAKE_SYSTEM_NAME STREQUAL "Linux" AND NOT APPLE)
     message(FATAL_ERROR "Musix supports Linux and macOS only")
 endif()
@@ -40,8 +45,16 @@ endif()
 # directory default stays off so the test executables keep the plain paths the
 # harness and the README both name.
 set(CMAKE_MACOSX_BUNDLE FALSE)
-qt_add_executable(musix src/windowresources.h src/artworkurl.h src/desktoptheme.cpp src/desktoptheme.h src/main.cpp src/roundedart.cpp src/roundedart.h src/motionartwork.cpp src/motionartwork.h ${SUNG_BACKEND_SOURCES})
+qt_add_executable(musix src/windowresources.h src/artworkurl.h src/desktoptheme.cpp src/desktoptheme.h src/main.cpp src/roundedart.cpp src/roundedart.h src/motionartwork.cpp src/motionartwork.h src/windowchrome.h ${SUNG_BACKEND_SOURCES})
 target_link_libraries(musix PRIVATE Qt6::Core Qt6::Gui Qt6::Quick Qt6::Qml Qt6::QuickControls2 Qt6::Multimedia Qt6::Network Qt6::Svg)
+# Same shape as the MPRIS split above: one of the two implementations is
+# compiled, never both, so neither platform carries a stub of the other.
+if(APPLE)
+ target_sources(musix PRIVATE src/windowchrome.mm)
+ target_link_libraries(musix PRIVATE "-framework AppKit")
+else()
+ target_sources(musix PRIVATE src/windowchrome.cpp)
+endif()
 if(SUNG_DBUS)
  target_sources(musix PRIVATE src/mpris.cpp src/mpris.h)
  target_link_libraries(musix PRIVATE Qt6::DBus)
