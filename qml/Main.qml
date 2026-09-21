@@ -502,14 +502,68 @@ ApplicationWindow {
     // The window's background item rather than a child of its content: on
     // macOS the content is inset to clear the title bar, and a wash that
     // stopped at that line would put the seam back that the blended title bar
-    // is there to remove.
-    background: AmbientBackdrop {
-        objectName: "windowBackdrop"
-        visible: !window.compactMode && !window.immersive && active
-        url: window.windowArtwork
-        scrim: Theme.background
-        dim: 0.80
-        corner: 0
+    // is there to remove. It is also the only item that reaches the strip the
+    // title bar is drawn over, which is why the drag lives here too.
+    background: Item {
+        AmbientBackdrop {
+            objectName: "windowBackdrop"
+            anchors.fill: parent
+            visible: !window.compactMode && !window.immersive && active
+            url: window.windowArtwork
+            scrim: Theme.background
+            dim: 0.80
+            corner: 0
+        }
+        // Expanding the client area means the system never sees the press
+        // that used to move the window, so the app has to move it. This sits
+        // under the whole interface: a control that wants the press still
+        // takes it, and only the empty space around them falls through here.
+        Item {
+            objectName: "windowDragStrip"
+            anchors.left: parent.left; anchors.right: parent.right; anchors.top: parent.top
+            // Down to the bottom of the row holding the back button and the
+            // search bar: that row's empty space is title bar as far as the
+            // system is concerned. Every term notifies, so the strip follows
+            // the layout instead of being measured once at startup.
+            //
+            // It has to be here rather than on the row itself. A DragHandler
+            // on the row is an ancestor of the controls in it and takes the
+            // press off them the moment a drag starts, so the back button
+            // moved the window instead of going back.
+            height: windowChrome.inset + (headerRow.visible
+                    ? headerColumn.y + headerRow.y + headerRow.height : 0)
+            enabled: !window.compactMode && !window.immersive
+            // Handlers rather than a MouseArea: startSystemMove() on press
+            // would swallow the second click of a double-click, and would
+            // move the window on a click that never travelled anywhere. A
+            // DragHandler waits for the drag threshold and leaves taps be.
+            DragHandler {
+                target: null; enabled: Qt.platform.os==="osx"
+                // Never take the press off a control: without this the back
+                // button and the rail's menu button moved the window instead
+                // of working. A press that landed on one is already held, so
+                // only empty space reaches the drag. The TapHandler below is
+                // the exception -- it holds every press in the strip, and the
+                // drag has to be able to take that one over.
+                grabPermissions: PointerHandler.CanTakeOverFromHandlersOfDifferentType
+                                 | PointerHandler.ApprovesTakeOverByItems
+                                 | PointerHandler.ApprovesTakeOverByHandlersOfDifferentType
+                                 | PointerHandler.ApprovesCancellation
+                onActiveChanged: if(active)window.startSystemMove()
+            }
+            TapHandler {
+                enabled: Qt.platform.os==="osx"
+                // ReleaseWithinBounds makes this compete for the press rather
+                // than watch it go by, and the same permissions keep it from
+                // winning one a control already holds. Without both, a
+                // double-click on the back button zoomed the window.
+                gesturePolicy: TapHandler.ReleaseWithinBounds
+                grabPermissions: PointerHandler.ApprovesTakeOverByItems
+                                 | PointerHandler.ApprovesTakeOverByHandlersOfDifferentType
+                                 | PointerHandler.ApprovesCancellation
+                onDoubleTapped: windowChrome.titleBarDoubleClick()
+            }
+        }
     }
     // How much of the wash the floating surfaces let through. Opaque when there
     // is no wash, so nothing changes for anyone who has turned it off.
@@ -609,6 +663,7 @@ ApplicationWindow {
             MButton { objectName: "settingsButton"; symbol: "settings"; tip: "Settings"; text: navigationRail.expanded?"Settings":""; leftAligned: navigationRail.expanded; Layout.preferredWidth: navigationRail.expanded?navigationRail.shownWidth-32:48; Layout.alignment: navigationRail.expanded ? Qt.AlignLeft : Qt.AlignHCenter; Layout.leftMargin: navigationRail.expanded ? 16 : 0; Layout.bottomMargin: 20; onClicked: settingsDialog.open() }
         }
         ColumnLayout {
+            id: headerColumn
             // A navigation bar spans the window and sits against its bottom
             // edge, so the column gives up its own margins on those sides once
             // the window is compact.
@@ -619,6 +674,7 @@ ApplicationWindow {
             Layout.bottomMargin: window.compactWindow ? 0 : 16
             spacing: 12
             RowLayout {
+                id: headerRow
                 Layout.fillWidth: true; spacing: 12
                 MButton {
                     objectName: "drawerButton"; symbol: "menu"; tip: "Navigation"
