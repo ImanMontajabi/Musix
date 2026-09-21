@@ -19,5 +19,32 @@ Runtime dependencies carry their own licenses. Qt is dynamically linked;
 Qt licensing: https://www.qt.io/licensing/open-source-lgpl-obligations
 The installed Qt Multimedia and FFmpeg packages determine the media backend.
 Catalog requests use ytmusicapi (MIT); audio resolution uses yt-dlp (Unlicense).
+
+The macOS application bundle redistributes further works, and carries the full
+text of each of their licenses in Contents/Resources/licenses:
+
+  FFmpeg-LGPL-2.1.txt      FFmpeg
+  CPython-PSF.txt          CPython
+  yt-dlp-Unlicense.txt     yt-dlp
+  ytmusicapi-MIT.txt       ytmusicapi
+  MaterialSymbols-LICENSE.txt  Material Symbols
+
+FFmpeg (https://ffmpeg.org), used unmodified as the ffmpeg and ffprobe
+executables, under the GNU Lesser General Public License version 2.1 or later.
+The bundled build is configured with --disable-gpl --disable-nonfree
+--disable-autodetect, so it contains no GPL-licensed or non-free components and
+links no external libraries. scripts/build-ffmpeg.sh reproduces it exactly from
+the upstream release it pins. As the LGPL requires, the corresponding source is
+published alongside each release as
+Musix-<version>-ffmpeg-<ffmpeg version>-source.tar.xz, which is the unmodified
+tarball the bundled binaries were built from.
+
+CPython (https://python.org), redistributed as a relocatable build from
+python-build-standalone (https://github.com/astral-sh/python-build-standalone),
+under the Python Software Foundation License.
+
+yt-dlp (Unlicense) and ytmusicapi (MIT) are installed into that runtime, and
+the application updates those two packages in place.
+
 No fonts are bundled. Musix uses an installed Google Sans Flex or Noto Sans font.
 Musix is independent of Google and YouTube.
