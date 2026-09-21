@@ -1,0 +1,64 @@
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+## What this is
+
+Musix is a native Material 3 music player built with C++20/Qt 6 (Quick/QML) that plays YouTube Music, local files, and Subsonic/Navidrome or Jellyfin servers. It runs on Linux and on macOS (Apple Silicon); the source, binary and several paths still say `sung`, which is deliberate.
+
+## Build, run, test
+
+```bash
+./scripts/setup.sh   # creates ./runtime venv, installs helper/requirements.txt (yt-dlp, ytmusicapi)
+./scripts/build.sh   # configures ./build (Release, Ninja, BUILD_TESTING=OFF) and builds
+./scripts/run.sh     # runs ./build/sung with SUNG_HELPER/SUNG_PYTHON pointed at the checkout
+```
+
+On macOS, `./scripts/package-dmg.sh` builds the distributable `Musix-<version>-arm64.dmg`: a Release build, `macdeployqt`, then a relocatable Python carrying the resolver and an LGPL ffmpeg from `./scripts/build-ffmpeg.sh`, ad-hoc signed. Both payloads are downloaded and built once into the ignored `build-packaging/` and reused after that.
+
+Pass extra CMake args through `build.sh`, e.g. `./scripts/build.sh -DSUNG_DIAGNOSTICS=ON`. `SUNG_BUILD_JOBS` controls parallelism (default 4).
+
+```bash
+./scripts/test.sh          # configures ./build-tests (BUILD_TESTING=ON), builds, runs ctest + Python unittest
+./scripts/verify.sh --offline   # full verification suite (tests/verify.py); omit --offline for live network/audio checks
+```
+
+- `test.sh` runs both C++ (ctest, Qt Test based) and Python (`unittest discover -s tests -p 'test_*.py'`) suites. To run a single ctest target: `ctest --test-dir build-tests -R <name> --output-on-failure` (targets: `crossfade`, `m3color`, `subsonic-protocol`, `backend`, `notifications`; some, e.g. `sung-jellyfin-tests`, `sung-artwork-tests`, are built but not registered as ctest targets — run the binary in `build-tests/` directly).
+- Single Python test: `python3 -m unittest tests.test_catalog -v` (run from repo root) or `python3 tests/test_online_artwork.py`.
+- `tests/immersive_regression.py --binary /path/to/diagnostics/sung --output verification/<name>` runs the offscreen immersive/high-DPI/layout-persistence checks against a `-DSUNG_DIAGNOSTICS=ON` build; use a fresh output dir each run.
+- Server integration tests spin up a disposable Navidrome/Jellyfin instance and generated audio fixtures — see `tests/navidrome_integration.py` and `tests/jellyfin_integration.py` (`--test-binary build-tests/sung-subsonic-tests`, optional `--ui-binary`/`--native-ui` for rendered checks). Skip unless you have those server binaries available.
+- Reports/screenshots land in the git-ignored `verification/` directory.
+- A `-DSUNG_DIAGNOSTICS=ON` build also compiles the interactive UI harness in `tests/uitest.cpp` and friends into the `sung` binary itself; each `--foo-test` CLI flag in `src/main.cpp` runs one of these Qt-Test-based UI suites headlessly (offscreen QPA) instead of the normal app.
+
+## Architecture
+
+**Two-language split:** the C++/QML app never talks to YouTube directly. `Backend::request()` (src/backend.cpp) spawns `helper/catalog.py` as a one-shot subprocess per call (`python3 helper/catalog.py`, JSON args on stdin, JSON result on stdout, own process group so it can be killed cleanly), using `yt-dlp`/`ytmusicapi` under the hood. `helper/online_artwork.py` similarly resolves Apple Music/MusicBrainz cover art. There is no long-lived server or daemon — one process per request, killed on cancel/timeout (45s normal, 75s for `play`/`prepare`).
+
+**`Backend` (src/backend.h/.cpp, ~3500 lines across backend.cpp/backendserver.cpp/productfeatures.cpp/presentationfeatures.cpp) is the app's single QML-facing god object**, exposed to QML as the `app` context property in `main.cpp`. It owns: the current catalog view/navigation stack (`page`/`viewKey`/`sections`/`results`), the playback queue and `QMediaPlayer`, library/local-file import, settings (`QSettings`), server plumbing, and drives most `Q_PROPERTY`/`NOTIFY` signals QML binds to. Its implementation is split across files by concern but it's one class:
+  - `backend.cpp` — core state, navigation, catalog/queue mutation
+  - `backendserver.cpp` — wiring to `MusicServer` (playback reporting, cover fetch on track change)
+  - `productfeatures.cpp` — library-facing features (albums, smart playlists, folders, listening sessions, etc.)
+  - `presentationfeatures.cpp` — home layout / density / start-page presentation settings
+
+**`MusicServer` (src/musicserver.h) is a compile-time facade over `Subsonic` and `Jellyfin`**, dispatching every call (`browse`, `cover`, `lyrics`, `star`, `rate`, `scrobble`, `editPlaylist`, ...) to whichever backend is the active `m_provider`. `Subsonic`/`Jellyfin` (src/subsonic.*, src/jellyfin.*) each own their own HTTP/auth/protocol details independently; `MusicServer` is the only place `Backend` needs to know about.
+
+**QML is the entire UI layer** (`qml/`, ~80 files, registered as the `SungUi` QML module in CMakeLists.txt). `Main.qml` (~2200 lines) is the application shell: window chrome, navigation state (`destination`, `libraryTab`, immersive mode, mini player), and wires most top-level behavior. Reusable Material 3 components are the `M*.qml` files (MButton, MCard, MDialog, MNavigationBar, MFabMenu, etc.) — check there before adding a new UI primitive. `Theme.qml` is a QML singleton (colors, type scale, motion tokens) computed from Material 3 dynamic color; `m3color.cpp`/`m3shape.cpp` implement the actual HCT/tonal-palette math and Material shape library in C++, exposed for QML to consume.
+
+**Native QML types registered under `Sung.Native`** (see `main.cpp`): `RowSelection` (multi-select state for a model, tied to the displayed model rather than recycled delegates), `RoundedArt` (a `QQuickPaintedItem` that paints artwork — local, server, or YouTube video-frame — with rounding/shape masking and animated-cover support via `MotionArtwork`), and `MotionArtwork` itself (the single shared GIF/video decoder for whichever cover is currently playing, exposed as an uncreatable singleton-like instance so all now-playing surfaces share one decoder).
+
+**Other native singletons wired into the QML context in `main.cpp`**: `windowResources` (releases GPU/scene resources after a window is hidden 30s, keeps app state alive), `motionArtwork`, `desktopTheme` (reads the desktop's color scheme / Noctalia palette via a `QFileSystemWatcher`), plus a custom `symbols` `QQuickImageProvider` that tints/caches Material Symbol SVGs at the requested optical size.
+
+**Single-instance behavior**: `main.cpp` uses a `QLocalServer`/`QLocalSocket` pair keyed on uid so a second launch (unless `--isolated`) hands its argv (a YouTube link, or a raise/`--mini` request) to the already-running instance and exits.
+
+**Desktop integration** lives in dedicated small classes: `mpris.cpp/h` (MPRIS2 D-Bus media-key/metadata interface), `playbacknotifier.cpp/h` (desktop notifications), `scrobbler.cpp/h` (ListenBrainz-compatible scrobbling, independent of any music server). The D-Bus pieces are gated on `SUNG_DBUS`, which is off on macOS.
+
+**Data locations at runtime**: on Linux, library data in `~/.local/share/Sung/sung/`, settings in `~/.config/Sung/`, cache in `~/.cache/Sung/sung/` (XDG overrides respected); on macOS, `~/Library/Application Support/Sung/sung/` and a `com.sung.sung` plist.
+
+**Where the helper, Python and ffmpeg come from** is answered in one place, `src/runtimeenv.cpp`: a checkout uses what `run.sh` exports, a bundle uses its own `Contents/Resources`. Because the bundle is signed and must not be written to, the packaged runtime is copied once into the writable data directory and the app updates `yt-dlp`/`ytmusicapi` inside that copy — at most daily, immediately after a playback failure, and immediately after a re-seed. A resolver that will not import is rolled back, and failing that re-seeded from the bundle.
+
+## Conventions to notice before editing
+
+- Comments in this codebase explain *why*, not *what* — they're notably terse and only appear where a design decision is non-obvious (see `src/scrobbler.h`, `src/artworkurl.h`, `src/windowresources.h` for the house style). Match that style rather than adding narrative comments.
+- Many files pack multiple statements per line intentionally (dense style throughout `backend.h`/`backend.cpp`); don't reflow files wholesale as a side effect of a small change.
+- `Backend`, `Subsonic`, and `Jellyfin` are each single large classes by design (facade + one god object), not an oversight — new server providers should follow the `Subsonic`/`Jellyfin` shape and be added to `MusicServer`'s dispatch, not layered on top of `Backend` directly.
+- QML files: new reusable widgets go in `qml/M*.qml` following the existing Material naming; new files must also be added to the `QML_FILES` list in `CMakeLists.txt`'s `qt_add_qml_module` call (and to the relevant test executable's source list in CMakeLists.txt if C++ sources are added).

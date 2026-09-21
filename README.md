@@ -34,6 +34,12 @@ Native rendering and bounded artwork caches keep Musix lightweight. Animated cov
 
 ## Install
 
+### macOS (Apple Silicon)
+
+Download `Musix-<version>-arm64.dmg`, open it, and drag **Musix** to Applications. Nothing else is needed: Qt, Python, the YouTube resolver and FFmpeg all travel inside the app, and it keeps the resolver up to date on its own.
+
+Musix is not signed with an Apple Developer certificate yet, so the first launch is refused. Open it once from Applications, then go to **System Settings → Privacy & Security**, scroll to the message naming Musix and choose **Open Anyway**. macOS asks to confirm once, and every launch after that is ordinary.
+
 ### CachyOS / Arch Linux
 
 Install the build and runtime dependencies:
@@ -199,7 +205,9 @@ Library data is stored in `~/.local/share/Sung/sung/`, settings in `~/.config/Su
 
 Playback depends on YouTube availability, region and network conditions. Musix buffers audio before playing, so starting a song can take a moment. It does not remove sponsor segments embedded in recordings or promise gapless playback.
 
-If YouTube playback stops working after an upstream change, update the resolver:
+YouTube occasionally changes how audio is served, and the resolver has to catch up. The macOS app does this itself: it refreshes `yt-dlp` and `ytmusicapi` in the background at most once a day, and again straight away if playback fails, keeping the previous working versions if an update turns out to be broken. There is nothing to run.
+
+On Linux the resolver is updated by hand:
 
 ```bash
 ~/.local/lib/musix/runtime/bin/python -m pip install --upgrade 'yt-dlp[default]' ytmusicapi
@@ -216,6 +224,8 @@ Build and run from the checkout:
 ./scripts/build.sh
 ./scripts/run.sh
 ```
+
+On macOS, `./scripts/package-dmg.sh` produces the distributable `Musix-<version>-arm64.dmg`. It builds a Release bundle, deploys Qt into it with `macdeployqt`, adds a relocatable Python carrying the resolver, adds the ffmpeg built by `./scripts/build-ffmpeg.sh`, signs the result ad-hoc and wraps it up. The first run downloads and builds those two payloads into the ignored `build-packaging/` directory and reuses them afterwards.
 
 Run automated tests:
 
