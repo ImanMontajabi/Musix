@@ -214,9 +214,11 @@ cp "$runtime"/lib/python3.11/site-packages/ytmusicapi-*.dist-info/licenses/LICEN
 # A library that arrives in the bundle without a license text is the failure
 # this is here to catch, so the check is against what is actually there.
 "$runtime/bin/python3" - "$app" "$licenses" <<'AUDIT'
-import sys, pathlib, re
+import sys, pathlib
 app, licenses = pathlib.Path(sys.argv[1]), pathlib.Path(sys.argv[2])
-# dylib stem -> the license file that covers it.
+# Library name -> the license file that covers it. Matched as the longest
+# prefix rather than by stripping a version, because the versions are not one
+# shape: libwebp.7, libpcre2-8.0 and libglib-2.0.0 all end differently.
 covered = {
     'libb2': 'libb2', 'libbrotlicommon': 'brotli', 'libbrotlidec': 'brotli',
     'libcrypto': 'openssl', 'libssl': 'openssl', 'libdbus-1': 'dbus',
@@ -231,8 +233,8 @@ covered = {
 names = [p.name for p in licenses.iterdir()]
 missing = []
 for lib in sorted((app / 'Contents/Frameworks').glob('*.dylib')):
-    stem = re.sub(r'\.[0-9.]*dylib$', '', lib.name)
-    key = covered.get(stem)
+    match = max((c for c in covered if lib.name.startswith(c)), key=len, default=None)
+    key = covered.get(match)
     if key is None:
         missing.append('%s is bundled and nothing in this build claims to license it' % lib.name)
     elif not any(n.startswith(key) for n in names):
