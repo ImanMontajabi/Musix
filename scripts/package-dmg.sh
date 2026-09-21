@@ -96,10 +96,16 @@ cp "$root/LICENSE" "$root/NOTICE" "$resources/"
 # unchecked-hash keeps source mtimes out of the files and stops Python
 # revalidating them, and stripping $resources keeps this machine's directory
 # names out of every traceback the app can print.
-find "$resources/runtime" -name __pycache__ -type d -prune -exec rm -rf {} + 2>/dev/null || true
+#
+# The helper scripts count too, and for the same reason: catalog.py does
+# "from online_artwork import lookup", which caches a sibling module next to
+# itself inside Contents/Resources on the first artwork lookup of any ordinary
+# session — seeded runtime or not.
+find "$resources/runtime" "$resources/helper" -name __pycache__ -type d -prune \
+  -exec rm -rf {} + 2>/dev/null || true
 "$resources/runtime/bin/python3" -m compileall -q -f \
   --invalidation-mode unchecked-hash -s "$resources" \
-  "$resources/runtime/lib/python3.11" >/dev/null
+  "$resources/runtime/lib/python3.11" "$resources/helper" >/dev/null
 
 # The bundle redistributes other people's work, so it carries their licenses
 # rather than only naming them.
