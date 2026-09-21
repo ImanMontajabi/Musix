@@ -25,7 +25,7 @@ MDialog {
             ["Mute¹","M"],
             ["Back","Alt+←"],
             ["Mini player","Ctrl+M"],
-            ["Immersive player","F11"],
+            ["Immersive player",Qt.platform.os==="osx"?"Ctrl+Shift+F":"F11"],
             ["Select all songs²","Ctrl+A"],
             ["Extend selection²","Shift+↑ / ↓"],
             ["Toggle selection²","Ctrl+Space"],

@@ -458,7 +458,13 @@ ApplicationWindow {
             }
         }
     }
-    Shortcut { sequence: "F11"; enabled: !window.modalOpen; onActivated: window.toggleImmersive() }
+    // F11 belongs to Show Desktop on macOS and never reaches the app, which
+    // left the immersive player with no shortcut there. Ctrl+Shift+F is
+    // Cmd+Shift+F once Qt maps it, which is what Music and Spotify use for
+    // their own full-screen players; the system's own Enter Full Screen is
+    // Ctrl+Cmd+F and stays out of the way.
+    readonly property string immersiveShortcut: Qt.platform.os==="osx" ? "Ctrl+Shift+F" : "F11"
+    Shortcut { sequence: window.immersiveShortcut; enabled: !window.modalOpen; onActivated: window.toggleImmersive() }
     Loader { id: immersiveLoader; anchors.fill: parent; active: window.immersive; sourceComponent: Component { ImmersivePlayer { coverHidden: window.coverFlying;
                 preferredLayout:listeningSettings.layout;autoHideControls:listeningSettings.autoHide;externalModalOpen:window.modalOpen
                 coverflow:listeningSettings.coverflow
@@ -1581,7 +1587,7 @@ ApplicationWindow {
             MButton { objectName: "revealPlayingButton"; text: "Playing"; tip: "Show playing song · Ctrl+J"; visible: window.side==="queue" && window.queueTab==="next"; enabled: app.currentIndex>=0; onClicked: window.revealPlaying() }
             MButton { objectName: "lyricSearchButton"; symbol: "search"; tip: "Find in lyrics"; visible: window.side==="lyrics"; enabled: !!app.lyrics; onClicked: {if(sideLoader.item)sideLoader.item.openSearch();} }
             MButton { objectName: "lyricTimingButton"; symbol: "settings"; tip: "Lyric timing · saved for this song"; visible: window.side==="lyrics" && !!app.current.id; onClicked: lyricTimingDialog.open() }
-            MButton { objectName: "immersiveButton"; symbol: "expand"; tip: "Immersive player · F11"; visible: window.side!=="queue"; enabled: app.currentIndex>=0; onClicked: window.toggleImmersive() }
+            MButton { objectName: "immersiveButton"; symbol: "expand"; tip: "Immersive player · "+window.immersiveShortcut; visible: window.side!=="queue"; enabled: app.currentIndex>=0; onClicked: window.toggleImmersive() }
             MButton { symbol: "close"; tip: "Close panel"; onClicked: window.side="" }
         }
         Loader {
