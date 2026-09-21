@@ -82,6 +82,10 @@ mkdir -p "$resources/helper" "$resources/ffmpeg"
 cp "$root/helper/catalog.py" "$root/helper/online_artwork.py" \
    "$root/helper/requirements.txt" "$resources/helper/"
 cp "$cache/ffmpeg-out/bin/ffmpeg" "$cache/ffmpeg-out/bin/ffprobe" "$resources/ffmpeg/"
+# cp -a copies into an existing directory rather than over it, which once
+# produced runtime/python-runtime nested inside the bundle. Nothing here may
+# depend on what the destination already held.
+rm -rf "$resources/runtime"
 cp -a "$runtime" "$resources/runtime"
 cp "$root/LICENSE" "$root/NOTICE" "$resources/"
 
