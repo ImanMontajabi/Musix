@@ -19,6 +19,32 @@ mkdir -p "$cache"
 
 say() { printf '\n== %s ==\n' "$1"; }
 
+# Two runs share one staging directory, and the second one deletes it while the
+# first is still deploying into it. That produced a bundle with two copies of
+# the runtime in it and a pile of install_name_tool failures, and neither run
+# had any way to tell. mkdir is atomic, so it is the lock.
+lock="$cache/.build-lock"
+if ! mkdir "$lock" 2>/dev/null; then
+  holder="$(cat "$lock/pid" 2>/dev/null || true)"
+  if [ -n "$holder" ] && kill -0 "$holder" 2>/dev/null; then
+    echo "Another packaging run is already going: pid $holder, started $(cat "$lock/started" 2>/dev/null || echo 'unknown')." >&2
+    echo "Wait for it to finish, or stop it with:  kill $holder" >&2
+    exit 1
+  fi
+  # Nothing is holding it: a run was killed before it could clean up. A stale
+  # lock must never be the thing that stops the next build.
+  echo "Clearing a stale lock left by pid ${holder:-unknown}." >&2
+  rm -rf "$lock"
+  mkdir "$lock" || { echo "Could not take the build lock at $lock" >&2; exit 1; }
+fi
+echo $$ > "$lock/pid"
+date '+%Y-%m-%d %H:%M:%S' > "$lock/started"
+# EXIT covers the ordinary ending and the failures; the signals cover being
+# killed. Only kill -9 can still leave the lock behind, which is what the
+# staleness check above is for.
+trap 'rm -rf "$lock"' EXIT
+trap 'rm -rf "$lock"; exit 130' INT TERM
+
 # What ships has to be traceable to a commit, so refuse to build from a tree
 # that is not one. MUSIX_ALLOW_DIRTY exists for trying things out locally.
 commit="$(git -C "$root" rev-parse HEAD 2>/dev/null || echo unknown)"
