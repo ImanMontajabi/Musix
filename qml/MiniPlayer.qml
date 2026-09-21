@@ -11,10 +11,12 @@ Window {
     width: 520; height: hasTimedLyrics?216:188
     minimumWidth: 520; maximumWidth: 520
     minimumHeight: hasTimedLyrics?216:188; maximumHeight: minimumHeight
-    color: Theme.background
+    // The card below draws the shape; anything the window paints outside it
+    // would be a square corner behind a rounded one.
+    color: "transparent"
     TrackPresentation { id: presentation }
     signal restoreRequested()
-    Component.onCompleted: windowResources.manage(mini)
+    Component.onCompleted: { windowResources.manage(mini);windowChrome.roundCorners(mini); }
     onClosing: Qt.quit()
     Shortcut { sequence: "Ctrl+M"; onActivated: mini.restoreRequested() }
     Shortcut { sequence: "Escape"; enabled:!miniVolume.popupVisible;onActivated: mini.restoreRequested() }

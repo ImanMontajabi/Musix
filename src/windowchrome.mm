@@ -69,3 +69,37 @@ void WindowChrome::titleBarDoubleClick() {
   else
     [native performZoom:nil];
 }
+
+void WindowChrome::roundCorners(QQuickWindow *window) {
+  if (!window)
+    return;
+  // Qt::FramelessWindowHint takes the frame away but leaves an opaque
+  // NSWindow behind the scene, so the square corners outside the rounded card
+  // were the window itself showing through. Clearing its background is what
+  // lets the alpha the scene graph draws reach the screen.
+  //
+  // The shadow is cut from that alpha, and AppKit only recomputes it when
+  // asked, so it has to be invalidated again every time the window resizes or
+  // a theme change repaints it -- otherwise the shadow keeps the old outline.
+  const auto apply = [window] {
+    auto native = nativeWindow(window);
+    if (!native)
+      return;
+    native.opaque = NO;
+    native.backgroundColor = NSColor.clearColor;
+    native.hasShadow = YES;
+    [native invalidateShadow];
+  };
+  connect(window, &QWindow::widthChanged, this, apply);
+  connect(window, &QWindow::heightChanged, this, apply);
+  connect(window, &QWindow::visibilityChanged, this, apply);
+  // And once more after the first frame: at this point the scene has drawn
+  // nothing, so a shadow cut from its alpha now would be cut from nothing.
+  auto *first = new QMetaObject::Connection;
+  *first = connect(window, &QQuickWindow::frameSwapped, this, [apply, first] {
+    apply();
+    disconnect(*first);
+    delete first;
+  });
+  apply();
+}

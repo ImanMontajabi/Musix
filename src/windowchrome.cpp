@@ -6,5 +6,6 @@
 #ifndef Q_OS_MACOS
 void WindowChrome::blend(QQuickWindow *) {}
 void WindowChrome::titleBarDoubleClick() {}
+void WindowChrome::roundCorners(QQuickWindow *) {}
 void WindowChrome::refresh() {}
 #endif

@@ -23,6 +23,9 @@ public:
   Q_INVOKABLE void blend(QQuickWindow *window);
   // Whatever Desktop & Dock says a double-click on a title bar should do.
   Q_INVOKABLE void titleBarDoubleClick();
+  // Let a frameless window's own rounded shape be the shape macOS sees, so
+  // nothing square shows behind it and the shadow follows the corners.
+  Q_INVOKABLE void roundCorners(QQuickWindow *window);
   qreal inset() const { return m_inset; }
 signals:
   void insetChanged();
