@@ -68,3 +68,10 @@ settings.json
 *.[mM][dD]
 *.[mM][aA][rR][kK][dD][oO][wW][nN]
 !/README.md
+
+# macOS packaging: the release build, the downloaded and compiled payloads it
+# reuses, and the artifacts it produces.
+build-release/
+build-packaging/
+Musix-*.dmg
+Musix-*-source.tar.xz
