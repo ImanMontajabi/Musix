@@ -37,7 +37,7 @@ for repeat in range(a.repeats):
   if not a.native_workspace:env['QSG_RENDER_LOOP']='basic'
   env.update(QT_QPA_PLATFORM='wayland' if a.native_workspace else 'offscreen',QT_QPA_PLATFORMTHEME='generic',FONTCONFIG_FILE=str(fonts),SUNG_HELPER=str(helper),SUNG_PYTHON='python3',SUNG_BENCH_AUDIO=str(audio),SUNG_BENCH_MODE=mode,SUNG_BENCH_MS=str(a.seconds*1000),SUNG_BENCH_OUTPUT=str(run),SUNG_BENCH_ART='1')
   if not a.native_workspace:env['QT_QUICK_BACKEND']='software'
-  subprocess.run([str(a.binary.resolve().with_name('sung-artwork-fixture'))],env=env,check=True)
+  subprocess.run([str(a.binary.resolve().with_name('musix-artwork-fixture'))],env=env,check=True)
   env['SUNG_BENCH_ART_PRESEEDED']='1'
   command=[str(a.binary.resolve()),'--isolated','--benchmark']
   (run/'ready').touch()

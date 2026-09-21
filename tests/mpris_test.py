@@ -1,7 +1,7 @@
 """Isolated D-Bus integration test; never controls the user's running player."""
 import os, pathlib, subprocess, sys, time
 binary=sys.argv[1]
-service='org.mpris.MediaPlayer2.sung';path='/org/mpris/MediaPlayer2'
+service='org.mpris.MediaPlayer2.musix';path='/org/mpris/MediaPlayer2'
 proc=subprocess.Popen([binary,'--isolated','--mpris-test','--offline'])
 def call(method,*args):
     return subprocess.check_output(['qdbus6',service,path,method,*args],text=True,stderr=subprocess.DEVNULL).strip()

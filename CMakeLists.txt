@@ -36,8 +36,9 @@ set(SUNG_BACKEND_LIBS Qt6::Core Qt6::Gui Qt6::Multimedia Qt6::Network)
 if(SUNG_DBUS)
  list(APPEND SUNG_BACKEND_LIBS Qt6::DBus)
 endif()
-# Keep the binary at build/musix rather than build/musix.app so the scripts and
-# the diagnostics harness keep addressing it the same way on either platform.
+# Only the player becomes a bundle, and it asks for that on its own target. The
+# directory default stays off so the test executables keep the plain paths the
+# harness and the README both name.
 set(CMAKE_MACOSX_BUNDLE FALSE)
 qt_add_executable(musix src/windowresources.h src/artworkurl.h src/desktoptheme.cpp src/desktoptheme.h src/main.cpp src/roundedart.cpp src/roundedart.h src/motionartwork.cpp src/motionartwork.h ${SUNG_BACKEND_SOURCES})
 target_link_libraries(musix PRIVATE Qt6::Core Qt6::Gui Qt6::Quick Qt6::Qml Qt6::QuickControls2 Qt6::Multimedia Qt6::Network Qt6::Svg)
@@ -52,6 +53,44 @@ else()
  target_link_options(musix PRIVATE "$<$<CONFIG:Release>:-Oz;-Wl,--gc-sections;-Wl,-z,pack-relative-relocs>")
 endif()
 set_target_properties(musix PROPERTIES CXX_VISIBILITY_PRESET hidden VISIBILITY_INLINES_HIDDEN YES)
+if(APPLE)
+ # The artwork is a placeholder, so the whole icon pipeline hangs off one path:
+ # point MUSIX_ICON at another square PNG and rebuild. Only the sizes a 512px
+ # source can fill honestly are generated; iconutil does not require the rest.
+ set(MUSIX_ICON "${CMAKE_CURRENT_SOURCE_DIR}/assets/sung.png" CACHE FILEPATH
+     "Square PNG the macOS application icon is generated from")
+ set(musix_iconset "${CMAKE_CURRENT_BINARY_DIR}/Musix.iconset")
+ set(musix_icns "${CMAKE_CURRENT_BINARY_DIR}/Musix.icns")
+ set(musix_sips_commands)
+ foreach(entry "16;icon_16x16" "32;icon_16x16@2x" "32;icon_32x32" "64;icon_32x32@2x"
+               "128;icon_128x128" "256;icon_128x128@2x" "256;icon_256x256"
+               "512;icon_256x256@2x" "512;icon_512x512")
+  list(GET entry 0 px)
+  list(GET entry 1 stem)
+  list(APPEND musix_sips_commands COMMAND sips -z ${px} ${px} "${MUSIX_ICON}"
+       --out "${musix_iconset}/${stem}.png" > /dev/null)
+ endforeach()
+ add_custom_command(OUTPUT "${musix_icns}"
+  COMMAND ${CMAKE_COMMAND} -E rm -rf "${musix_iconset}"
+  COMMAND ${CMAKE_COMMAND} -E make_directory "${musix_iconset}"
+  ${musix_sips_commands}
+  COMMAND iconutil -c icns "${musix_iconset}" -o "${musix_icns}"
+  DEPENDS "${MUSIX_ICON}"
+  COMMENT "Generating Musix.icns from ${MUSIX_ICON}"
+  VERBATIM)
+ set_source_files_properties("${musix_icns}" PROPERTIES
+   GENERATED TRUE MACOSX_PACKAGE_LOCATION Resources)
+ target_sources(musix PRIVATE "${musix_icns}")
+ set_target_properties(musix PROPERTIES
+   MACOSX_BUNDLE TRUE
+   MACOSX_BUNDLE_INFO_PLIST "${CMAKE_CURRENT_SOURCE_DIR}/assets/Info.plist.in"
+   MACOSX_BUNDLE_BUNDLE_NAME "Musix"
+   MACOSX_BUNDLE_GUI_IDENTIFIER "io.github.ImanMontajabi.Musix"
+   MACOSX_BUNDLE_BUNDLE_VERSION "${PROJECT_VERSION}"
+   MACOSX_BUNDLE_SHORT_VERSION_STRING "${PROJECT_VERSION}"
+   MACOSX_BUNDLE_ICON_FILE "Musix"
+   MACOSX_BUNDLE_COPYRIGHT "Copyright (c) 2026 Sung contributors; Iman Montajabi. MIT.")
+endif()
 # This small, first-use-only component can compile on demand. Keep the player
 # and animation components precompiled, without embedding unused picker bytecode.
 set_source_files_properties(qml/FileDialogs.qml PROPERTIES QT_QML_SKIP_CACHEGEN TRUE)
@@ -66,7 +105,7 @@ if(CMAKE_BUILD_TYPE STREQUAL "Release" AND NOT APPLE)
  add_custom_command(TARGET musix POST_BUILD COMMAND ${CMAKE_STRIP} --strip-unneeded $<TARGET_FILE:musix>)
 endif()
 include(GNUInstallDirs)
-install(TARGETS musix RUNTIME DESTINATION bin)
+install(TARGETS musix RUNTIME DESTINATION bin BUNDLE DESTINATION .)
 install(FILES helper/catalog.py helper/online_artwork.py helper/requirements.txt DESTINATION lib/musix)
 if(NOT APPLE)
  install(FILES assets/musix.desktop DESTINATION share/applications)

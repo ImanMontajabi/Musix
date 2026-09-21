@@ -31,7 +31,8 @@
 /assets/*
 !/assets/readme-banner.png
 !/assets/sung.png
-!/assets/sung.desktop
+!/assets/musix.desktop
+!/assets/Info.plist.in
 !/assets/icons/
 /assets/icons/*
 !/assets/icons/*.svg

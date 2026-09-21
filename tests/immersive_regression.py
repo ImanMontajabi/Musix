@@ -33,7 +33,7 @@ def main():
     out = args.output.resolve()
     out.mkdir(parents=True, exist_ok=False, mode=0o700)
     (out / "bin").mkdir()
-    binary = out / "bin/sung"
+    binary = out / "bin/musix"
     # Test a fixed artifact even if another build replaces the original executable.
     shutil.copy2(source, binary)
     env = {k: v for k, v in os.environ.items() if not k.startswith("SUNG_")}
