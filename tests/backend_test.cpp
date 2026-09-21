@@ -157,21 +157,23 @@ private slots:
     b.rejectArtwork();QVERIFY(b.currentMotionArt().isEmpty());
     b.m_index=1;QVERIFY(b.artworkChoice().isEmpty());b.m_index=0;QCOMPARE(b.artworkChoice(),QString("disabled"));
     b.resetArtworkChoice();QVERIFY(b.artworkChoice().isEmpty());
-    QTemporaryDir music;const auto original=music.filePath("One.wav");
+    // Sung stores the canonical folder path, and macOS hands out temporary
+    // directories under /var, which is a symlink to /private/var.
+    QTemporaryDir music;const auto root=QFileInfo(music.path()).canonicalFilePath();const auto original=root+"/One.wav";
     QProcess encode;encode.start("ffmpeg",{"-nostdin","-v","error","-f","lavfi","-i","anullsrc=r=8000:cl=mono","-t","1",original});QVERIFY(encode.waitForFinished(10000));QCOMPARE(encode.exitCode(),0);
-    b.importMusicFolder(QUrl::fromLocalFile(music.path()));QTRY_VERIFY_WITH_TIMEOUT(!b.importingLocal(),10000);QCOMPARE(b.m_localTracks.size(),1);
+    b.importMusicFolder(QUrl::fromLocalFile(root));QTRY_VERIFY_WITH_TIMEOUT(!b.importingLocal(),10000);QCOMPARE(b.m_localTracks.size(),1);
     b.setWatchMusicFolders(true);QTRY_VERIFY_WITH_TIMEOUT(b.m_folderWatcher.files().contains(original),5000);
-    const auto second=music.filePath("Two.wav");QVERIFY(QFile::copy(original,second));
+    const auto second=root+"/Two.wav";QVERIFY(QFile::copy(original,second));
     QTRY_COMPARE_WITH_TIMEOUT(b.m_localTracks.size(),2,10000);
     QVERIFY(QFile::remove(second));
     QTRY_VERIFY_WITH_TIMEOUT(!b.m_localTracks.last().toMap().value("available",true).toBool(),10000);
     QVERIFY(QFile::copy(original,second));
     QTRY_VERIFY_WITH_TIMEOUT(b.m_localTracks.last().toMap().value("available").toBool(),10000);
-    QDir().mkpath(music.filePath("Nested"));QVERIFY(QFile::copy(original,music.filePath("Nested/Three.wav")));
+    QDir().mkpath(root+"/Nested");QVERIFY(QFile::copy(original,root+"/Nested/Three.wav"));
     QTRY_COMPARE_WITH_TIMEOUT(b.m_localTracks.size(),3,10000);
     b.setWatchMusicFolders(false);QVERIFY(b.m_folderWatcher.files().isEmpty());QVERIFY(b.m_folderWatcher.directories().isEmpty());
-    QVERIFY(QFile::copy(original,music.filePath("Four.wav")));QTest::qWait(1800);QCOMPARE(b.m_localTracks.size(),3);
-    b.forgetMusicFolder(music.path());b.m_localTracks.clear();b.clearQueue();
+    QVERIFY(QFile::copy(original,root+"/Four.wav"));QTest::qWait(1800);QCOMPARE(b.m_localTracks.size(),3);
+    b.forgetMusicFolder(root);b.m_localTracks.clear();b.clearQueue();
   }
   void videoFrameCovers() {
     const auto oldHelper=qgetenv("SUNG_HELPER"),oldPython=qgetenv("SUNG_PYTHON"),oldBuffer=qgetenv("SUNG_BUFFER_FIXTURE");
@@ -355,8 +357,10 @@ private slots:
     const auto helper=QFileInfo(QString::fromUtf8(qgetenv("SUNG_FIXTURE_HELPER"))).dir().absoluteFilePath("../helper/catalog.py");
     qputenv("SUNG_HELPER",helper.toUtf8());qputenv("SUNG_PYTHON","/usr/bin/python3");
     const auto restore=qScopeGuard([&]{qputenv("SUNG_HELPER",oldHelper);qputenv("SUNG_PYTHON",oldPython);});
-    QTemporaryDir music;QDir().mkpath(music.filePath("Album"));
-    const auto path=music.filePath("Album/One.wav");
+    // Sung stores the canonical folder path, and macOS hands out temporary
+    // directories under /var, which is a symlink to /private/var.
+    QTemporaryDir music;const auto root=QFileInfo(music.path()).canonicalFilePath();QDir().mkpath(root+"/Album");
+    const auto path=root+"/Album/One.wav";
     QProcess encode;encode.start("ffmpeg",{"-nostdin","-v","error","-f","lavfi","-i","anullsrc=r=8000:cl=mono","-t","12",path});QVERIFY(encode.waitForFinished(10000));QCOMPARE(encode.exitCode(),0);
     Backend b;b.m_localTracks.clear();b.m_musicFolders.clear();b.m_playlists.clear();b.clearQueue();b.setVolume(0);b.setAutoplay(false);b.setPrepareNext(false);
     QVERIFY(!b.importMusicFolderPath("").isEmpty());
@@ -364,18 +368,18 @@ private slots:
     QVERIFY(!b.importMusicFolderPath("smb://example.invalid/Music").isEmpty());
     QVERIFY(!b.importMusicFolderPath("file://example.invalid/Music").isEmpty());
     QVERIFY(!b.importMusicFolderPath(path).isEmpty());
-    QVERIFY(!b.importMusicFolderPath(music.filePath("missing")).isEmpty());
+    QVERIFY(!b.importMusicFolderPath(root+"/missing").isEmpty());
     QVERIFY(b.musicFolders().isEmpty());QVERIFY(!b.importingLocal());
-    QCOMPARE(b.importMusicFolderPath(music.path()),QString());QTRY_VERIFY_WITH_TIMEOUT(!b.importingLocal(),10000);QCOMPARE(b.m_localTracks.size(),1);QCOMPARE(b.musicFolders().size(),1);
-    QCOMPARE(b.importMusicFolderPath(QUrl::fromLocalFile(music.path()).toString(QUrl::FullyEncoded)),QString());QTRY_VERIFY(!b.importingLocal());QCOMPARE(b.musicFolders().size(),1);QCOMPARE(b.m_localTracks.size(),1);
-    const auto special=music.filePath("Space # and % and ü");QVERIFY(QDir().mkpath(special));
+    QCOMPARE(b.importMusicFolderPath(root),QString());QTRY_VERIFY_WITH_TIMEOUT(!b.importingLocal(),10000);QCOMPARE(b.m_localTracks.size(),1);QCOMPARE(b.musicFolders().size(),1);
+    QCOMPARE(b.importMusicFolderPath(QUrl::fromLocalFile(root).toString(QUrl::FullyEncoded)),QString());QTRY_VERIFY(!b.importingLocal());QCOMPARE(b.musicFolders().size(),1);QCOMPARE(b.m_localTracks.size(),1);
+    const auto special=root+"/Space # and % and ü";QVERIFY(QDir().mkpath(special));
     QCOMPARE(b.importMusicFolderPath(special),QString());QTRY_VERIFY(!b.importingLocal());QVERIFY(b.musicFolders().contains(special));
     QCOMPARE(b.importMusicFolderPath(QUrl::fromLocalFile(special).toString(QUrl::FullyEncoded)),QString());QTRY_VERIFY(!b.importingLocal());QCOMPARE(b.musicFolders().size(),2);b.forgetMusicFolder(special);
     const auto first=b.m_localTracks.first().toMap();QVERIFY(!first.value("localStamp").toString().isEmpty());
     b.playItem(first);QTRY_VERIFY(b.playing());const auto source=b.media()->source();
     b.rescanMusicFolders();QTRY_VERIFY(!b.importingLocal());QCOMPARE(b.m_importDone,1);QCOMPARE(b.m_localTracks.size(),1);QVERIFY(b.playing());QCOMPARE(b.media()->source(),source);
-    const auto secondPath=music.filePath("Two.wav");QVERIFY(QFile::copy(path,secondPath));b.rescanMusicFolders();QTRY_VERIFY(!b.importingLocal());QCOMPARE(b.m_localTracks.size(),2);
-    b.save();b.load();QCOMPARE(b.musicFolders(),QStringList{music.path()});
+    const auto secondPath=root+"/Two.wav";QVERIFY(QFile::copy(path,secondPath));b.rescanMusicFolders();QTRY_VERIFY(!b.importingLocal());QCOMPARE(b.m_localTracks.size(),2);
+    b.save();b.load();QCOMPARE(b.musicFolders(),QStringList{root});
     auto missing=b.m_localTracks.last().toMap();QVERIFY(QFile::remove(secondPath));b.rescanMusicFolders();QTRY_VERIFY(!b.importingLocal());QCOMPARE(b.m_localTracks.size(),2);
     auto youtube=track("abcdefghijk");const auto id=b.createPlaylist("Cleanup fixture");
     const QVariantList original{first,youtube,first,missing,youtube};
@@ -391,7 +395,7 @@ private slots:
     b.inspectPlaylist(id);QTRY_VERIFY(!b.cleanupBusy());b.removePlaylistRows(id,{0});b.applyPlaylistCleanup(true,true);QTRY_VERIFY(!b.cleanupBusy());QCOMPARE(b.results()->count(),4);
     b.closePlaylistCleanup();QVERIFY(b.cleanupItems().isEmpty());
     b.rescanMusicFolders();b.cancelLocalImport();QTest::qWait(100);QVERIFY(!b.importingLocal());
-    b.forgetMusicFolder(music.path());QVERIFY(b.musicFolders().isEmpty());QCOMPARE(b.m_localTracks.size(),2);QVERIFY(QFile::exists(path));
+    b.forgetMusicFolder(root);QVERIFY(b.musicFolders().isEmpty());QCOMPARE(b.m_localTracks.size(),2);QVERIFY(QFile::exists(path));
     b.stop();b.m_localTracks.clear();b.m_playlists.clear();b.clearQueue();b.setPrepareNext(true);b.setAutoplay(true);
   }
   void localAudioAndLyricSearch() {
