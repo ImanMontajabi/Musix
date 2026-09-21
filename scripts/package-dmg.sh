@@ -19,6 +19,17 @@ mkdir -p "$cache"
 
 say() { printf '\n== %s ==\n' "$1"; }
 
+# What ships has to be traceable to a commit, so refuse to build from a tree
+# that is not one. MUSIX_ALLOW_DIRTY exists for trying things out locally.
+commit="$(git -C "$root" rev-parse HEAD 2>/dev/null || echo unknown)"
+if [ -z "${MUSIX_ALLOW_DIRTY:-}" ] && ! git -C "$root" diff-index --quiet HEAD -- 2>/dev/null; then
+  echo "Working tree has uncommitted changes; commit them first." >&2
+  git -C "$root" status --short >&2
+  echo "(set MUSIX_ALLOW_DIRTY=1 to build anyway, for a throwaway build)" >&2
+  exit 1
+fi
+printf 'Musix %s from %s\n' "$version" "$commit"
+
 say "Release build"
 cmake -S "$root" -B "$build" -G Ninja -DCMAKE_BUILD_TYPE=Release \
   -DBUILD_TESTING=OFF -DSUNG_DIAGNOSTICS=OFF
@@ -76,6 +87,20 @@ cp "$cache/ffmpeg-out/bin/ffmpeg" "$cache/ffmpeg-out/bin/ffprobe" "$resources/ff
 cp -a "$runtime" "$resources/runtime"
 cp "$root/LICENSE" "$root/NOTICE" "$resources/"
 
+# Bytecode is rebuilt here rather than inherited, because what the cache
+# happened to contain decided what shipped. Leaving it out is worse than
+# untidy: the app runs from this read-only copy while the writable one is
+# still being seeded, and Python would answer by writing .pyc back into
+# Contents/Resources, which breaks the signature's resource seal.
+#
+# unchecked-hash keeps source mtimes out of the files and stops Python
+# revalidating them, and stripping $resources keeps this machine's directory
+# names out of every traceback the app can print.
+find "$resources/runtime" -name __pycache__ -type d -prune -exec rm -rf {} + 2>/dev/null || true
+"$resources/runtime/bin/python3" -m compileall -q -f \
+  --invalidation-mode unchecked-hash -s "$resources" \
+  "$resources/runtime/lib/python3.11" >/dev/null
+
 # The bundle redistributes other people's work, so it carries their licenses
 # rather than only naming them.
 licenses="$resources/licenses"
@@ -104,4 +129,13 @@ dmg="$root/Musix-$version-arm64.dmg"
 rm -f "$dmg"
 hdiutil create -volname "Musix $version" -srcfolder "$stage" -ov -format UDZO \
   -quiet "$dmg"
-printf '\n%s (%s)\n' "$dmg" "$(du -h "$dmg" | cut -f1)"
+
+say "Artifacts"
+# These two go up together: the DMG, and the source the LGPL entitles its
+# recipients to. The checksums are what the release notes publish.
+printf 'commit  %s\n' "$commit"
+for f in "$dmg" "$root/Musix-$version-ffmpeg-$ffmpeg_version-source.tar.xz"; do
+  printf '\n%s\n  %s bytes (%s)\n  sha256  %s\n' \
+    "$f" "$(stat -f '%z' "$f")" "$(du -h "$f" | cut -f1)" \
+    "$(shasum -a 256 "$f" | cut -d' ' -f1)"
+done

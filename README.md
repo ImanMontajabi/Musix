@@ -227,6 +227,43 @@ Build and run from the checkout:
 
 On macOS, `./scripts/package-dmg.sh` produces the distributable `Musix-<version>-arm64.dmg`. It builds a Release bundle, deploys Qt into it with `macdeployqt`, adds a relocatable Python carrying the resolver, adds the ffmpeg built by `./scripts/build-ffmpeg.sh`, signs the result ad-hoc and wraps it up. The first run downloads and builds those two payloads into the ignored `build-packaging/` directory and reuses them afterwards.
 
+### Releasing
+
+macOS releases are cut from a clean tree; `package-dmg.sh` refuses to run otherwise, so that every DMG traces back to one commit.
+
+1. Commit everything. Bump `project(Musix VERSION ...)` in `CMakeLists.txt` and commit that too — the version names the DMG, the volume and the FFmpeg source tarball.
+2. Build:
+
+   ```bash
+   ./scripts/package-dmg.sh
+   ```
+
+   It prints the commit it is building, and finishes by printing the path, size and SHA-256 of both artifacts. Keep that output; the checksums go in the release notes.
+3. Test the DMG the way somebody receiving it would, from Finder rather than a terminal — open the image, drag Musix to Applications, launch it, and walk through **Privacy & Security → Open Anyway** once. A quarantined copy is the only way to see what a first launch actually does:
+
+   ```bash
+   xattr -w com.apple.quarantine "0081;$(printf %x $(date +%s));Safari;" Musix-<version>-arm64.dmg
+   ```
+
+   The first launch must be refused with an **Open Anyway** option. If macOS says the app is *damaged*, the signature is broken — do not ship it.
+4. Tag the exact commit and push:
+
+   ```bash
+   git tag -a v<version> -m "Musix v<version>"
+   git push origin main --follow-tags
+   ```
+
+5. Create the release with both artifacts attached:
+
+   ```bash
+   gh release create v<version> \
+     Musix-<version>-arm64.dmg \
+     Musix-<version>-ffmpeg-<ffmpeg version>-source.tar.xz \
+     --title "Musix v<version>" --notes-file notes.md
+   ```
+
+   Both files are required. The tarball is the corresponding source for the bundled LGPL ffmpeg, and the release is where that offer is met. The notes must carry both SHA-256 values and the one-time **Open Anyway** step.
+
 Run automated tests:
 
 ```bash
