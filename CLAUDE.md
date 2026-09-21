@@ -64,3 +64,31 @@ Pass extra CMake args through `build.sh`, e.g. `./scripts/build.sh -DSUNG_DIAGNO
 - Many files pack multiple statements per line intentionally (dense style throughout `backend.h`/`backend.cpp`); don't reflow files wholesale as a side effect of a small change.
 - `Backend`, `Subsonic`, and `Jellyfin` are each single large classes by design (facade + one god object), not an oversight — new server providers should follow the `Subsonic`/`Jellyfin` shape and be added to `MusicServer`'s dispatch, not layered on top of `Backend` directly.
 - QML files: new reusable widgets go in `qml/M*.qml` following the existing Material naming; new files must also be added to the `QML_FILES` list in `CMakeLists.txt`'s `qt_add_qml_module` call (and to the relevant test executable's source list in CMakeLists.txt if C++ sources are added).
+
+## Working on this machine
+
+These are hard rules, not preferences. Each one is here because breaking it
+already cost something.
+
+- **Never change a system-wide setting** — appearance, sound, displays, input,
+  anything in System Settings — without asking first. Testing that the app
+  follows the desktop's light/dark setting is not a reason to flip it; ask.
+- **Screenshot the target window only**, with `screencapture -l <windowID>`.
+  Never `-R` (a region) and never the whole screen: both capture whatever
+  happens to be in front, which has already pulled a private messaging window
+  into a transcript. Get the id from a helper that reads
+  `CGWindowListCopyWindowInfo` and filters by pid.
+- **Back up the profile before launching the GUI.** `--isolated` does not
+  isolate data and `$HOME` does not reach `NSHomeDirectory()`, so a launched
+  app writes to the real library. Copy `~/Library/Application Support/Sung`
+  and `~/Library/Preferences/com.sung.sung.plist` first, restore both
+  afterwards, `killall cfprefsd` so the restored plist is re-read, and confirm
+  with `shasum -a 256` that they match the backup.
+- **Never run two packaging builds at once.** `package-dmg.sh` takes a lock and
+  will refuse, but the lock is the last line of defence, not permission to
+  try: two runs sharing `build-packaging/dmg` once produced a bundle with the
+  runtime nested inside itself and silently voided a day of results.
+- **Verify macOS window behaviour, do not reason about it.** AppKit semantics
+  that are true of a plain `NSWindow` are not necessarily true of what Qt
+  builds. Window dragging was reported working on exactly that reasoning and
+  was in fact broken.
