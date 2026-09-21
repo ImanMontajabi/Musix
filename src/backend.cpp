@@ -1989,7 +1989,11 @@ void Backend::updatePreparation(){
     // Preload failures and oversized/direct streams leave normal playback in charge.
     if(data.value("ok").toBool()&&file.isFile()&&file.size()<=32*1024*1024&&file.canonicalPath()==QFileInfo(directory->path()).canonicalFilePath()){
       m_preparedData=data;
+#ifdef Q_OS_LINUX
+      // Hand the buffered track back to the page cache. The hint is advisory,
+      // and macOS has no retroactive equivalent, so there it simply goes unsaid.
       QFile buffered(file.filePath());if(buffered.open(QIODevice::ReadOnly))::posix_fadvise(buffered.handle(),0,0,POSIX_FADV_DONTNEED);
+#endif
     }
     else m_preparedDirectory.reset();
   },directory);

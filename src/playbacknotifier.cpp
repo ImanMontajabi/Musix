@@ -1,4 +1,5 @@
 #include "playbacknotifier.h"
+#ifdef SUNG_DBUS
 #include <QDBusConnection>
 #include <QDBusMessage>
 #include <QDBusPendingCallWatcher>
@@ -42,3 +43,13 @@ void PlaybackNotifier::flush() {
     m_pending=false;call->deleteLater();flush();
   });
 }
+#else
+// Without a session bus there is nowhere to post a notification, so the
+// notifier keeps its state and stays quiet. Backend calls it either way.
+PlaybackNotifier::PlaybackNotifier(QObject *parent) : QObject(parent) {}
+void PlaybackNotifier::show(const QString &,const QString &) {}
+void PlaybackNotifier::clear() {m_queued.clear();m_id=0;++m_generation;m_pending=false;}
+void PlaybackNotifier::notificationClosed(uint,uint) {}
+void PlaybackNotifier::flush() {}
+void PlaybackNotifier::close(uint) {}
+#endif

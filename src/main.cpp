@@ -1,7 +1,9 @@
 #include "backend.h"
 #include "rowselection.h"
 #include "desktoptheme.h"
+#ifdef SUNG_DBUS
 #include "mpris.h"
+#endif
 #include "roundedart.h"
 #include "windowresources.h"
 #include <QDir>
@@ -138,11 +140,13 @@ int main(int argc, char **argv) {
   QObject::connect(backend.server(),&MusicServer::accountChanged,&app,[]{RoundedArt::clearCaches();});
   DesktopTheme desktopTheme;
   QObject::connect(&backend,&Backend::artworkCacheCleared,&app,[]{RoundedArt::clearCaches();});
+#ifdef SUNG_DBUS
   bool exposeMpris = !args.contains("--isolated");
 #ifdef SUNG_DIAGNOSTICS
   exposeMpris = exposeMpris || args.contains("--mpris-test");
 #endif
   if (exposeMpris) registerMpris(&backend);
+#endif
   WindowResources windowResources;
   QQmlApplicationEngine engine;
   engine.rootContext()->setContextProperty("windowResources", &windowResources);
