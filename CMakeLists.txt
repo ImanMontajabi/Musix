@@ -1,4 +1,10 @@
 cmake_minimum_required(VERSION 3.24)
+# The oldest macOS the app will run on. It has to be set before project(), and
+# it is only a promise if everything in the bundle keeps it: package-dmg.sh
+# checks every binary against this number and refuses to ship if one is newer.
+# Left unset it silently became the build machine's own macOS, which put the
+# floor at 27 and shut out everyone else.
+set(CMAKE_OSX_DEPLOYMENT_TARGET "14.0" CACHE STRING "Oldest macOS the app runs on")
 project(Musix VERSION 0.13.0 LANGUAGES CXX)
 # The title-bar blending in src/windowchrome.mm is the only Objective-C++
 # in the tree, and only macOS compiles it.

@@ -5,6 +5,10 @@ root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 here="$root/build-packaging"
 mkdir -p "$here"
 ver="${FFMPEG_VERSION:-7.1}"
+# The same floor as the app. Without it the compiler targets the build
+# machine's own macOS and ffmpeg alone would keep the bundle off anything older.
+target="${MACOSX_DEPLOYMENT_TARGET:-14.0}"
+export MACOSX_DEPLOYMENT_TARGET="$target"
 src="$here/ffmpeg-$ver"
 out="$here/ffmpeg-out"
 tarball="$here/ffmpeg-$ver.tar.xz"
@@ -18,8 +22,14 @@ if [ ! -f "$tarball" ]; then
 fi
 [ -d "$src" ] || tar -xf "$tarball" -C "$here"
 cd "$src"
+# A tree configured for another deployment target is rebuilt from scratch.
+if [ -f config.h ] && [ "$(cat .musix-target 2>/dev/null)" != "$target" ]; then
+  make distclean >/dev/null 2>&1 || true
+fi
 [ -f config.h ] || ./configure \
   --prefix="$out" \
+  --extra-cflags="-mmacosx-version-min=$target" \
+  --extra-ldflags="-mmacosx-version-min=$target" \
   --disable-gpl --disable-nonfree --disable-autodetect \
   --disable-doc --disable-debug --enable-small \
   --disable-shared --enable-static \
@@ -30,6 +40,8 @@ cd "$src"
   --disable-filters --enable-filter=scale,null,anull,aformat,aresample,format \
   --disable-protocols --enable-protocol=file,pipe \
   --enable-ffmpeg --enable-ffprobe
+echo "$target" > .musix-target
 make -j"$(sysctl -n hw.ncpu)"
 make install
+echo "$target" > "$out/.musix-target"
 ls -lh "$out/bin/"
