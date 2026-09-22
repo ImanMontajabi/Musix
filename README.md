@@ -1,217 +1,134 @@
 <div align="center">
 
-
 # Musix
 
-**YouTube Music, your music files, and your music server. Native on macOS.**
+**YouTube Music, your music files, and your music server — one library, one native app.**
 
-A minimal Material 3 player built with C++ and Qt Quick, running natively on macOS (Apple Silicon).
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![macOS Apple Silicon](https://img.shields.io/badge/macOS-Apple%20Silicon-black.svg?logo=apple)](#requirements)
+[![Latest release](https://img.shields.io/github/v/release/ImanMontajabi/Musix?label=latest)](https://github.com/ImanMontajabi/Musix/releases/latest)
 
-[Install](#install) · [Features](#features) · [Development](#development)
+A minimal Material 3 player built with C++20 and Qt Quick. No account, no telemetry, no embedded browser.
+
+### [⬇ Download the latest release](https://github.com/ImanMontajabi/Musix/releases/latest)
 
 </div>
 
 ## Screenshots
 
-### Minimized window
-<img width="566" height="262" alt="Screenshot 2026-09-22 at 17 22 53" src="https://github.com/user-attachments/assets/63ca9eb1-c9ae-42a2-9408-ebec2c486961" />
+### Mini player
+<img width="566" height="262" alt="The Musix mini player: a compact rounded window with album art, track title, a lyric line and transport controls" src="https://github.com/user-attachments/assets/63ca9eb1-c9ae-42a2-9408-ebec2c486961" />
 
-### Play from Youtube Music
-<img width="1366" height="868" alt="Screenshot 2026-09-22 at 17 22 45" src="https://github.com/user-attachments/assets/f3016ea7-710b-46d0-96fe-0b2bcbc7dcce" />
+### Play from YouTube Music
+<img width="1366" height="868" alt="The Musix home page showing YouTube Music shelves of album artwork, with the navigation rail on the left and the player bar along the bottom" src="https://github.com/user-attachments/assets/f3016ea7-710b-46d0-96fe-0b2bcbc7dcce" />
 
-### Play your local musics
-<img width="1366" height="868" alt="Screenshot 2026-09-22 at 17 21 47" src="https://github.com/user-attachments/assets/ae6dfbba-4402-4566-a47e-122071082b2f" />
+### Play your local music
+<img width="1366" height="868" alt="The Musix local library showing imported songs in a list with embedded artwork, and the now-playing panel on the right" src="https://github.com/user-attachments/assets/ae6dfbba-4402-4566-a47e-122071082b2f" />
 
 ## Features
 
-- **YouTube Music**: search songs, albums, artists and playlists; play audio without an embedded browser or ad interface, at standard quality or a data saver setting.
-- **Navidrome / Subsonic**: browse and search your server, play original or transcoded audio, edit server playlists, rate songs, sync favorites and listening history, and display server lyrics.
-- **Jellyfin**: browse music libraries, albums, artists and genres; search, stream original or transcoded audio, manage permitted server playlists, sync favorites and display synchronized lyrics.
-- **Your music**: import FLAC, MP3 and other supported audio files or folders; browse albums and artists, search paths and group songs by folder. Mix local and YouTube songs in the same playlists.
-- **Animated artwork**: local animated covers and automatic online covers for matching YouTube songs, shared across the player, immersive view and mini player; lists use still covers.
-- **Appearance**: light and dark themes, a pickable Material accent color, artwork-derived color, an ambient cover backdrop, an expandable navigation rail, density and per-view layouts.
-- **Lyrics**: synchronized lyrics, an immersive view, timing adjustments, LRC import, seek previews and search with jump-to-line playback.
-- **Library tools**: likes, listening history, smart mixes, custom smart playlists, M3U playlist import and export, custom playlist covers, playlist cleanup, multi-selection, drag reordering and Undo.
-- **Playback controls**: mini player, queue editing with source headings, an immersive up-next carousel, volume normalization, shuffle, repeat, sleep timer, playback speed and audio-device selection.
-- **Keyboard and assistive use**: every control takes focus and shows it, sections are marked as headings, and colors are solved to keep 4.5:1 contrast in both themes and at either contrast setting.
-- **Desktop integration**: media keys through MPRIS, optional notifications, light/dark themes and Noctalia palette support.
+- **YouTube Music** — search songs, albums, artists and playlists, and play audio with no browser and no ad interface. Standard or data-saver quality.
+- **Your own files** — import MP3, FLAC, OGG, Opus, M4A, AAC, WAV, AIFF and WMA, individually or a folder at a time. Folders are watched and rescanned while the app runs.
+- **Navidrome / Subsonic and Jellyfin** — browse and search your server, stream original or transcoded audio, edit permitted playlists, and sync favourites and history.
+- **Artwork** — embedded covers, sidecar images, and animated covers from GIF, WebP, MP4 or WebM. Missing covers for YouTube songs are looked up on Apple Music, then MusicBrainz.
+- **Lyrics** — synchronised lyrics with an immersive view, timing adjustment, LRC import and search with jump-to-line.
+- **Library tools** — likes, history, smart playlists, M3U import and export, custom playlist covers, multi-selection, drag reordering and Undo.
+- **Playback** — mini player, immersive player, queue editing, volume normalisation, per-song gain, shuffle, repeat, sleep timer and playback speed.
+- **Appearance** — light and dark themes that follow the system, a pickable Material accent colour, artwork-derived colour and an ambient cover backdrop.
+- **Keyboard and assistive use** — every control takes focus and shows it, and colours are solved to hold 4.5:1 contrast in both themes.
 
-Native rendering and bounded artwork caches keep Musix lightweight. Animated covers share one additional decoder, released when the player is hidden. Animations can be disabled in Settings.
+The window has no separate title bar: the app's background runs to the top edge and the traffic lights sit on it.
+
+Full documentation is in the **[Musix guide](docs/guide.md)**.
+
+## Requirements
+
+- **Apple Silicon** (M1 or later). There is no Intel build.
+- **macOS 27 (Tahoe) or later.** The released binary is built against the macOS 27 SDK, so earlier versions refuse to launch it.
+
+Nothing else. Qt, Python, the YouTube resolver and FFmpeg all travel inside the app, and it keeps the resolver up to date on its own.
 
 ## Install
 
-### macOS (Apple Silicon)
+1. Download `Musix-<version>-arm64.dmg` from the [latest release](https://github.com/ImanMontajabi/Musix/releases/latest).
+2. Open it and drag **Musix** to **Applications**.
+3. Open Musix once from Applications. macOS will refuse to launch it.
+4. Go to **System Settings → Privacy & Security**, scroll to the message naming Musix, and click **Open Anyway**. Confirm once.
 
-Download `Musix-<version>-arm64.dmg`, open it, and drag **Musix** to Applications. Nothing else is needed: Qt, Python, the YouTube resolver and FFmpeg all travel inside the app, and it keeps the resolver up to date on its own.
+Every launch after that is ordinary. The refusal is expected: Musix is signed, but not with a paid Apple Developer certificate, so macOS cannot check it against Apple's notary service and asks you to decide. If it says *"Musix is damaged and can't be opened"* instead, the download is corrupt — check it against the `SHA256SUMS.txt` on the release and download it again.
 
-Musix is not signed with an Apple Developer certificate yet, so the first launch is refused. Open it once from Applications, then go to **System Settings → Privacy & Security**, scroll to the message naming Musix and choose **Open Anyway**. macOS asks to confirm once, and every launch after that is ordinary.
+## Keyboard shortcuts
 
-Musix uses Google Sans Flex when installed and otherwise falls back to a system font. Noctalia is optional.
+| Key | Action |
+| --- | --- |
+| Space | Play / pause |
+| ⌘F or ⌘K | Focus search |
+| ⌘⇧P | Quick actions |
+| ⌘J | Show the playing song in the queue |
+| ⌘L | Queue |
+| ⌘Y | Lyrics |
+| ⌘⇧M | Mini player |
+| ⌘⇧F | Immersive player |
+| ⌘← / → | Previous / next track |
+| ← / → | Seek ten seconds |
+| 0 – 9 | Jump to that tenth of the track |
+| ⌘↑ / ↓ | Volume |
+| M | Mute |
+| ⌥← | Back |
+| ⌘A | Select songs in the focused list |
+| ⎋ | Close the current view or clear the selection |
+| ? or F1 | Shortcut reference |
+| ⌘, | Settings |
+| ⌘M | Minimize |
+| ⌘W | Close the window, which quits as the close button does |
+| ⌘Q | Quit |
 
-## Getting started
+⌘H hides the app as usual. The in-app sheet (**?**) lists these too.
 
-### Music library
+## Privacy
 
-Search for music or paste a YouTube song or playlist link. Use **Library → Local files → +** to add files, or **Folders → Add folder…** for a whole music folder. Enter its absolute path (or `~/Music`), or use **Browse…**, then choose **Add folder**. This also works for network shares mounted as local folders and does not depend on the system folder picker. Subfolders are scanned recursively. Saved folders update automatically while Musix is running. Settings can disable automatic updates; the refresh button also rescans them. Missing files remain listed as unavailable; files and playlist entries are never deleted by a scan. Folder monitoring uses filesystem notifications and is bounded to 4,096 directories and 10,000 audio files; use manual rescan for larger libraries or mounts that do not deliver notifications.
+Musix has no analytics and no telemetry, and it never asks you to sign in to anything of ours.
 
-In **Local files**, open **Find and sort songs → Folder** to group songs by their parent directory, with natural filename order inside each group. The filter also searches folder paths.
+What leaves your Mac, and only when the matching feature is used:
 
-With a song list focused, start typing to jump to the first matching title, or artist when no title matches. The search refines as you type and clears after a short pause. Turn it off with **Settings → Library → Type to jump in lists**.
-
-Create an automatic playlist from **Library → Playlists → Smart playlist**. Combine artist, title, album, release-year range, length range, source, liked status and last-played rules over your saved music. A year or length rule skips songs with no year or duration, and a range that ends before it starts drops its upper bound. Use **Edit rules** to change it; matching songs update automatically.
-
-**Local files → Albums / Artists** groups imported music by its tags. Albums use album-artist tags when present, with disc and track order preserved. Use **Rescan** after upgrading to refresh tags on existing imports. Folder-sorted songs and multi-disc albums have collapsible group headings with track counts and group-play buttons. Collapsed songs stay in the collection but are excluded from selection.
-
-**Library → Playlists → Import M3U** reads an `.m3u` or `.m3u8` file, imports the audio it names and saves it as a playlist. Relative entries resolve against the playlist file’s own folder. A playlist’s menu offers **Export as M3U…** in return. Only local files can travel this way: streaming ids mean nothing to other players, and server URLs would carry credentials that library exports deliberately leave out, so those songs are skipped and counted.
-
-In a playlist’s menu, choose **Change cover…** to crop a PNG, JPEG or WebP. Musix saves a 512px copy; the original stays untouched. **Restore cover collage** returns to automatic artwork.
-
-### Artwork and appearance
-
-The navigation rail on the left can expand. Use the menu button at its top to switch between icons and a wider list that also shows your pinned collections. The choice is remembered, and windows narrower than 1080px stay collapsed because the expanded rail sits beside the content rather than over it.
-
-On first run Musix offers a three-step setup: theme and accent color, a music folder, and the page to open on. Every step can be skipped, and each control also lives in Settings.
-
-Open **Home → Customize Home** to reorder or hide sections; **Reset layout** restores them. **Settings → Library → Start page** chooses Home, Local, Server or Liked for future launches. Direct launch links still take priority.
-
-**Settings → Appearance → Current view layout** saves a density override for the current view. Local album/artist browsers and the playlist overview also offer Grid / List. Choose Default density to follow the global setting. Up to 64 view preferences are retained locally.
-
-**Settings → Appearance → Density** switches between comfortable and compact track rows and album grids without changing font size. Density changes animate when motion is enabled. Opening an album carries its cover into the header; Back returns it to the originating card when visible. The header contracts as you scroll while keeping playback actions available.
-
-For animated artwork, place a **GIF, animated WebP, MP4 or WebM** beside your music, named `cover`, `folder`, `front` or `artwork` (for example, `cover.mp4`). A matching song filename, such as `Song.gif` beside `Song.flac`, takes priority. Names are case-insensitive. JPG, PNG and static WebP sidecars also work as still covers. Import or rescan the folder after changing its artwork. Covers are limited to 128 MiB and 4096 × 4096 pixels; unreadable covers fall back to embedded artwork. Animation is silent, pauses with playback, and respects **Settings → Appearance → Animations** and **Animated album artwork**. No artwork service account is needed.
-
-A song that is a music video or an upload has a video frame for a cover rather than album art. Wherever that cover is drawn larger than a list row, Musix asks YouTube for the 1280 × 720 frame and keeps the small one only when the upload has no HD version.
-
-**Settings → Appearance → Album covers for music videos** goes further and looks for the album's own cover on Apple Music's public pages, using the same unofficial, best-effort match as animated covers. When Apple has no album for a song, which is common for game soundtracks, fan uploads and releases that never reached a store, MusicBrainz and its Cover Art Archive are asked next; those covers are scans people uploaded, so anything below 500 pixels is left alone, because a thumbnail is no improvement on a video frame. The setting is on by default and works whether or not animations are enabled. The cover replaces the frame everywhere, including the desktop's own media controls. A song neither service has keeps its frame, and is not looked up again; **Find cover again** in the artwork controls asks once more. Up to 2,000 answers are kept locally.
-
-For YouTube songs, **Online animated covers** looks for a matching album on Apple Music’s public pages. This unofficial, best-effort lookup needs no account; it sends the song’s title and artist to Apple, and to MusicBrainz when a cover is wanted and Apple has none, and checks the album and duration when available. Singles can use artwork from a verified original album release; missing search results are checked against the album’s track list. Many albums have no animation, and uncertain matches keep the original still cover. Temporary lookup failures get one automatic retry. Downloads are limited to 16 MiB per silent cover and 64 MiB of disk cache. Disable the lookup in Settings or remove downloaded covers with **Clear cache**.
-
-Open **Settings → Appearance → Current artwork** to preview the current cover, view its source album, retry a match, disable animation for that song or choose a local GIF, WebP, MP4 or WebM. Local choices are saved per song and reference the selected file; keep it in place. **Use automatic cover** clears the override.
-
-**Settings → Appearance → Use artwork accent** colors controls from the current cover. It is off by default; desktop surfaces and Noctalia integration are preserved. Monochrome or missing covers use the normal theme.
-
-**Settings → Appearance → Accent color** picks a Material source color for buttons, highlights and progress. Musix solves each seed against the current surfaces, so the resulting color always clears 4.5:1 contrast in both themes. **Default** restores the built-in palette. Artwork accent takes priority while it is on.
-
-**Settings → Appearance → Ambient artwork backdrop** draws the current cover, softened and dimmed, behind Home, the immersive player and the Now playing panel. Home has no cover of its own, so it borrows the playing track’s, or the first artwork on its shelves when nothing is playing. It is on by default. The cover is decoded small and blurred once when it loads, so the wash costs one small texture and no per-frame effect, and a scrim keeps text contrast unchanged. In the immersive player the backdrop drifts slowly and, with **Backdrop follows the music**, swells gently with the decoded low end of the track; it holds still on rounded surfaces such as Home and the Now playing panel, because swelling there would square off their corners. Everything stops when **Animations** is off. Hiding either surface releases the decoded cover.
-
-The artwork controls also offer **Fit / Fill**, remembered per album where album metadata is available, otherwise per song. Immersive artwork requests a display-sized still cover up to 1600px; source quality remains the limit. Artwork accents transition smoothly when animations are enabled. Next and Previous move song information in opposite directions. Player covers crossfade between songs; transitions stop when hidden or animations are disabled.
-
-Click album or immersive artwork to inspect the full cover. Use the wheel or + / − to zoom, 0 to reset, and Escape to close. The viewer uses available source detail, capped at 1600px. You can also click the preview in **Current artwork**.
-
-### Playback and shortcuts
-
-Press **F11** for immersive playback — **⌘⇧F** on macOS, where F11 belongs to Show Desktop. The **…** menu selects Artwork, Lyrics or Split; **Ctrl+L** opens the queue. Optional **Auto-hide controls** fades controls while idle; pointer or keyboard activity restores them. The cursor stays visible. Click an available artist or album name to browse, then use Back to return.
-
-The same **…** menu offers **Up next covers**: a carousel of the queue below the player, with the playing track centered and large and the rest peeking either side. Scrolling snaps to a cover and plays it as soon as it settles; clicking a cover plays it directly. The choice is remembered. **Show all** opens the full queue for anything the strip cannot reach. The carousel shrinks the main cover to make room, so it is off by default.
-
-The sleep timer can stop at the **end of the queue** as well as after a set time or the current track. It is offered only when the queue can actually finish, so it is unavailable while shuffle or repeat is on.
-
-**Settings → Playback → Resume long recordings** returns to where you left a recording of 20 minutes or more: mixes, sets and live shows. The mark is written when you pause or move on, dropped once the recording finishes or if you stop near either end, and up to 400 are kept locally.
-
-A song’s menu offers **Adjust volume…** to trim that one song by up to 12 dB. The trim is kept for that song, applies whether or not volume normalization is on, and appears in **Track details**.
-
-**Settings → Playback → Fade out before sleep** lowers the audio over the last 30 seconds of a timed or end-of-track sleep timer. Your chosen volume stays saved and is restored when the timer ends or is cancelled.
-
-Drag a queue row sideways to remove it; the row lifts into its own color while you carry it, and the gap it will fall into is drawn as you drag it up or down. Undo restores it.
-
-Queue headings distinguish songs added manually, collection tracks and autoplay recommendations when their origin is known. These labels preserve playback order, including after dragging songs. Older queues without origin information retain source headings.
-
-Hold **Shift while dragging the seek bar** for fine seeking; the new position applies when you release. **Shift+Left / Right** seeks by 100ms. Escape cancels a fine drag. The mouse wheel over the seek bar moves playback in five-second steps. **0**–**9** jump to that tenth of the track, with the same on-screen feedback as the other seek shortcuts; they are ignored while you are typing or while a song list has the keyboard.
-
-Click the volume icon for a slider and an exact percentage. Enter a value from 0 to 100 and press Enter or Apply. This works in the main, mini and immersive players. In the main and immersive players, **Ctrl+Up / Down** adjusts volume and **M** toggles mute; shortcuts show brief playback feedback.
-
-Timed lyrics show a countdown during intros and explicit gaps of at least five seconds. Musix uses supplied line boundaries or blank timed lines; it does not infer instrumental passages from a long lyric line. Timing adjustments apply to the countdown.
-
-The queue shows remaining time and a finish estimate during uninterrupted playback. Unknown durations, random shuffle, repeat, autoplay or a sleep timer can make a finish estimate unavailable.
-
-Album pages show the artist, release year when available, track count and duration, with disc headings when the source supplies disc numbers. Drag the lyrics/queue divider to resize the panel; double-click it to reset. Its width is remembered.
-
-Press **Ctrl+Shift+P** for quick actions, saved playlists and audio outputs. Type to filter, use the arrow keys, then press Enter.
-
-**Listening sessions** in Settings or Quick Actions save your queue, song position, speed, shuffle, repeat and autoplay settings. Resume asks before replacing the current queue. Sessions can be renamed, updated or deleted; up to 20 sessions of 2,000 songs each are kept locally.
-
-The arrow beside the player’s volume controls opens an audio-output picker. It remains available in narrow windows.
-
-**Settings → Playback → Volume normalization** evens out loudness between recordings. ReplayGain and R128 tags are read when a file is imported; everything else, including YouTube and server audio, is measured from the decoded stream and levelled from the next play onward. Recordings shorter than 45 seconds of playback are never treated as measured. Gain is limited to -15 dB and +6 dB, and the mixer cannot amplify past full scale, so a quiet track is only lifted while your own volume leaves headroom. Your chosen volume is never rewritten, and **Track details** shows the correction in use. Up to 2,000 measurements are kept locally. Existing imports need a rescan to pick up their tags.
-
-**Pause when audio output disconnects** is optional. Musix pauses when the selected device disappears; wired headphone-port detection uses `pactl` from `libpulse`. Reconnecting does not automatically resume playback.
-
-**Track details** shows playback codec, bitrate and decoded sample rate/channels when reported by the decoder. Local file metadata is labeled separately. Missing values are omitted.
-
-**Settings** groups controls into Appearance, Playback, Library, Connections, and Privacy & data. Search finds controls across all categories. Narrow windows use a category selector.
-
-Open a song’s menu to queue it, like it or add it to a playlist. Local playlist additions skip duplicates and can be undone. Views remember their filter, sort and scroll position during the session. Open **Clean up** in a local playlist to review duplicates and missing files; removal never deletes the original audio.
-
-Qt maps `Ctrl` to `⌘` on macOS, so the two columns are the same binding except where noted.
-
-| Linux | macOS | Action |
+| Goes to | What is sent | When |
 | --- | --- | --- |
-| Space | Space | Play / pause |
-| Ctrl+F | ⌘F | Focus search |
-| Ctrl+Shift+P | ⌘⇧P | Quick actions |
-| Ctrl+J | ⌘J | Show the playing song in the queue |
-| ? / F1 | ? / F1 | Keyboard shortcut reference (outside text fields) |
-| Ctrl+M | **⌘⇧M** | Toggle mini player — ⌘M is Minimize on macOS |
-| F11 | **⌘⇧F** | Toggle immersive player — F11 is Show Desktop on macOS |
-| 0 – 9 | 0 – 9 | Jump to that tenth of the track |
-| Ctrl+A | ⌘A | Select songs in the focused list |
-| Escape | ⎋ | Close the current view or clear selection |
-| Ctrl+Q | ⌘Q | Quit |
-| — | ⌘M | Minimize the window |
-| — | ⌘, | Settings |
-| — | ⌘W | Close the window, which ends the app as its close button does |
+| `music.youtube.com` | Search terms, and the id of the song being played | Browsing or playing YouTube Music. Anonymous — no Google account is involved, and likes and playlists stay local. |
+| `itunes.apple.com`, `music.apple.com` | A song's title, artist and album | Looking for a cover or an animated cover a YouTube song has none of |
+| `musicbrainz.org`, `coverartarchive.org` | A song's title, artist and album | Only when Apple Music has no match |
+| `lrclib.net` | A song's title, artist, album and duration | Lyrics, when the source has none. Can be turned off in Settings. |
+| Your own server | Whatever Subsonic or Jellyfin needs | Only if you connect one |
 
-macOS also hides the app with ⌘H, as usual. The in-app shortcut sheet (**?**) prints whichever set applies.
+Requests identify the app as `Musix/<version> ( https://github.com/ImanMontajabi/Musix )`, which is what MusicBrainz and LRCLIB ask of a client.
 
-### Connect a music server
+Your data lives in `~/Library/Application Support/Sung/sung/`, settings in `~/Library/Preferences/com.sung.sung.plist`, and cache in `~/Library/Caches/Sung/sung/`. The folder is still called Sung for compatibility with existing installs.
 
-Open **Settings → Connections → Music server** and choose **Subsonic** (including Navidrome) or **Jellyfin**, and enter your server address, username and password. Use the server root, including any deployment subpath, without `/rest` or `/web`. Use HTTPS for remote servers.
+## Troubleshooting
 
-Open **Library → Music server** to browse. The main search bar searches your server while this view is open. The server menu offers library selection and playlist creation. Permitted playlists support renaming, song removal and drag reordering; deletion requires owner or administrator permissions. Subsonic also offers ratings and server queue save/restore. Jellyfin shared playlists respect the server’s editing permissions.
+**"Musix is damaged and can't be opened."** The download is corrupt, or the quarantine flag was cleared oddly. Verify the DMG against `SHA256SUMS.txt` on the release and download it again.
 
-Local playlists can mix YouTube, local files and server songs. Server playlists accept songs from that server only. One server account can be connected at a time. Server lyrics use synchronized lyrics when available, otherwise plain text.
+**The app will not open at all and gives no message.** Check your macOS version; the released build needs macOS 27 or later.
 
-**Remember in desktop keyring** uses `secret-tool` (the `libsecret` package on Arch) and a running Secret Service provider. If the keyring is unavailable, the connection works for the current session. Jellyfin saves its session token in the keyring instead of its password. Passwords and authenticated URLs are not saved in library exports. Disconnect removes the saved login.
+**A song will not play.** Playback depends on YouTube's availability, your region and the network. Musix buffers a song before playing it, so starting can take a moment. When YouTube changes how audio is served, the app refreshes its own resolver in the background — at most once a day, and immediately after a failure — keeping the last working version if an update is broken. There is nothing to run by hand.
 
-Connection settings include audio quality and server listening history. Original audio is buffered on disk before playback, with a 512 MiB limit per song; choose a lower bitrate for very large files. Server transcoding must be available for the selected bitrate. Subsonic listening history is submitted after half a song or four minutes of playback, whichever comes first. Jellyfin receives playback status and progress and manages its own play counts. Private listening disables these reports.
+**My server password is not remembered.** It is not saved on macOS. Storing it needs a freedesktop secret service, which macOS does not have, so a server connection lasts for the session and the app says so when you connect. Address and username are remembered; the password is not.
 
-Tested against Navidrome 0.63.2 and Jellyfin 10.11.11 / 12.0. Other servers must support Subsonic 1.16.1 token authentication and JSON responses. OpenSubsonic lyrics and form POST are detected when available. Jellyfin 10.11 removes duplicate playlist additions on the server; 12.0 preserves them. Jellyfin collections are paginated; a single opened collection is limited to 20,000 items. Server administration, video, podcasts, remote-device control and permanent offline downloads are outside this music integration.
+**ListenBrainz scrobbling will not stay signed in.** Same reason — the token has nowhere to be stored, and Settings says a system keyring is needed.
 
-### Accounts and saved data
-
-**Settings → Connections → YouTube → Streaming quality** chooses what a song costs to download. Standard takes the best stream YouTube offers, which is Opus at about 130 kbps. Data saver caps it, which lands on Opus at about 67 kbps and a little over half the bytes. Musix buffers the whole song before playing it, so this is the download either way. No account or sign-in is involved, and neither setting is a lossless one; for lossless audio use local files or a music server set to Original.
-
-YouTube browsing is anonymous. YouTube likes, local playlists and local history are stored locally and **do not sync with your Google account**. Settings offers library JSON import/export; audio files, custom cover images and imported LRC files are not bundled into exports.
-
-For streams requiring sign-in, Settings can import a user-selected Netscape-format cookie file. Musix does not read your browser profile. Cookies can be removed in Settings.
-
-Library data is stored in `~/.local/share/Sung/sung/`, settings in `~/.config/Sung/`, and cache in `~/.cache/Sung/sung/`. Standard XDG directory overrides are respected. Musix has no analytics or telemetry. Optional LRCLIB lyric lookups send the song’s title, artist and duration; they can be disabled in Settings.
-
-### Troubleshooting
-
-Playback depends on YouTube availability, region and network conditions. Musix buffers audio before playing, so starting a song can take a moment. It does not remove sponsor segments embedded in recordings or promise gapless playback.
-
-YouTube occasionally changes how audio is served, and the resolver has to catch up. The macOS app does this itself: it refreshes `yt-dlp` and `ytmusicapi` in the background at most once a day, and again straight away if playback fails, keeping the previous working versions if an update turns out to be broken. There is nothing to run.
-
-On Linux the resolver is updated by hand:
-
-```bash
-~/.local/lib/musix/runtime/bin/python -m pip install --upgrade 'yt-dlp[default]' ytmusicapi
-```
-
-To update Musix, quit the player, then run `git pull` and `./scripts/install.sh` from this checkout. To uninstall, run `./scripts/uninstall.sh`; your library and settings are kept.
+**Media keys and notifications do nothing.** Both go through D-Bus, which macOS does not have. They work on Linux only.
 
 ## Development
 
-Build and run from the checkout:
-
 ```bash
-./scripts/setup.sh
-./scripts/build.sh
-./scripts/run.sh
+./scripts/setup.sh   # ./runtime venv with yt-dlp and ytmusicapi
+./scripts/build.sh   # configures ./build and builds
+./scripts/run.sh     # runs it against the checkout
+./scripts/test.sh    # ctest plus the Python suites
 ```
 
-On macOS, `./scripts/package-dmg.sh` produces the distributable `Musix-<version>-arm64.dmg`. It builds a Release bundle, deploys Qt into it with `macdeployqt`, adds a relocatable Python carrying the resolver, adds the ffmpeg built by `./scripts/build-ffmpeg.sh`, signs the result ad-hoc and wraps it up. The first run downloads and builds those two payloads into the ignored `build-packaging/` directory and reuses them afterwards.
+`./scripts/package-dmg.sh` produces the distributable `Musix-<version>-arm64.dmg`: a Release build, `macdeployqt`, the unused Qt plugins pruned, a relocatable Python carrying the resolver, an LGPL FFmpeg from `./scripts/build-ffmpeg.sh`, every bundled library's license text, and an ad-hoc signature. It refuses to build from a dirty tree, prints the commit it is building, and checks the signature still verifies after the app has been used. Two builds of the same commit produce a byte-identical bundle.
+
+Architecture and conventions are in [CLAUDE.md](CLAUDE.md).
 
 ### Releasing
 
@@ -299,8 +216,11 @@ python3 tests/jellyfin_integration.py \
 
 The server binds to loopback only and stops after testing. Test data and credentials stay in the private output directory; remove it when finished. Add `--ui-binary /path/to/musix` for rendered UI checks, or additionally `--native-ui` to use Hyprland workspace 2. The normal test suite also checks malformed responses, redirects, cancellation, credential persistence and failed downloads using a local mock server.
 
+
 ## License
 
-[MIT](LICENSE). Material Symbols are licensed under Apache-2.0; see [NOTICE](NOTICE) for third-party acknowledgments.
+[MIT](LICENSE). Material Symbols are licensed under Apache-2.0; see [NOTICE](NOTICE) for third-party acknowledgments, including the license texts and LGPL corresponding source for everything the macOS bundle redistributes.
 
-Musix is a fork of [Sung](https://github.com/yappologistic/Sung) by yappologistic, used under the MIT License. Musix is an independent project and is not affiliated with Google or YouTube.
+Musix is a fork of [Sung](https://github.com/yappologistic/Sung) by yappologistic, used under the MIT License, and the great majority of this code is theirs. **Linux users should go to [Sung](https://github.com/yappologistic/Sung)**, which is where the Linux player is maintained; Musix adds the macOS port, the self-contained bundle and the self-updating resolver.
+
+Musix is an independent project and is not affiliated with Google or YouTube.
