@@ -131,7 +131,7 @@ QNetworkRequest Jellyfin::request(const QUrl &u) const {
   r.setAttribute(QNetworkRequest::CacheSaveControlAttribute, false);
   QByteArray auth =
       "MediaBrowser Client=\"Sung\", Device=\"Sung Linux\", DeviceId=\"" +
-      m_device.toUtf8() + "\", Version=\"0.12.0\"";
+      m_device.toUtf8() + "\", Version=\"" MUSIX_VERSION "\"";
   if (!m_token.isEmpty())
     auth += ", Token=\"" + m_token.toUtf8() + "\"";
   r.setRawHeader("Authorization", auth);

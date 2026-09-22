@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.24)
-project(Musix VERSION 0.12.0 LANGUAGES CXX)
+project(Musix VERSION 0.13.0 LANGUAGES CXX)
 # The title-bar blending in src/windowchrome.mm is the only Objective-C++
 # in the tree, and only macOS compiles it.
 if(APPLE)
@@ -28,6 +28,9 @@ endif()
 if(SUNG_DBUS)
  add_compile_definitions(SUNG_DBUS)
 endif()
+# One version, from the one place that declares it. These were four separate
+# literals, and a release once went out carrying the previous one.
+add_compile_definitions(MUSIX_VERSION="${PROJECT_VERSION}")
 set(SUNG_QT_COMPONENTS Core Gui Quick Qml QuickControls2 Multimedia Network Svg)
 if(SUNG_DBUS)
  list(APPEND SUNG_QT_COMPONENTS DBus)

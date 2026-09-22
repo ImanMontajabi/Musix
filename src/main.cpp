@@ -97,14 +97,14 @@ int main(int argc, char **argv) {
   app.setApplicationName("sung");
   app.setApplicationDisplayName("Musix");
   app.setOrganizationName("Sung");
-  app.setApplicationVersion("0.12.0");
+  app.setApplicationVersion(MUSIX_VERSION);
   app.setDesktopFileName("musix");
 #ifdef SUNG_DIAGNOSTICS
   if(app.arguments().contains("--immersive-polish-test"))app.setDesktopFileName("musix-immersive-test");
 #endif
   const auto args = app.arguments();
   if (args.contains("--version")) {
-    fprintf(stdout, "Musix 0.12.0\n");
+    fprintf(stdout, "Musix %s\n", MUSIX_VERSION);
     return 0;
   }
   QLocalSocket peer;

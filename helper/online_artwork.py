@@ -35,7 +35,7 @@ APPLE_ART = re.compile(r'^https://is\d+-ssl\.mzstatic\.com/image/thumb/[^?#@]+/\
 COVER_HOSTS = {'musicbrainz.org', 'coverartarchive.org'}
 ARCHIVE_HOST = re.compile(r'^(?:[a-z0-9-]+\.)*archive\.org$')
 # MusicBrainz asks every client to identify itself and to name a contact.
-COVER_AGENT = 'Sung/0.12.0 ( https://github.com/yappologistic/Sung )'
+COVER_AGENT = 'Sung/0.13.0 ( https://github.com/yappologistic/Sung )'
 # Its covers are scans people uploaded, so they run from postage stamps to
 # full sleeves. Below this a video frame is the better picture of the two.
 COVER_FLOOR = 500
