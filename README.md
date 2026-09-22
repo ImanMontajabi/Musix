@@ -1,20 +1,26 @@
 <div align="center">
 
-<img src="assets/readme-banner.png" alt="Musix showing music collections and synchronized lyrics" width="100%">
 
 # Musix
 
-**YouTube Music, your music files, and your music server. Native on Linux and macOS.**
+**YouTube Music, your music files, and your music server. Native on macOS.**
 
-[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-![Linux | macOS](https://img.shields.io/badge/platform-Linux%20%7C%20macOS-blue.svg)
-![Qt 6](https://img.shields.io/badge/built_with-Qt_6-41CD52.svg)
-
-A minimal Material 3 player built with C++ and Qt Quick, running natively on Linux (Wayland) and macOS (Apple Silicon).
+A minimal Material 3 player built with C++ and Qt Quick, running natively on macOS (Apple Silicon).
 
 [Install](#install) · [Features](#features) · [Development](#development)
 
 </div>
+
+## Screenshots
+
+### Minimized window
+<img width="566" height="262" alt="Screenshot 2026-09-22 at 17 22 53" src="https://github.com/user-attachments/assets/63ca9eb1-c9ae-42a2-9408-ebec2c486961" />
+
+### Play from Youtube Music
+<img width="1366" height="868" alt="Screenshot 2026-09-22 at 17 22 45" src="https://github.com/user-attachments/assets/f3016ea7-710b-46d0-96fe-0b2bcbc7dcce" />
+
+### Play your local musics
+<img width="1366" height="868" alt="Screenshot 2026-09-22 at 17 21 47" src="https://github.com/user-attachments/assets/ae6dfbba-4402-4566-a47e-122071082b2f" />
 
 ## Features
 
@@ -39,34 +45,6 @@ Native rendering and bounded artwork caches keep Musix lightweight. Animated cov
 Download `Musix-<version>-arm64.dmg`, open it, and drag **Musix** to Applications. Nothing else is needed: Qt, Python, the YouTube resolver and FFmpeg all travel inside the app, and it keeps the resolver up to date on its own.
 
 Musix is not signed with an Apple Developer certificate yet, so the first launch is refused. Open it once from Applications, then go to **System Settings → Privacy & Security**, scroll to the message naming Musix and choose **Open Anyway**. macOS asks to confirm once, and every launch after that is ordinary.
-
-### CachyOS / Arch Linux
-
-Install the build and runtime dependencies:
-
-```bash
-sudo pacman -S --needed git base-devel cmake ninja python nodejs ffmpeg qt6-base qt6-declarative qt6-multimedia qt6-svg qt6-wayland qt6-imageformats
-```
-
-Download and install Musix:
-
-```bash
-git clone https://github.com/ImanMontajabi/Musix.git
-cd Musix
-./scripts/install.sh
-```
-
-Open **Musix** from your application menu, or run:
-
-```bash
-~/.local/bin/musix
-```
-
-Installation is per-user in `~/.local`; do not run the install script with `sudo`. Python dependencies are installed in an isolated environment. Internet access is needed during installation and for YouTube playback.
-
-### Other Linux distributions
-
-Install the equivalent development packages for **Qt 6.8+** (Core, Gui, Quick, Qml, QuickControls2, Multimedia, Network, DBus, Svg and Wayland), a C++20 compiler, CMake 3.24+, Ninja, Python 3 with `venv`/`pip`, Node.js 20+ and FFmpeg. Install the Qt image-format plugins for WebP artwork. Then follow the clone and install commands above.
 
 Musix uses Google Sans Flex when installed and otherwise falls back to a system font. Noctalia is optional.
 
