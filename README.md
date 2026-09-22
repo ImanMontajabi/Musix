@@ -256,12 +256,14 @@ macOS releases are cut from a clean tree; `package-dmg.sh` refuses to run otherw
    ```
 
    The first launch must be refused with an **Open Anyway** option. If macOS says the app is *damaged*, the signature is broken — do not ship it.
-4. Tag the exact commit and push:
+4. Tag the commit `package-dmg.sh` printed — not whatever `HEAD` is by now — and push:
 
    ```bash
-   git tag -a v<version> -m "Musix v<version>"
+   git tag -a V<version> -m "Musix V<version>" <the commit the build reported>
    git push origin main --follow-tags
    ```
+
+   V0.12.0 was tagged at a commit five behind the one its DMG was built from, so the published source did not produce the published binary. The build prints the hash for this reason; use it.
 
 5. Create the release with every artifact attached:
 
