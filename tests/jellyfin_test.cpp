@@ -400,7 +400,7 @@ private slots:
       QVariantMap found;
       for (const auto &v : response.value("Items").toList()) {
         const auto x = v.toMap();
-        if (x.value("Client") == "Sung" &&
+        if (x.value("Client") == "Musix" &&
             x.value("NowPlayingItem").toMap().value("Id") == id)
           found = x;
       }

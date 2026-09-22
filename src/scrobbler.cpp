@@ -73,7 +73,7 @@ QVariantMap Scrobbler::listenFor(const QVariantMap &track, qint64 startedAt) {
   const auto album = track.value("album").toString().trimmed();
   if (!album.isEmpty())
     metadata.insert("release_name", album);
-  QVariantMap info{{"media_player", "Sung"}, {"submission_client", "Sung"}};
+  QVariantMap info{{"media_player", "Musix"}, {"submission_client", "Musix"}};
   const auto duration = track.value("seconds").toLongLong();
   if (duration > 0 && duration <= 86400)
     info.insert("duration", duration);

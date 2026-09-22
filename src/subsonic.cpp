@@ -237,7 +237,7 @@ QUrl Subsonic::url(const QString &method, const Params &params) const {
                            .toHex())},
              {"s", salt},
              {"v", "1.16.1"},
-             {"c", "Sung"},
+             {"c", "Musix"},
              {"f", "json"}};
   all.append(params);
   QStringList encoded;

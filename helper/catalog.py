@@ -6,6 +6,13 @@ import re
 import sys
 from urllib.parse import urlparse, parse_qs
 
+# What this client tells a public API it is. MusicBrainz and LRCLIB both ask
+# for something that identifies the client and can be contacted; the contact
+# has to be this project, not the upstream one it is derived from. The version
+# comes from the app so it cannot drift -- the LRCLIB agent still said 0.11.0.
+USER_AGENT = 'Musix/%s ( https://github.com/ImanMontajabi/Musix )' % (
+    os.environ.get('MUSIX_VERSION') or 'dev')
+
 # A packaged app ships its own ffmpeg; nothing put it on PATH. Bare names
 # stay the fallback so a checkout keeps working.
 _FFMPEG_DIR = os.environ.get('SUNG_FFMPEG_DIR', '')
@@ -97,7 +104,7 @@ def lyric_fallback(req):
         return ' '.join(unicodedata.normalize('NFKC', str(value)).casefold().split())
     params = dict(track_name=title, artist_name=artist, duration=duration)
     if req.get('album'): params['album_name'] = req['album']
-    request = Request('https://lrclib.net/api/get?' + urlencode(params), headers={'User-Agent': 'Sung/0.11.0 (native Linux music client)', 'Accept': 'application/json'})
+    request = Request('https://lrclib.net/api/get?' + urlencode(params), headers={'User-Agent': USER_AGENT, 'Accept': 'application/json'})
     try:
         with urlopen(request, timeout=8) as response:
             raw = response.read(1048577)

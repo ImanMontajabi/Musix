@@ -35,7 +35,13 @@ APPLE_ART = re.compile(r'^https://is\d+-ssl\.mzstatic\.com/image/thumb/[^?#@]+/\
 COVER_HOSTS = {'musicbrainz.org', 'coverartarchive.org'}
 ARCHIVE_HOST = re.compile(r'^(?:[a-z0-9-]+\.)*archive\.org$')
 # MusicBrainz asks every client to identify itself and to name a contact.
-COVER_AGENT = 'Sung/0.13.0 ( https://github.com/yappologistic/Sung )'
+# What this client tells a public API it is. MusicBrainz and LRCLIB both ask
+# for something that identifies the client and can be contacted; the contact
+# has to be this project, not the upstream one it is derived from. The version
+# comes from the app so it cannot drift -- the LRCLIB agent still said 0.11.0.
+USER_AGENT = 'Musix/%s ( https://github.com/ImanMontajabi/Musix )' % (
+    os.environ.get('MUSIX_VERSION') or 'dev')
+COVER_AGENT = USER_AGENT
 # Its covers are scans people uploaded, so they run from postage stamps to
 # full sleeves. Below this a video frame is the better picture of the two.
 COVER_FLOOR = 500
@@ -67,7 +73,7 @@ class Redirects(HTTPRedirectHandler):
 
 def fetch(url, limit=2 * 1024 * 1024):
     with build_opener(Redirects()).open(Request(safe_url(url), headers={
-            'User-Agent': 'Mozilla/5.0 (compatible; Sung)', 'Accept-Encoding': 'identity'}), timeout=8) as response:
+            'User-Agent': USER_AGENT, 'Accept-Encoding': 'identity'}), timeout=8) as response:
         if int(response.headers.get('Content-Length', 0)) > limit:
             raise ValueError('Artwork response too large')
         data = response.read(limit + 1)

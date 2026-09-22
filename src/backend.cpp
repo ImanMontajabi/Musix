@@ -244,13 +244,16 @@ void Backend::request(const QString &channel, QVariantMap args, Callback done, s
   p->setChildProcessModifier([] { ::setsid(); });
   const QString helper = helperScript();
   const QString python = pythonExecutable();
+  // The helper talks to MusicBrainz and LRCLIB, which both ask a client to say
+  // what it is; it gets the version from here rather than keeping its own copy
+  // to go stale, as the LRCLIB agent had at 0.11.0.
+  auto environment = QProcessEnvironment::systemEnvironment();
+  environment.insert("MUSIX_VERSION", MUSIX_VERSION);
   // A packaged app carries its own ffmpeg, which the helper must reach by path
   // because nothing put it on this machine's PATH.
-  if (const auto ffmpeg = ffmpegDirectory(); !ffmpeg.isEmpty()) {
-    auto environment = QProcessEnvironment::systemEnvironment();
+  if (const auto ffmpeg = ffmpegDirectory(); !ffmpeg.isEmpty())
     environment.insert("SUNG_FFMPEG_DIR", ffmpeg);
-    p->setProcessEnvironment(environment);
-  }
+  p->setProcessEnvironment(environment);
   auto timer = new QTimer(p);
   timer->setSingleShot(true);
   timer->setInterval((channel == "play" || channel == "prepare") ? 75000 : 45000);

@@ -129,9 +129,17 @@ QNetworkRequest Jellyfin::request(const QUrl &u) const {
   r.setAttribute(QNetworkRequest::RedirectPolicyAttribute,
                  QNetworkRequest::ManualRedirectPolicy);
   r.setAttribute(QNetworkRequest::CacheSaveControlAttribute, false);
+  // Client and Device are what the server shows under Devices; DeviceId is the
+  // one that matters, and it is a stored uuid, so renaming these does not cost
+  // anyone their session.
+#ifdef Q_OS_MACOS
+  static constexpr const char *deviceName = "Musix (macOS)";
+#else
+  static constexpr const char *deviceName = "Musix (Linux)";
+#endif
   QByteArray auth =
-      "MediaBrowser Client=\"Sung\", Device=\"Sung Linux\", DeviceId=\"" +
-      m_device.toUtf8() + "\", Version=\"" MUSIX_VERSION "\"";
+      QByteArray("MediaBrowser Client=\"Musix\", Device=\"") + deviceName +
+      "\", DeviceId=\"" + m_device.toUtf8() + "\", Version=\"" MUSIX_VERSION "\"";
   if (!m_token.isEmpty())
     auth += ", Token=\"" + m_token.toUtf8() + "\"";
   r.setRawHeader("Authorization", auth);
