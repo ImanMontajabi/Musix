@@ -122,7 +122,7 @@ Click album or immersive artwork to inspect the full cover. Use the wheel or + /
 
 ### Playback and shortcuts
 
-Press **F11** for immersive playback — **Ctrl+Shift+F** on macOS, where F11 belongs to Show Desktop. The **…** menu selects Artwork, Lyrics or Split; **Ctrl+L** opens the queue. Optional **Auto-hide controls** fades controls while idle; pointer or keyboard activity restores them. The cursor stays visible. Click an available artist or album name to browse, then use Back to return.
+Press **F11** for immersive playback — **⌘⇧F** on macOS, where F11 belongs to Show Desktop. The **…** menu selects Artwork, Lyrics or Split; **Ctrl+L** opens the queue. Optional **Auto-hide controls** fades controls while idle; pointer or keyboard activity restores them. The cursor stays visible. Click an available artist or album name to browse, then use Back to return.
 
 The same **…** menu offers **Up next covers**: a carousel of the queue below the player, with the playing track centered and large and the rest peeking either side. Scrolling snaps to a cover and plays it as soon as it settles; clicking a cover plays it directly. The choice is remembered. **Show all** opens the full queue for anything the strip cannot reach. The carousel shrinks the main cover to make room, so it is off by default.
 
@@ -164,18 +164,26 @@ The arrow beside the player’s volume controls opens an audio-output picker. It
 
 Open a song’s menu to queue it, like it or add it to a playlist. Local playlist additions skip duplicates and can be undone. Views remember their filter, sort and scroll position during the session. Open **Clean up** in a local playlist to review duplicates and missing files; removal never deletes the original audio.
 
-| Shortcut | Action |
-| --- | --- |
-| Space | Play / pause |
-| Ctrl+F | Focus search |
-| Ctrl+Shift+P | Quick actions |
-| Ctrl+J | Show the playing song in the queue |
-| ? / F1 | Keyboard shortcut reference (outside text fields) |
-| Ctrl+M | Toggle mini player |
-| F11 (macOS: Ctrl+Shift+F) | Toggle immersive player |
-| 0 – 9 | Jump to that tenth of the track |
-| Ctrl+A | Select songs in the focused list |
-| Escape | Close the current view or clear selection |
+Qt maps `Ctrl` to `⌘` on macOS, so the two columns are the same binding except where noted.
+
+| Linux | macOS | Action |
+| --- | --- | --- |
+| Space | Space | Play / pause |
+| Ctrl+F | ⌘F | Focus search |
+| Ctrl+Shift+P | ⌘⇧P | Quick actions |
+| Ctrl+J | ⌘J | Show the playing song in the queue |
+| ? / F1 | ? / F1 | Keyboard shortcut reference (outside text fields) |
+| Ctrl+M | **⌘⇧M** | Toggle mini player — ⌘M is Minimize on macOS |
+| F11 | **⌘⇧F** | Toggle immersive player — F11 is Show Desktop on macOS |
+| 0 – 9 | 0 – 9 | Jump to that tenth of the track |
+| Ctrl+A | ⌘A | Select songs in the focused list |
+| Escape | ⎋ | Close the current view or clear selection |
+| Ctrl+Q | ⌘Q | Quit |
+| — | ⌘M | Minimize the window |
+| — | ⌘, | Settings |
+| — | ⌘W | Close the window, which ends the app as its close button does |
+
+macOS also hides the app with ⌘H, as usual. The in-app shortcut sheet (**?**) prints whichever set applies.
 
 ### Connect a music server
 

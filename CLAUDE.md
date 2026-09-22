@@ -84,6 +84,12 @@ already cost something.
   and `~/Library/Preferences/com.sung.sung.plist` first, restore both
   afterwards, `killall cfprefsd` so the restored plist is re-read, and confirm
   with `shasum -a 256` that they match the backup.
+- **Never install anything into `build-packaging/` or the bundled runtime.**
+  Those caches are what ships. A `pip install` into `build-packaging/
+  python-runtime` for a one-off analysis put Pillow in the DMG, unlisted in
+  `helper/requirements.txt` and unmentioned in `NOTICE`. Make a throwaway venv
+  in the scratchpad instead. The build now refuses a runtime whose packages
+  have drifted, which is a backstop, not a licence to install.
 - **Never run two packaging builds at once.** `package-dmg.sh` takes a lock and
   will refuse, but the lock is the last line of defence, not permission to
   try: two runs sharing `build-packaging/dmg` once produced a bundle with the

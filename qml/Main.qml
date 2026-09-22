@@ -426,7 +426,7 @@ ApplicationWindow {
     Shortcut { sequence: "Ctrl+Shift+P"; enabled: !window.modalOpen; onActivated: commandPalette.open() }
     Shortcut { sequence: "Ctrl+J"; enabled: !window.modalOpen; onActivated: window.revealPlaying() }
     Shortcut { sequences: ["?", "F1"]; enabled: !window.modalOpen && !window.searchFocused; onActivated: shortcutHelp.open() }
-    Shortcut { sequence: "Ctrl+M"; enabled: !window.modalOpen; onActivated: window.openMiniPlayer() }
+    Shortcut { sequence: Keymap.miniPlayer; enabled: !window.modalOpen; onActivated: window.openMiniPlayer() }
     Shortcut { sequence: "Ctrl+K"; enabled: !window.modalOpen; onActivated: window.focusSearch() }
     Shortcut { sequence: "Ctrl+F"; enabled: !window.modalOpen; onActivated: window.focusSearch() }
     Shortcut { sequence: "Space"; enabled: !window.searchFocused && !window.modalOpen && (!window.activeFocusItem || window.activeFocusItem===content || window.activeFocusItem===immersiveLoader.item); onActivated: app.toggle() }
@@ -442,6 +442,11 @@ ApplicationWindow {
     Shortcut { sequence: "Alt+Left"; enabled: !window.modalOpen && !window.immersive; onActivated: window.navigateBack() }
     Shortcut { sequence: "Escape"; enabled: !window.modalOpen && !(window.activeFocusItem && window.activeFocusItem.objectName==="lyricSearchField"); onActivated: { if(trackDrag.owner)trackDrag.cancel();else if(window.selectedView().selection.count)window.selectedView().selection.clear();else if(window.immersive)window.toggleImmersive();else {window.side="";content.forceActiveFocus();} } }
     Shortcut { sequence: "Ctrl+Q"; onActivated: window.close() }
+    // Cmd+W and Cmd+, are what a Mac reaches for and had nothing on them.
+    // Closing the only window ends the app, which is what its red button does.
+    Shortcut { sequence: Keymap.closeWindow; enabled: Keymap.mac; onActivated: window.close() }
+    Shortcut { sequence: Keymap.settings; enabled: Keymap.mac && !window.modalOpen; onActivated: settingsDialog.open() }
+    Shortcut { sequence: Keymap.minimize; enabled: Keymap.mac; onActivated: window.showMinimized() }
 
     Instantiator {
         model: 10
@@ -458,13 +463,7 @@ ApplicationWindow {
             }
         }
     }
-    // F11 belongs to Show Desktop on macOS and never reaches the app, which
-    // left the immersive player with no shortcut there. Ctrl+Shift+F is
-    // Cmd+Shift+F once Qt maps it, which is what Music and Spotify use for
-    // their own full-screen players; the system's own Enter Full Screen is
-    // Ctrl+Cmd+F and stays out of the way.
-    readonly property string immersiveShortcut: Qt.platform.os==="osx" ? "Ctrl+Shift+F" : "F11"
-    Shortcut { sequence: window.immersiveShortcut; enabled: !window.modalOpen; onActivated: window.toggleImmersive() }
+    Shortcut { sequence: Keymap.immersive; enabled: !window.modalOpen; onActivated: window.toggleImmersive() }
     Loader { id: immersiveLoader; anchors.fill: parent; active: window.immersive; sourceComponent: Component { ImmersivePlayer { coverHidden: window.coverFlying;
                 preferredLayout:listeningSettings.layout;autoHideControls:listeningSettings.autoHide;externalModalOpen:window.modalOpen
                 coverflow:listeningSettings.coverflow
@@ -665,8 +664,8 @@ ApplicationWindow {
                 }
             }
             Item { Layout.fillHeight: true }
-            MButton { objectName: "miniPlayerButton"; symbol: "mini"; tip: "Mini player · Ctrl+M"; text: navigationRail.expanded?"Mini player":""; leftAligned: navigationRail.expanded; Layout.preferredWidth: navigationRail.expanded?navigationRail.shownWidth-32:48; Layout.alignment: navigationRail.expanded ? Qt.AlignLeft : Qt.AlignHCenter; Layout.leftMargin: navigationRail.expanded ? 16 : 0; onClicked: window.openMiniPlayer() }
-            MButton { objectName: "settingsButton"; symbol: "settings"; tip: "Settings"; text: navigationRail.expanded?"Settings":""; leftAligned: navigationRail.expanded; Layout.preferredWidth: navigationRail.expanded?navigationRail.shownWidth-32:48; Layout.alignment: navigationRail.expanded ? Qt.AlignLeft : Qt.AlignHCenter; Layout.leftMargin: navigationRail.expanded ? 16 : 0; Layout.bottomMargin: 20; onClicked: settingsDialog.open() }
+            MButton { objectName: "miniPlayerButton"; symbol: "mini"; tip: "Mini player · "+Keymap.label(Keymap.miniPlayer); text: navigationRail.expanded?"Mini player":""; leftAligned: navigationRail.expanded; Layout.preferredWidth: navigationRail.expanded?navigationRail.shownWidth-32:48; Layout.alignment: navigationRail.expanded ? Qt.AlignLeft : Qt.AlignHCenter; Layout.leftMargin: navigationRail.expanded ? 16 : 0; onClicked: window.openMiniPlayer() }
+            MButton { objectName: "settingsButton"; symbol: "settings"; tip: Keymap.mac ? "Settings · "+Keymap.label(Keymap.settings) : "Settings"; text: navigationRail.expanded?"Settings":""; leftAligned: navigationRail.expanded; Layout.preferredWidth: navigationRail.expanded?navigationRail.shownWidth-32:48; Layout.alignment: navigationRail.expanded ? Qt.AlignLeft : Qt.AlignHCenter; Layout.leftMargin: navigationRail.expanded ? 16 : 0; Layout.bottomMargin: 20; onClicked: settingsDialog.open() }
         }
         ColumnLayout {
             id: headerColumn
@@ -824,7 +823,7 @@ ApplicationWindow {
                                             ink: suggestionRow.highlighted?Theme.secondaryContainerText:Theme.muted
                                         }
                                     }
-                                    MButton { anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter; implicitWidth: 36; implicitHeight: 36; symbol: "close"; tip: "Remove recent search · Shift+Delete"; focusPolicy: Qt.NoFocus; visible: modelData.recent===true; onClicked: app.removeRecentSearch(modelData.title) }
+                                    MButton { anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter; implicitWidth: 36; implicitHeight: 36; symbol: "close"; tip: "Remove recent search · "+Keymap.label("Shift+Delete"); focusPolicy: Qt.NoFocus; visible: modelData.recent===true; onClicked: app.removeRecentSearch(modelData.title) }
                                 }
                             }
                         }
@@ -1391,9 +1390,9 @@ ApplicationWindow {
                         RowLayout {
                             Layout.alignment: Qt.AlignHCenter; spacing: 6
                             MButton { objectName: "playerShuffle"; symbol: "shuffle"; tip: "Shuffle"; toggle: true; selected: app.shuffle; onClicked: app.shuffle=!app.shuffle; visible: window.width>=980 }
-                            MButton { symbol: "previous"; tip: "Previous · Ctrl+←"; enabled: app.queue.count>0; onClicked: app.previous() }
+                            MButton { symbol: "previous"; tip: "Previous · "+Keymap.label("Ctrl+←"); enabled: app.queue.count>0; onClicked: app.previous() }
                             MButton { objectName: "playButton"; morphPlayback:true; symbol: app.playing||app.resolving?"pause":"play"; tip: app.playing||app.resolving?"Pause · Space":"Play · Space"; filled: true; size: "medium"; implicitWidth: 72; enabled: app.queue.count>0; onClicked: app.toggle(); busy: app.buffering }
-                            MButton { symbol: "next"; tip: "Next · Ctrl+→"; enabled: app.queue.count>0; onClicked: app.next() }
+                            MButton { symbol: "next"; tip: "Next · "+Keymap.label("Ctrl+→"); enabled: app.queue.count>0; onClicked: app.next() }
                             MButton { symbol: app.repeat===2?"repeat_one":"repeat"; tip: app.repeat===0?"Repeat off":app.repeat===1?"Repeat queue":"Repeat song"; toggle: true; selected: app.repeat>0; onClicked: app.repeat=(app.repeat+1)%3; visible: window.width>=980 }
                         }
                         RowLayout {
@@ -1404,9 +1403,9 @@ ApplicationWindow {
                         }
                     }
                     Item { Layout.fillWidth: true; visible: window.width>=1320 }
-                    MButton { symbol: "lyrics"; tip: "Lyrics · Ctrl+Y"; toggle: true; selected: window.side==="lyrics"; enabled: app.currentIndex>=0; onClicked: window.activateSide("lyrics") }
+                    MButton { symbol: "lyrics"; tip: "Lyrics · "+Keymap.label("Ctrl+Y"); toggle: true; selected: window.side==="lyrics"; enabled: app.currentIndex>=0; onClicked: window.activateSide("lyrics") }
                     MButton {
-                        objectName: "queueButton"; symbol: "queue"; tip: "Queue · Ctrl+L"
+                        objectName: "queueButton"; symbol: "queue"; tip: "Queue · "+Keymap.label("Ctrl+L")
                         toggle: true; selected: window.side==="queue"; onClicked: window.activateSide("queue")
                         MBadge {
                             objectName: "queueBadge"
@@ -1584,10 +1583,10 @@ ApplicationWindow {
         RowLayout {
             Layout.fillWidth: true
             SungText {heading: true; objectName: "sidePanelTitle"; text: window.side==="queue"?(window.queueTab==="history"?"Recently played":"Up next"):window.side==="lyrics"?"Lyrics":"Now playing"; font.pixelSize: Theme.titleLarge; font.weight: Font.Medium; Layout.fillWidth: true }
-            MButton { objectName: "revealPlayingButton"; text: "Playing"; tip: "Show playing song · Ctrl+J"; visible: window.side==="queue" && window.queueTab==="next"; enabled: app.currentIndex>=0; onClicked: window.revealPlaying() }
+            MButton { objectName: "revealPlayingButton"; text: "Playing"; tip: "Show playing song · "+Keymap.label("Ctrl+J"); visible: window.side==="queue" && window.queueTab==="next"; enabled: app.currentIndex>=0; onClicked: window.revealPlaying() }
             MButton { objectName: "lyricSearchButton"; symbol: "search"; tip: "Find in lyrics"; visible: window.side==="lyrics"; enabled: !!app.lyrics; onClicked: {if(sideLoader.item)sideLoader.item.openSearch();} }
             MButton { objectName: "lyricTimingButton"; symbol: "settings"; tip: "Lyric timing · saved for this song"; visible: window.side==="lyrics" && !!app.current.id; onClicked: lyricTimingDialog.open() }
-            MButton { objectName: "immersiveButton"; symbol: "expand"; tip: "Immersive player · "+window.immersiveShortcut; visible: window.side!=="queue"; enabled: app.currentIndex>=0; onClicked: window.toggleImmersive() }
+            MButton { objectName: "immersiveButton"; symbol: "expand"; tip: "Immersive player · "+Keymap.label(Keymap.immersive); visible: window.side!=="queue"; enabled: app.currentIndex>=0; onClicked: window.toggleImmersive() }
             MButton { symbol: "close"; tip: "Close panel"; onClicked: window.side="" }
         }
         Loader {
@@ -2048,7 +2047,7 @@ ApplicationWindow {
                     ColumnLayout {id:options2;objectName:"settingsRows2";Layout.fillWidth:true;Layout.minimumWidth:0;spacing:12
                 MSettingRow {opens:true;text:"Music folders";visible:settingsDialog.matches("Music folders import manage");onClicked:{settingsDialog.close();musicFoldersDialog.open();}}
                 MSettingRow {opens:true;objectName:"shortcutHelpButton";text:"Keyboard shortcuts";visible:settingsDialog.matches("Keyboard shortcuts keys help");onClicked:{settingsDialog.close();shortcutHelp.open()}}
-                MSettingRow {opens:true;text:"Quick actions · Ctrl+Shift+P";visible:settingsDialog.matches("Quick actions commands playlists");onClicked:{settingsDialog.close();commandPalette.open();}}
+                MSettingRow {opens:true;text:"Quick actions · "+Keymap.label("Ctrl+Shift+P");visible:settingsDialog.matches("Quick actions commands playlists");onClicked:{settingsDialog.close();commandPalette.open();}}
                 MSwitch { Layout.fillWidth:true;Layout.minimumWidth:0; text: "Update music folders automatically"; visible: settingsDialog.matches("Update music folders automatically watch"); checked: app.watchMusicFolders; onToggled: app.watchMusicFolders=checked }
                 MSwitch { Layout.fillWidth:true;Layout.minimumWidth:0; objectName:"typeAheadSwitch"; text: "Type to jump in lists"; visible: settingsDialog.matches("Type to jump in lists keyboard"); checked: app.typeAheadJump; onToggled: app.typeAheadJump=checked }
                 SungText {text:"Start page";visible:settingsDialog.matches("Start page Home local music server liked");font.pixelSize:Theme.bodyLarge;font.weight:Font.Medium}

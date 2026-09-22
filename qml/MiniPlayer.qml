@@ -18,7 +18,7 @@ Window {
     signal restoreRequested()
     Component.onCompleted: { windowResources.manage(mini);windowChrome.roundCorners(mini); }
     onClosing: Qt.quit()
-    Shortcut { sequence: "Ctrl+M"; onActivated: mini.restoreRequested() }
+    Shortcut { sequence: Keymap.miniPlayer; onActivated: mini.restoreRequested() }
     Shortcut { sequence: "Escape"; enabled:!miniVolume.popupVisible;onActivated: mini.restoreRequested() }
     Shortcut { sequence: "Ctrl+Q"; onActivated: Qt.quit() }
     Shortcut { sequence: "Space"; enabled:!miniVolume.popupVisible;onActivated: app.toggle() }
@@ -38,7 +38,7 @@ Window {
                     SungText { text: presentation.shown.title || "Nothing playing"; opacity: presentation.fade; transform: Translate { x: presentation.offset } Layout.fillWidth: true; font.pixelSize: Theme.titleMedium; typeRole: "titleMedium"; font.weight: Font.DemiBold }
                     SungText { text: presentation.shown.artist || ""; opacity: presentation.fade; transform: Translate { x: presentation.offset } Layout.fillWidth: true; font.pixelSize: Theme.bodyMedium; color: Theme.muted }
                 }
-                MButton { objectName: "miniRestoreButton"; symbol: "expand"; tip: "Full player · Ctrl+M"; onClicked: mini.restoreRequested() }
+                MButton { objectName: "miniRestoreButton"; symbol: "expand"; tip: "Full player · "+Keymap.label(Keymap.miniPlayer); onClicked: mini.restoreRequested() }
                 MButton { symbol: "close"; tip: "Quit Musix"; onClicked: Qt.quit() }
             }
             Item {

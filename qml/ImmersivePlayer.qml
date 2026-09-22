@@ -83,7 +83,7 @@ Item {
             objectName: "immersiveTopControls"
             Layout.fillWidth: true; opacity: player.controlsShown?1:0
             Behavior on opacity {NumberAnimation {duration:Theme.normal;easing.type:Easing.BezierSpline;easing.bezierCurve:Theme.effectsCurve}}
-            MButton { objectName: "exitImmersiveButton"; symbol: "back"; tip: "Exit immersive · Esc"; onClicked: player.exitRequested() }
+            MButton { objectName: "exitImmersiveButton"; symbol: "back"; tip: "Exit immersive · "+Keymap.label("Esc"); onClicked: player.exitRequested() }
             Item { Layout.fillWidth: true }
             MButton {id:layoutButton;objectName:"immersiveLayoutButton";symbol:"more";tip:"Immersive layout";selected:layoutMenu.visible;onClicked:layoutMenu.popup(layoutButton,width-layoutMenu.width,height+4)}
             MButton { objectName: "immersiveLyricSearchButton"; symbol: "search"; tip: "Find in lyrics"; enabled: player.hasLyrics && player.displayedLayout!=="singalong"; onClicked: player.showLyricsSearch() }
@@ -159,7 +159,7 @@ Item {
             SungText { font.features: {"tnum": 1}; text: app.formatTime(app.position); color: Theme.muted; font.pixelSize: Theme.labelMedium; labelRole: true; Layout.preferredWidth: 40 }
             SeekBar { Layout.fillWidth: true }
             SungText { font.features: {"tnum": 1}; text: app.formatTime(app.duration); color: Theme.muted; font.pixelSize: Theme.labelMedium; labelRole: true; Layout.preferredWidth: 40; horizontalAlignment: Text.AlignRight }
-            MButton {objectName:"immersiveQueueButton";symbol:"queue";tip:player.externalModalOpen?"":"Queue · Ctrl+L";onClicked:player.queueRequested()}
+            MButton {objectName:"immersiveQueueButton";symbol:"queue";tip:player.externalModalOpen?"":"Queue · "+Keymap.label("Ctrl+L");onClicked:player.queueRequested()}
             VolumeControl {id:immersiveVolume;showSlider:false}
         }
     }

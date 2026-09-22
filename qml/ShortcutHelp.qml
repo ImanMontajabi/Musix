@@ -12,6 +12,9 @@ MDialog {
     contentItem: ListView {
         id: shortcuts; objectName: "shortcutList"; clip: true; spacing: 4
         boundsBehavior: Flickable.StopAtBounds
+        // Written in the portable form and printed through Keymap.label,
+        // so macOS reads ⌘⇧M where Linux reads Ctrl+M rather than both being
+        // told the Linux answer.
         model: dialog.visible ? [
             ["Search music","Ctrl+K / Ctrl+F"],
             ["Quick actions","Ctrl+Shift+P"],
@@ -24,8 +27,8 @@ MDialog {
             ["Volume¹","Ctrl+↑ / ↓"],
             ["Mute¹","M"],
             ["Back","Alt+←"],
-            ["Mini player","Ctrl+M"],
-            ["Immersive player",Qt.platform.os==="osx"?"Ctrl+Shift+F":"F11"],
+            ["Mini player",Keymap.miniPlayer],
+            ["Immersive player",Keymap.immersive],
             ["Select all songs²","Ctrl+A"],
             ["Extend selection²","Shift+↑ / ↓"],
             ["Toggle selection²","Ctrl+Space"],
@@ -33,15 +36,17 @@ MDialog {
             ["Track menu²","Shift+F10"],
             ["Remove selection²","Delete"],
             ["Close / clear selection","Esc"],
-            ["Keyboard shortcuts¹","? / F1"],
-            ["Quit","Ctrl+Q"]
-        ] : []
+            ["Keyboard shortcuts¹","? / F1"]
+        ].concat(Keymap.mac ? [["Settings",Keymap.settings],
+                               ["Minimize",Keymap.minimize],
+                               ["Close window",Keymap.closeWindow]] : [])
+          .concat([["Quit","Ctrl+Q"]]) : []
         ScrollBar.vertical: MScrollBar {}
         delegate: RowLayout {
             required property var modelData
             width: shortcuts.width-12; height: Math.max(48,description.implicitHeight+16); spacing: 16
             SungText { id: description; text: modelData[0]; Layout.fillWidth: true; wrapMode: Text.Wrap; font.pixelSize: Theme.bodyMedium }
-            SungText { text: modelData[1]; Layout.preferredWidth: 155; horizontalAlignment: Text.AlignRight; color: Theme.primary; font.pixelSize: Theme.labelLarge; labelRole: true }
+            SungText { text: Keymap.label(modelData[1]); Layout.preferredWidth: 155; horizontalAlignment: Text.AlignRight; color: Theme.primary; font.pixelSize: Theme.labelLarge; labelRole: true }
         }
         footer: SungText { width: shortcuts.width-16; text: "¹ Outside text fields and controls. ² With the song list focused."; wrapMode: Text.Wrap; color: Theme.muted; font.pixelSize: Theme.bodySmall; topPadding: 16 }
     }
