@@ -2,8 +2,8 @@
 # Build a self-contained Musix.app and wrap it in a DMG.
 #
 # The result must run on a Mac with no Homebrew, no Python and no ffmpeg, so
-# the bundle carries Qt, a relocatable Python with the resolver packages, and
-# a pure-LGPL ffmpeg. Order matters: macdeployqt rewrites what it finds, so it
+# the bundle carries Qt (The Qt Company's own binaries), a relocatable Python
+# with the resolver packages, and a pure-LGPL ffmpeg. Order matters: macdeployqt rewrites what it finds, so it
 # runs before the payload is copied in, and the signature is applied last
 # because every one of those steps invalidates it.
 set -euo pipefail
@@ -15,10 +15,13 @@ version="$(sed -n 's/^project(Musix VERSION \([0-9.]*\).*/\1/p' "$root/CMakeList
 python_release="${MUSIX_PYTHON_RELEASE:-20260901}"
 python_version="${MUSIX_PYTHON_VERSION:-3.11.16}"
 ffmpeg_version="${FFMPEG_VERSION:-7.1}"
-# The LGPL-2.1 libraries macdeployqt brings in, whose source ships with the
-# release. Keep in step with scripts/fetch-lgpl-sources.sh.
-glib_version="2.90.0"
-gettext_version="1.0"
+# The oldest macOS the bundle promises, as CMakeLists.txt declares it. Every
+# compiler below targets it, and every binary shipped is checked against it
+# before signing, because one library built for something newer is enough to
+# stop the whole app launching there.
+deployment_target="$(sed -n 's/^set(CMAKE_OSX_DEPLOYMENT_TARGET "\([0-9.]*\)".*/\1/p' "$root/CMakeLists.txt")"
+[ -n "$deployment_target" ] || { echo "CMakeLists.txt declares no CMAKE_OSX_DEPLOYMENT_TARGET" >&2; exit 1; }
+export MACOSX_DEPLOYMENT_TARGET="$deployment_target"
 mkdir -p "$cache"
 
 say() { printf '\n== %s ==\n' "$1"; }
@@ -69,11 +72,17 @@ if [ -z "${MUSIX_ALLOW_DIRTY:-}" ] && ! git -C "$root" diff-index --quiet HEAD -
   echo "(set MUSIX_ALLOW_DIRTY=1 to build anyway, for a throwaway build)" >&2
   exit 1
 fi
-printf 'Musix %s from %s\n' "$version" "$commit"
+printf 'Musix %s from %s, for macOS %s and later\n' "$version" "$commit" "$deployment_target"
+
+say "Qt"
+qt="$("$root/scripts/fetch-qt.sh" | tail -1)"
+echo "$qt"
 
 say "Release build"
-cmake -S "$root" -B "$build" -G Ninja -DCMAKE_BUILD_TYPE=Release \
-  -DBUILD_TESTING=OFF -DSUNG_DIAGNOSTICS=OFF
+# --fresh, because a configure left over from a Homebrew-Qt build would keep
+# pointing at Homebrew's Qt, and the build would quietly go on linking it.
+cmake --fresh -S "$root" -B "$build" -G Ninja -DCMAKE_BUILD_TYPE=Release \
+  -DBUILD_TESTING=OFF -DSUNG_DIAGNOSTICS=OFF -DCMAKE_PREFIX_PATH="$qt"
 cmake --build "$build" --parallel "${SUNG_BUILD_JOBS:-8}"
 
 say "Python runtime with the resolver"
@@ -116,6 +125,7 @@ say "ffmpeg"
 # one of them missing has to send the build back, because skipping it only
 # defers the failure to a cp further down.
 ffmpeg_ready() {
+  [ "$(cat "$cache/ffmpeg-out/.musix-target" 2>/dev/null)" = "$deployment_target" ] &&
   [ -x "$cache/ffmpeg-out/bin/ffmpeg" ] && [ -x "$cache/ffmpeg-out/bin/ffprobe" ] &&
     [ -f "$cache/ffmpeg-$ffmpeg_version/COPYING.LGPLv2.1" ] &&
     [ -f "$cache/ffmpeg-$ffmpeg_version.tar.xz" ]
@@ -130,11 +140,20 @@ rm -rf "$stage"; mkdir -p "$stage"
 cp -a "$build/musix.app" "$stage/Musix.app"
 app="$stage/Musix.app"
 
-# Qt first, while the bundle is still only Qt's business.
-macdeployqt "$app" -qmldir="$root/qml" -always-overwrite
+# Qt first, while the bundle is still only Qt's business. Its own macdeployqt,
+# so the frameworks come from the Qt the app was linked against.
+"$qt/bin/macdeployqt" "$app" -qmldir="$root/qml" -always-overwrite
 
 say "Dropping what Musix never loads"
 "$root/scripts/prune-bundle.sh" "$app" "$runtime/bin/python3"
+
+# Qt's binaries are universal. There is no Intel build of anything else in the
+# bundle, so the x86_64 half of Qt is weight nobody can run.
+find "$app/Contents/Frameworks" "$app/Contents/PlugIns" -type f | while read -r f; do
+  archs="$(lipo -archs "$f" 2>/dev/null)" || continue
+  [ "$archs" = "arm64" ] && continue
+  lipo "$f" -thin arm64 -output "$f.arm64" && mv "$f.arm64" "$f"
+done
 
 resources="$app/Contents/Resources"
 mkdir -p "$resources/helper" "$resources/ffmpeg"
@@ -175,49 +194,18 @@ find "$resources/runtime" "$resources/helper" -name __pycache__ -type d -prune \
   "$resources/runtime/lib/python3.11" "$resources/helper" >/dev/null
 
 # The bundle redistributes other people's work, so it carries the full text of
-# every one of their licenses rather than only naming them. macdeployqt copies
-# in Qt and a pile of Homebrew libraries without saying anything about their
-# terms, so those are listed here too. NOTICE says which option was taken for
-# the components offered under more than one.
+# every one of their licenses rather than only naming them.
 #
-# Most texts come out of the keg that supplied the dylib, so they track the
-# version actually bundled. The rest are in ./licenses because the keg ships
-# no copy: Qt's has no license file at all, FreeType's points at a docs/ file
-# it does not install, libjpeg-turbo's cites a README.ijg that is not there,
-# dbus's names LICENSES/AFL-2.1.txt which is also not there, and gettext's is
-# the GPL that covers the tools rather than the LGPL that covers libintl.
+# Qt's own terms are the LGPL-3.0 and the GPL-3.0 it incorporates, kept in
+# ./licenses because Qt's binaries ship no copy. The third-party code compiled
+# into Qt -- harfbuzz, libpng, pcre2, freetype, masm and forty-odd more -- is
+# written out of Qt's own qt_attribution.json files in the pinned module
+# sources, by scripts/qt-licenses.py, which says what it leaves out and why.
 licenses="$resources/licenses"
 rm -rf "$licenses"; mkdir -p "$licenses"
-brew_licenses="
-Qt-LGPL-3.0.txt                     $root/licenses/LGPL-3.0.txt
-Qt-LGPL-3.0-incorporates-GPL-3.0.txt $root/licenses/GPL-3.0.txt
-glib-LGPL-2.1.txt                   /opt/homebrew/opt/glib/LGPL-2.1-or-later.txt
-gettext-libintl-LGPL-2.1.txt        $root/licenses/LGPL-2.1.txt
-dbus-AFL-2.1.txt                    $root/licenses/AFL-2.1.txt
-dbus-COPYING.txt                    /opt/homebrew/opt/dbus/COPYING
-freetype-FTL.txt                    $root/licenses/freetype-FTL.txt
-freetype-LICENSE.txt                /opt/homebrew/opt/freetype/LICENSE.TXT
-libjpeg-turbo-LICENSE.txt           /opt/homebrew/opt/jpeg-turbo/LICENSE.md
-libjpeg-turbo-IJG-README.txt        $root/licenses/libjpeg-turbo-README.ijg.txt
-brotli-MIT.txt                      /opt/homebrew/opt/brotli/LICENSE
-double-conversion-BSD-3-Clause.txt  /opt/homebrew/opt/double-conversion/LICENSE
-graphite2-LICENSE.txt               /opt/homebrew/opt/graphite2/LICENSE
-harfbuzz-MIT.txt                    /opt/homebrew/opt/harfbuzz/COPYING
-icu-Unicode-3.0.txt                 /opt/homebrew/opt/icu4c@78/LICENSE
-libb2-CC0-1.0.txt                   /opt/homebrew/opt/libb2/COPYING
-libpng-libpng-2.0.txt               /opt/homebrew/opt/libpng/LICENSE
-md4c-MIT.txt                        /opt/homebrew/opt/md4c/LICENSE.md
-openssl-Apache-2.0.txt              /opt/homebrew/opt/openssl@3/LICENSE.txt
-pcre2-BSD-3-Clause.txt              /opt/homebrew/opt/pcre2/LICENCE.md
-libwebp-BSD-3-Clause.txt            /opt/homebrew/opt/webp/COPYING
-zstd-BSD-3-Clause.txt               /opt/homebrew/opt/zstd/LICENSE
-"
-while read -r dest src; do
-  [ -n "$dest" ] || continue
-  [ -f "$src" ] || { echo "no license text at $src (for $dest)" >&2; exit 1; }
-  cp "$src" "$licenses/$dest"
-done <<<"$brew_licenses"
-
+cp "$root/licenses/LGPL-3.0.txt" "$licenses/Qt-LGPL-3.0.txt"
+cp "$root/licenses/GPL-3.0.txt" "$licenses/Qt-LGPL-3.0-incorporates-GPL-3.0.txt"
+python3 "$root/scripts/qt-licenses.py" "$cache/qt-src" "$licenses/Qt-third-party.txt" 2>/dev/null
 cp "$root/licenses/MaterialSymbols-LICENSE.txt" "$licenses/"
 cp "$cache/ffmpeg-$ffmpeg_version/COPYING.LGPLv2.1" "$licenses/FFmpeg-LGPL-2.1.txt"
 cp "$runtime/lib/python3.11/LICENSE.txt" "$licenses/CPython-PSF.txt"
@@ -226,61 +214,90 @@ cp "$runtime"/lib/python3.11/site-packages/yt_dlp-*.dist-info/licenses/LICENSE \
 cp "$runtime"/lib/python3.11/site-packages/ytmusicapi-*.dist-info/licenses/LICENSE \
    "$licenses/ytmusicapi-MIT.txt"
 
-# A library that arrives in the bundle without a license text is the failure
-# this is here to catch, so the check is against what is actually there.
+# What the license set above assumes about the bundle, checked against the
+# bundle. Every framework must be Qt's; no loose library may ride along
+# unlicensed; nothing may still point into Homebrew; and each thing
+# qt-licenses.py leaves out must really be absent, or its exclusion was wrong.
 "$runtime/bin/python3" - "$app" "$licenses" <<'AUDIT'
-import sys, pathlib
+import sys, pathlib, subprocess
 app, licenses = pathlib.Path(sys.argv[1]), pathlib.Path(sys.argv[2])
-# Library name -> the license file that covers it. Matched as the longest
-# prefix rather than by stripping a version, because the versions are not one
-# shape: libwebp.7, libpcre2-8.0 and libglib-2.0.0 all end differently.
-covered = {
-    'libb2': 'libb2', 'libbrotlicommon': 'brotli', 'libbrotlidec': 'brotli',
-    'libcrypto': 'openssl', 'libssl': 'openssl', 'libdbus-1': 'dbus',
-    'libdouble-conversion': 'double-conversion', 'libfreetype': 'freetype',
-    'libglib-2.0': 'glib', 'libgthread-2.0': 'glib', 'libgraphite2': 'graphite2',
-    'libharfbuzz': 'harfbuzz', 'libicudata': 'icu', 'libicui18n': 'icu',
-    'libicuuc': 'icu', 'libintl': 'gettext', 'libjpeg': 'libjpeg-turbo',
-    'libmd4c': 'md4c', 'libpcre2-8': 'pcre2', 'libpcre2-16': 'pcre2',
-    'libpng16': 'libpng', 'libsharpyuv': 'libwebp', 'libwebp': 'libwebp',
-    'libwebpdemux': 'libwebp', 'libwebpmux': 'libwebp', 'libzstd': 'zstd',
+c = app / 'Contents'
+problems = []
+for fw in sorted((c / 'Frameworks').glob('*.framework')):
+    if not fw.name.startswith('Qt'):
+        problems.append('%s is bundled and is not part of Qt' % fw.name)
+for lib in sorted((c / 'Frameworks').glob('*.dylib')):
+    problems.append('%s is bundled and nothing in this build licenses it' % lib.name)
+# Premises of the exclusions in scripts/qt-licenses.py.
+absent = {
+    'Frameworks/QtSql.framework': 'SQLite',
+    'Frameworks/QtSpatialAudio.framework': 'Eigen, pffft and Resonance Audio',
+    'Frameworks/QtTest.framework': "QtTest's third-party code",
+    'PlugIns/imageformats/libqtiff.dylib': 'libtiff',
+    'PlugIns/multimedia/libffmpegmediaplugin.dylib': "Qt's FFmpeg and Signalsmith Stretch",
+    'Resources/qml/QtQuick/Controls/Material': 'the Material shadow values',
 }
-names = [p.name for p in licenses.iterdir()]
-missing = []
-for lib in sorted((app / 'Contents/Frameworks').glob('*.dylib')):
-    match = max((c for c in covered if lib.name.startswith(c)), key=len, default=None)
-    key = covered.get(match)
-    if key is None:
-        missing.append('%s is bundled and nothing in this build claims to license it' % lib.name)
-    elif not any(n.startswith(key) for n in names):
-        missing.append('%s needs the %s license text, which is not in licenses/' % (lib.name, key))
-if not any(n.startswith('Qt-') for n in names):
-    missing.append('Qt frameworks are bundled with no Qt license text')
-if missing:
+for path, what in absent.items():
+    if (c / path).exists():
+        problems.append('%s is in the bundle, so %s cannot be left out of the notices' % (path, what))
+for lib in c.rglob('libav*.dylib'):
+    problems.append('%s is in the bundle, so FFmpeg cannot be left out of the notices' % lib.relative_to(c))
+for binary in [c / 'MacOS/musix'] + list((c / 'Frameworks').rglob('*')) + list((c / 'PlugIns').rglob('*.dylib')):
+    if binary.is_file() and not binary.is_symlink():
+        out = subprocess.run(['otool', '-L', str(binary)], capture_output=True, text=True).stdout
+        if '/opt/homebrew' in out:
+            problems.append('%s still links something in /opt/homebrew' % binary.relative_to(c))
+for need in ('Qt-LGPL-3.0.txt', 'Qt-third-party.txt'):
+    if not (licenses / need).is_file():
+        problems.append('%s is missing from licenses/' % need)
+if problems:
     print('Licensing gap:', file=sys.stderr)
-    for m in missing:
+    for m in problems:
         print('  ' + m, file=sys.stderr)
     sys.exit(1)
-print('%d license texts cover every bundled library' % len(names))
+print('%d license texts; every framework is Qt, nothing unlicensed rides along' %
+      len(list(licenses.iterdir())))
 AUDIT
 
-# LGPL redistribution means the corresponding source has to be available.
-# ffmpeg, glib and libintl are LGPL-2.1, whose section 6 has no equivalent of
-# GPLv3 6(d), so their source travels with the release rather than being
-# pointed at. Qt is LGPL-3.0 and NOTICE gives the download.qt.io URL instead.
+# One binary built for a newer macOS is enough to keep the app from launching
+# on anything older, and it fails at load time with no message at all. Every
+# Mach-O in the bundle is checked against the declared floor, and Info.plist
+# has to say the same thing, so Finder refuses cleanly below it instead.
+"$runtime/bin/python3" - "$app" "$deployment_target" <<'FLOOR'
+import sys, pathlib, subprocess, plistlib
+app, floor = pathlib.Path(sys.argv[1]), sys.argv[2]
+key = lambda v: tuple(int(x) for x in v.split('.'))
+newest, over = '0', []
+for f in sorted(app.rglob('*')):
+    if not f.is_file() or f.is_symlink():
+        continue
+    with open(f, 'rb') as fh:
+        if fh.read(4) not in (b'\xcf\xfa\xed\xfe', b'\xca\xfe\xba\xbe'):
+            continue
+    out = subprocess.run(['otool', '-l', str(f)], capture_output=True, text=True).stdout.split()
+    for i, word in enumerate(out):
+        if word == 'minos' or (word == 'version' and 'LC_VERSION_MIN_MACOSX' in out[max(0, i - 6):i]):
+            m = out[i + 1]
+            newest = max(newest, m, key=key)
+            if key(m) > key(floor):
+                over.append('%s  %s' % (m, f.relative_to(app)))
+            break
+declared = plistlib.loads((app / 'Contents/Info.plist').read_bytes()).get('LSMinimumSystemVersion')
+if declared != floor:
+    over.append('Info.plist says LSMinimumSystemVersion %s' % declared)
+if over:
+    print('Built for a newer macOS than %s:' % floor, file=sys.stderr)
+    for o in over:
+        print('  ' + o, file=sys.stderr)
+    sys.exit(1)
+print('every binary runs on macOS %s; the newest requirement found is %s' % (floor, newest))
+FLOOR
+
+# FFmpeg is LGPL-2.1, whose section 6 has no equivalent of GPLv3 6(d), so its
+# source travels with the release rather than being pointed at. Qt is
+# LGPL-3.0 and NOTICE gives the download.qt.io URL for it instead.
 cp "$cache/ffmpeg-$ffmpeg_version.tar.xz" \
    "$root/Musix-$version-ffmpeg-$ffmpeg_version-source.tar.xz"
-lgpl="$cache/lgpl-sources"
-lgpl_ready() { [ -f "$lgpl/glib-$glib_version-source.tar.xz" ] &&
-               [ -f "$lgpl/gettext-$gettext_version-source.tar.xz" ]; }
-if ! lgpl_ready; then
-  "$root/scripts/fetch-lgpl-sources.sh"
-  lgpl_ready || { echo "LGPL source archives still missing after fetching" >&2; exit 1; }
-fi
-cp "$lgpl/glib-$glib_version-source.tar.xz" \
-   "$root/Musix-$version-glib-$glib_version-source.tar.xz"
-cp "$lgpl/gettext-$gettext_version-source.tar.xz" \
-   "$root/Musix-$version-gettext-$gettext_version-source.tar.xz"
 
 say "Signing (ad-hoc)"
 # Unsigned arm64 code will not run at all; this is not notarization.
@@ -359,14 +376,12 @@ hdiutil create -volname "Musix $version" -srcfolder "$stage" -ov -format UDZO \
 
 say "Artifacts"
 # These go up together: the DMG, and the source the LGPL entitles its
-# recipients to for each of the three LGPL-2.1 libraries in it. SHA256SUMS.txt
+# recipients to for the one LGPL-2.1 component in it, ffmpeg. SHA256SUMS.txt
 # is written last and covers the others, so it is also the list of what the
 # release attaches.
 artifacts=(
   "$dmg"
   "$root/Musix-$version-ffmpeg-$ffmpeg_version-source.tar.xz"
-  "$root/Musix-$version-glib-$glib_version-source.tar.xz"
-  "$root/Musix-$version-gettext-$gettext_version-source.tar.xz"
 )
 printf 'commit  %s\n' "$commit"
 for f in "${artifacts[@]}"; do

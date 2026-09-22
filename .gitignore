@@ -28,6 +28,7 @@
 !/helper/requirements.txt
 /scripts/*
 !/scripts/*.sh
+!/scripts/*.py
 /tests/*
 !/tests/*.cpp
 !/tests/*.h
@@ -42,14 +43,9 @@
 !/assets/icons/*.svg
 /licenses/*
 !/licenses/MaterialSymbols-LICENSE.txt
-# License texts the bundle needs and no Homebrew keg ships, so package-dmg.sh
-# takes them from here rather than from an installed copy.
-!/licenses/AFL-2.1.txt
+# Qt's own license texts, which its binaries do not ship.
 !/licenses/GPL-3.0.txt
-!/licenses/LGPL-2.1.txt
 !/licenses/LGPL-3.0.txt
-!/licenses/freetype-FTL.txt
-!/licenses/libjpeg-turbo-README.ijg.txt
 
 # Private state, credentials, build products and editor/assistant files.
 **/__pycache__/

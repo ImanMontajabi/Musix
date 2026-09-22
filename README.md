@@ -44,7 +44,7 @@ Full documentation is in the **[Musix guide](docs/guide.md)**.
 ## Requirements
 
 - **Apple Silicon** (M1 or later). There is no Intel build.
-- **macOS 27 (Tahoe) or later.** The released binary is built against the macOS 27 SDK, so earlier versions refuse to launch it.
+- **macOS 14 (Sonoma) or later.** Every binary in the app is built for macOS 14, and the build refuses to ship one that is not.
 
 Nothing else. Qt, Python, the YouTube resolver and FFmpeg all travel inside the app, and it keeps the resolver up to date on its own.
 
@@ -107,7 +107,7 @@ Your data lives in `~/Library/Application Support/Sung/sung/`, settings in `~/Li
 
 **"Musix is damaged and can't be opened."** The download is corrupt, or the quarantine flag was cleared oddly. Verify the DMG against `SHA256SUMS.txt` on the release and download it again.
 
-**The app will not open at all and gives no message.** Check your macOS version; the released build needs macOS 27 or later.
+**macOS says the app needs a newer version of macOS.** Musix needs macOS 14 or later. Musix 0.12.0 needed macOS 27 by accident; that was fixed in 0.13.0.
 
 **A song will not play.** Playback depends on YouTube's availability, your region and the network. Musix buffers a song before playing it, so starting can take a moment. When YouTube changes how audio is served, the app refreshes its own resolver in the background — at most once a day, and immediately after a failure — keeping the last working version if an update is broken. There is nothing to run by hand.
 
@@ -126,7 +126,7 @@ Your data lives in `~/Library/Application Support/Sung/sung/`, settings in `~/Li
 ./scripts/test.sh    # ctest plus the Python suites
 ```
 
-`./scripts/package-dmg.sh` produces the distributable `Musix-<version>-arm64.dmg`: a Release build, `macdeployqt`, the unused Qt plugins pruned, a relocatable Python carrying the resolver, an LGPL FFmpeg from `./scripts/build-ffmpeg.sh`, every bundled library's license text, and an ad-hoc signature. It refuses to build from a dirty tree, prints the commit it is building, and checks the signature still verifies after the app has been used. Two builds of the same commit produce a byte-identical bundle.
+`./scripts/package-dmg.sh` produces the distributable `Musix-<version>-arm64.dmg`: a Release build against Qt's official binaries, `macdeployqt`, the unused Qt plugins pruned, a relocatable Python carrying the resolver, an LGPL FFmpeg from `./scripts/build-ffmpeg.sh`, every bundled library's license text, and an ad-hoc signature. It refuses to build from a dirty tree, prints the commit it is building, and checks the signature still verifies after the app has been used. Two builds of the same commit produce a byte-identical bundle.
 
 Architecture and conventions are in [CLAUDE.md](CLAUDE.md).
 
@@ -134,7 +134,7 @@ Architecture and conventions are in [CLAUDE.md](CLAUDE.md).
 
 macOS releases are cut from a clean tree; `package-dmg.sh` refuses to run otherwise, so that every DMG traces back to one commit.
 
-1. Commit everything. Bump `project(Musix VERSION ...)` in `CMakeLists.txt` and commit that too — the version names the DMG, the volume and the three source tarballs.
+1. Commit everything. Bump `project(Musix VERSION ...)` in `CMakeLists.txt` and commit that too — the version names the DMG, the volume and the FFmpeg source tarball.
 2. Build:
 
    ```bash
@@ -143,7 +143,7 @@ macOS releases are cut from a clean tree; `package-dmg.sh` refuses to run otherw
 
    It prints the commit it is building, and finishes by printing the path, size and SHA-256 of every artifact, and writing `SHA256SUMS.txt` covering them. Keep that output; the checksums go in the release notes.
 
-   The build fetches the LGPL corresponding source for glib and gettext the first time, into `build-packaging/lgpl-sources/`, and reuses it after that. `scripts/fetch-lgpl-sources.sh` pins every download by checksum and fails if Homebrew's glib patch stops applying to the pinned release.
+   The first run fetches The Qt Company's official Qt 6.11.2 binaries and its pinned module sources into `build-packaging/` with `scripts/fetch-qt.sh`, and reuses them after that. The app is built against those rather than Homebrew's Qt, because Homebrew's bottles require the macOS they were built on. The build fails if any binary in the bundle needs a newer macOS than `CMAKE_OSX_DEPLOYMENT_TARGET`.
 3. Test the DMG the way somebody receiving it would, from Finder rather than a terminal — open the image, drag Musix to Applications, launch it, and walk through **Privacy & Security → Open Anyway** once. A quarantined copy is the only way to see what a first launch actually does:
 
    ```bash
@@ -166,13 +166,11 @@ macOS releases are cut from a clean tree; `package-dmg.sh` refuses to run otherw
    gh release create v<version> \
      Musix-<version>-arm64.dmg \
      Musix-<version>-ffmpeg-<ffmpeg version>-source.tar.xz \
-     Musix-<version>-glib-<glib version>-source.tar.xz \
-     Musix-<version>-gettext-<gettext version>-source.tar.xz \
      SHA256SUMS.txt \
      --title "Musix v<version>" --notes-file notes.md
    ```
 
-   The three tarballs are not optional. ffmpeg, glib and libintl are all LGPL-2.1, whose section 6 requires the corresponding source be offered from the same place as the binary, and the release page is that place. Qt is LGPL-3.0 and is met by the `download.qt.io` URL in `NOTICE` instead, which GPLv3 section 6(d) allows. The notes must carry the checksums and the one-time **Open Anyway** step.
+   The FFmpeg tarball is not optional. FFmpeg is LGPL-2.1, whose section 6 requires the corresponding source be offered from the same place as the binary, and the release page is that place. Qt is LGPL-3.0 and is met by the `download.qt.io` URL in `NOTICE` instead, which GPLv3 section 6(d) allows. The notes must carry the checksums and the one-time **Open Anyway** step.
 
 Run automated tests:
 

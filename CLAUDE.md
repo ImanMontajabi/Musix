@@ -14,7 +14,9 @@ Musix is a native Material 3 music player built with C++20/Qt 6 (Quick/QML) that
 ./scripts/run.sh     # runs ./build/sung with SUNG_HELPER/SUNG_PYTHON pointed at the checkout
 ```
 
-On macOS, `./scripts/package-dmg.sh` builds the distributable `Musix-<version>-arm64.dmg`: a Release build, `macdeployqt`, then a relocatable Python carrying the resolver and an LGPL ffmpeg from `./scripts/build-ffmpeg.sh`, ad-hoc signed. Both payloads are downloaded and built once into the ignored `build-packaging/` and reused after that.
+On macOS, `./scripts/package-dmg.sh` builds the distributable `Musix-<version>-arm64.dmg`: a Release build against The Qt Company's official Qt binaries (fetched by `scripts/fetch-qt.sh`, not Homebrew's), `macdeployqt`, then a relocatable Python carrying the resolver and an LGPL ffmpeg from `./scripts/build-ffmpeg.sh`, ad-hoc signed. The payloads are downloaded and built once into the ignored `build-packaging/` and reused after that. Dev builds (`build.sh`, `test.sh`) still use Homebrew's Qt.
+
+The bundle's minimum macOS is `CMAKE_OSX_DEPLOYMENT_TARGET` in `CMakeLists.txt` (14.0), and it is a promise only because every binary keeps it: Homebrew bottles carry the macOS they were built on as their minimum, which is why the DMG does not use them, and `package-dmg.sh` fails if any Mach-O in the bundle needs more. Third-party notices for the code compiled into Qt come from `scripts/qt-licenses.py`, which reads Qt's own `qt_attribution.json` files and names a reason for everything it leaves out; the build checks each of those premises.
 
 Pass extra CMake args through `build.sh`, e.g. `./scripts/build.sh -DSUNG_DIAGNOSTICS=ON`. `SUNG_BUILD_JOBS` controls parallelism (default 4).
 
@@ -84,8 +86,10 @@ already cost something.
   and `~/Library/Preferences/com.sung.sung.plist` first, restore both
   afterwards, `killall cfprefsd` so the restored plist is re-read, and confirm
   with `shasum -a 256` that they match the backup.
-- **Never install anything into `build-packaging/` or the bundled runtime.**
-  Those caches are what ships. A `pip install` into `build-packaging/
+- **Never install anything into `build-packaging/` or the bundled runtime** by
+  hand; only the build scripts write there (`build-packaging/tools/` holds the
+  build's own tools, such as the Qt downloader, and is never bundled). Those
+  caches are what ships. A `pip install` into `build-packaging/
   python-runtime` for a one-off analysis put Pillow in the DMG, unlisted in
   `helper/requirements.txt` and unmentioned in `NOTICE`. Make a throwaway venv
   in the scratchpad instead. The build now refuses a runtime whose packages
