@@ -95,11 +95,13 @@ void WindowChrome::roundCorners(QQuickWindow *window) {
   connect(window, &QWindow::visibilityChanged, this, apply);
   // And once more after the first frame: at this point the scene has drawn
   // nothing, so a shadow cut from its alpha now would be cut from nothing.
-  auto *first = new QMetaObject::Connection;
-  *first = connect(window, &QQuickWindow::frameSwapped, this, [apply, first] {
-    apply();
-    disconnect(*first);
-    delete first;
-  });
+  //
+  // frameSwapped comes from the render thread, so each frame queues a call
+  // here. A hand-rolled disconnect inside the slot ran too late: several
+  // frames were already queued, the first call freed the connection, and the
+  // next one disconnected through freed memory and crashed. A single-shot
+  // connection is cut when the signal fires, on the emitting thread, so only
+  // one call is ever queued.
+  connect(window, &QQuickWindow::frameSwapped, this, apply, Qt::SingleShotConnection);
   apply();
 }
