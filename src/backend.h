@@ -699,6 +699,7 @@ private:
   void load();
   void recordHistory();
   void notifyTrack();
+  static QStringList playableContainers();
   void resolveCurrent(bool retry = false);
   QVariantMap snapshot() const;
   void restore(const QVariantMap &);

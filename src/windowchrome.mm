@@ -1,4 +1,5 @@
 #include "windowchrome.h"
+#include <QPointer>
 #include <QWindow>
 #import <AppKit/AppKit.h>
 
@@ -81,7 +82,11 @@ void WindowChrome::roundCorners(QQuickWindow *window) {
   // The shadow is cut from that alpha, and AppKit only recomputes it when
   // asked, so it has to be invalidated again every time the window resizes or
   // a theme change repaints it -- otherwise the shadow keeps the old outline.
-  const auto apply = [window] {
+  // Held weakly: a queued call can outlive the window it was queued for, and
+  // the render-thread race that crashed this code once is not the only way.
+  const auto apply = [window = QPointer<QQuickWindow>(window)] {
+    if (!window)
+      return;
     auto native = nativeWindow(window);
     if (!native)
       return;

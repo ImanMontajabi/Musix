@@ -128,6 +128,30 @@ class CatalogTests(unittest.TestCase):
         for unknown in ('','lossless',None):
             self.assertEqual(catalog.audio_format(unknown),standard)
 
+    def test_playable_containers_are_never_left(self):
+        # macOS's player cannot open WebM, so when the app names what it can
+        # play, no choice in the chain may fall outside it -- not the capped
+        # one, not the fallback, not the last resort.
+        for quality in ('standard','saver'):
+            for fallback in (False,True):
+                choices=catalog.audio_format(quality,fallback,['m4a']).split('/')
+                self.assertTrue(all('[ext=m4a]' in c for c in choices), choices)
+        # Data saver still prefers something under the cap first.
+        self.assertTrue(catalog.audio_format('saver',False,['m4a']).startswith('bestaudio[ext=m4a][abr<=80]/'))
+        # Naming nothing leaves the Linux behaviour exactly as it was.
+        for quality in ('standard','saver'):
+            for fallback in (False,True):
+                self.assertEqual(catalog.audio_format(quality,fallback,None),catalog.audio_format(quality,fallback))
+                self.assertEqual(catalog.audio_format(quality,fallback,[]),catalog.audio_format(quality,fallback))
+
+    def test_playable_reaches_ytdlp(self):
+        from unittest.mock import patch, MagicMock
+        downloader=MagicMock();downloader.__enter__.return_value=downloader
+        downloader.extract_info.return_value={'url':'https://example.invalid/a','duration':1}
+        with patch.dict('sys.modules',{'yt_dlp':MagicMock(YoutubeDL=MagicMock(return_value=downloader))}) as mods:
+            catalog.run({'op':'resolve','id':'abcdefghijk','quality':'standard','playable':['m4a']})
+            self.assertEqual(mods['yt_dlp'].YoutubeDL.call_args[0][0]['format'],catalog.audio_format('standard',False,['m4a']))
+
     def test_streaming_quality_reaches_ytdlp(self):
         from unittest.mock import patch, MagicMock
         for quality,expected in [('saver',catalog.audio_format('saver')),('standard',catalog.audio_format('standard'))]:

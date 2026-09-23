@@ -345,8 +345,18 @@ def local_files(req):
 # saver caps the bitrate instead, and YouTube's next Opus rung down is about
 # 67 kbps, a little over half the download. A retry after a failed stream
 # swaps the container, so it genuinely tries something else.
-def audio_format(quality, fallback=False):
+def audio_format(quality, fallback=False, playable=None):
     cap = '[abr<=80]' if quality == 'saver' else ''
+    if playable:
+        # The app named the only containers its player can open. macOS's player
+        # cannot open WebM at all, so every choice has to stay inside what was
+        # named, or the download is wasted and the track fails to start.
+        containers = tuple(playable)
+        choices = ['bestaudio[ext=%s]%s' % (c, cap) for c in containers]
+        if cap:
+            choices += ['worstaudio[ext=%s]' % c for c in containers]
+        choices += ['bestaudio[ext=%s]' % c for c in containers]
+        return '/'.join(choices)
     containers = ('m4a', 'webm') if fallback else ('webm', 'm4a')
     choices = ['bestaudio[ext=%s]%s' % (c, cap) for c in containers]
     choices.append('bestaudio' + cap)
@@ -382,7 +392,7 @@ def run(req):
         if not re.fullmatch(r'[A-Za-z0-9_-]{11}', vid):
             raise ValueError('Invalid YouTube video ID')
         opts = {'quiet': True, 'noprogress': True, 'no_warnings': True, 'noplaylist': True,
-                'format': audio_format(req.get('quality', 'standard'), req.get('fallback')), 'socket_timeout': 18,
+                'format': audio_format(req.get('quality', 'standard'), req.get('fallback'), req.get('playable')), 'socket_timeout': 18,
                 'retries': 2, 'extractor_retries': 2, 'cachedir': False,
                 'js_runtimes': {'node': {}}, 'skip_download': True}
         if req.get('cookies'):

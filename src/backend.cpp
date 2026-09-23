@@ -646,6 +646,18 @@ void Backend::recoverStream() {
   const auto token=m_trackToken;
   QTimer::singleShot(0,this,[this,token]{if(m_wantPlay && token==m_trackToken){m_media().stop();m_media().setSource({});resolveCurrent(true);}});
 }
+// The audio containers this platform's Qt player can open, for the helper to
+// choose among; empty means any. Qt's player on macOS is AVFoundation, which
+// cannot open WebM: left to choose, the helper fetched Opus-in-WebM, the load
+// failed, and the one retry kept for real failures went on fetching the M4A
+// instead -- and the next track was pre-buffered as WebM, unplayable.
+QStringList Backend::playableContainers() {
+#ifdef Q_OS_MACOS
+  return {"m4a"};
+#else
+  return {};
+#endif
+}
 void Backend::resolveCurrent(bool retry) {
   if(isServerSource(current().value("source"))){
     cancelPreparation();cancel("play");m_recovering=false;m_resolving=true;
@@ -729,7 +741,7 @@ void Backend::resolveCurrent(bool retry) {
   m_audioCache=audioDirectory();
   if(!m_audioCache||!m_audioCache->isValid()){m_resolving=false;m_wantPlay=false;notifyError("Could not create the audio buffer.");emit playbackChanged();return;}
   request("play", {{"op", "buffer"}, {"id", id}, {"cookies", cookies()}, {"quality", streamingQuality()},
-                    {"fallback",m_recoveryAttempts>0},{"directory",m_audioCache->path()}},
+                    {"fallback",m_recoveryAttempts>0},{"directory",m_audioCache->path()},{"playable",playableContainers()}},
           apply,m_audioCache);
 }
 void Backend::enqueue(const QVariantMap &item, bool next) {
@@ -1991,7 +2003,7 @@ void Backend::updatePreparation(){
   m_preparationAttempt=nextId;const auto generation=m_preparationGeneration;
   auto directory=audioDirectory();if(!directory||!directory->isValid())return;
   m_preparedDirectory=directory;
-  request("prepare",{{"op","buffer"},{"id",nextId},{"directory",directory->path()},{"cookies",cookies()},{"quality",streamingQuality()}},[this,generation,nextId,directory](const QVariantMap &data){
+  request("prepare",{{"op","buffer"},{"id",nextId},{"directory",directory->path()},{"cookies",cookies()},{"quality",streamingQuality()},{"playable",playableContainers()}},[this,generation,nextId,directory](const QVariantMap &data){
     if(generation!=m_preparationGeneration||m_preparedId!=nextId)return;
     const QFileInfo file(data.value("file").toString());
     // Preload failures and oversized/direct streams leave normal playback in charge.
