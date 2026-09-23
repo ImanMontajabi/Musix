@@ -308,7 +308,7 @@ public:
   QString coverPlayId() const { return m_coverPlayId; }
   bool resolving() const { return m_resolving; }
   bool buffering() const { return m_wantPlay && (m_resolving || m_media().mediaStatus()==QMediaPlayer::LoadingMedia || m_media().mediaStatus()==QMediaPlayer::StalledMedia || m_media().mediaStatus()==QMediaPlayer::BufferingMedia); }
-  qint64 position() const { return m_media().source().isEmpty() ? m_savedPosition : m_media().position(); }
+  qint64 position() const { return m_media().source().isEmpty() ? m_savedPosition : m_restorePosition>0&&!m_media().isSeekable() ? m_restorePosition : m_media().position(); }
   qint64 duration() const {
     return m_media().duration() > 0
                ? m_media().duration()

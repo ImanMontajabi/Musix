@@ -961,6 +961,9 @@ void Backend::seek(qint64 p) {
     if(total<=0 || total-target>window){endCrossfade(false);clearSpare();}
   }
   if(m_media().source().isEmpty()){m_savedPosition=target;emit positionChanged();}
+  // AVFoundation drops a seek made before the item is ready, so one made while
+  // loading waits for seekable with the rest of the deferred seeks.
+  else if(!m_media().isSeekable()&&m_media().mediaStatus()==QMediaPlayer::LoadingMedia)m_restorePosition=target;
   else m_media().setPosition(target);
   emit positionChanged();
   emit seeked(target);
