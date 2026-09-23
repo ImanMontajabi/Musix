@@ -5,7 +5,7 @@ cmake_minimum_required(VERSION 3.24)
 # Left unset it silently became the build machine's own macOS, which put the
 # floor at 27 and shut out everyone else.
 set(CMAKE_OSX_DEPLOYMENT_TARGET "14.0" CACHE STRING "Oldest macOS the app runs on")
-project(Musix VERSION 0.13.0 LANGUAGES CXX)
+project(Musix VERSION 0.13.1 LANGUAGES CXX)
 # The title-bar blending in src/windowchrome.mm is the only Objective-C++
 # in the tree, and only macOS compiles it.
 if(APPLE)

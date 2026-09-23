@@ -158,7 +158,7 @@ macOS releases are cut from a clean tree; `package-dmg.sh` refuses to run otherw
    git push origin main --follow-tags
    ```
 
-   V0.12.0 was tagged at a commit five behind the one its DMG was built from, so the published source did not produce the published binary. The build prints the hash for this reason; use it. That tag is also the only one spelled with a capital V; everything from v0.13.0 on is lowercase.
+   V0.12.0 and V0.13.0 were both tagged at commits behind the ones their DMGs were built from — V0.13.0's tag is at `6403e0b`, which still builds 0.12.0; its DMG came from `0cb3183` — so the published source did not produce the published binary. The build prints the hash for this reason; use it.
 
 5. Create the release with every artifact attached:
 
