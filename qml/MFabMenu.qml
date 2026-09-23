@@ -87,7 +87,8 @@ Item {
             add: Transition {
                 enabled: app.motion
                 SequentialAnimation {
-                    PauseAnimation { duration: Math.min(3, ViewTransition.index) * 40 }
+                    // A positioner can report an index of -1, and a negative pause is an error.
+                    PauseAnimation { duration: Math.max(0, Math.min(3, ViewTransition.index)) * 40 }
                     NumberAnimation {
                         property: "y"; from: ViewTransition.destination.y + (root.downward ? -16 : 16)
                         duration: Theme.springFastSpatialMs

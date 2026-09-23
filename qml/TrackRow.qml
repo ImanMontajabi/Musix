@@ -58,7 +58,7 @@ ItemDelegate {
     hoverEnabled: true
     enabled: track.available !== false
     opacity: enabled ? 1 : Theme.disabledContentOpacity
-    Accessible.description: selectable ? "Ctrl-click to toggle selection, Shift-click for a range. Drag selected songs to move them." : ""
+    Accessible.description: selectable ? (Keymap.mac ? "Command-click" : "Ctrl-click")+" to toggle selection, Shift-click for a range. Drag selected songs to move them." : ""
     Accessible.name: (track.title || "") + ", " + (track.artist || "")
     Accessible.selected: selected
     // Material's reveal list uncovers a button rather than a coloured sheet:

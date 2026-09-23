@@ -23,12 +23,13 @@ ToolTip {
     padding: 16
     implicitWidth: Math.min(312, Math.max(200, bodyColumn.implicitWidth + padding*2))
 
-    Accessible.role: Accessible.ToolTip
-    Accessible.name: subhead
-    Accessible.description: supporting
-
     contentItem: Column {
         id: bodyColumn
+        // A ToolTip is a Popup, not an Item, so the attached property only
+        // takes on what it shows.
+        Accessible.role: Accessible.ToolTip
+        Accessible.name: tip.subhead
+        Accessible.description: tip.supporting
         spacing: 4
         SungText {
             objectName: "richTooltipSubhead"
