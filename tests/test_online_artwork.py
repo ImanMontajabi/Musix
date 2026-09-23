@@ -14,6 +14,10 @@ class OnlineArtworkTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory(); self.addCleanup(self.temp.cleanup)
         self.root = Path(self.temp.name)
+        # A lookup Apple cannot answer falls through to MusicBrainz, which was a
+        # real request -- and a retry whenever it was slow or rate-limited. The
+        # archive knows nothing here unless a case says otherwise.
+        archive = patch.object(art, 'fetch_cover', return_value=b'{"recordings":[]}'); archive.start(); self.addCleanup(archive.stop)
         self.track = dict(title='A Song', artist='An Artist', album='An Album', seconds=200,
                           artworkCache=str(self.root/'cache'), scratch=str(self.root/'scratch'))
         self.cover = 'https://is1-ssl.mzstatic.com/image/thumb/Music/ab/cd/100x100bb.jpg'

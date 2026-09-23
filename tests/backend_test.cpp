@@ -32,6 +32,15 @@ private slots:
     qputenv("XDG_CACHE_HOME", storage.path().toUtf8());
     QCoreApplication::setApplicationName("sung-test");
     QCoreApplication::setOrganizationName("SungTests");
+#ifdef Q_OS_MACOS
+    // macOS ignores the XDG variables above, so the profile would otherwise
+    // live on between runs and each run would start with the last one's
+    // library. Only a location named for the test organisation is wiped.
+    QSettings().clear();QSettings().sync();
+    for(const auto location:{QStandardPaths::AppDataLocation,QStandardPaths::CacheLocation}){
+      const auto path=QStandardPaths::writableLocation(location);if(path.contains("SungTests"))QDir(path).removeRecursively();
+    }
+#endif
   }
   void sleepFadeRestoresUserVolume() {
     Backend b;b.setSleepFade(true);b.setVolume(.6);b.setSleep(15);
@@ -96,7 +105,12 @@ private slots:
     b.setCurrentArtworkFit(true);QVERIFY(b.currentArtworkFit());auto sibling=song;sibling["id"]="local_sibling";QVERIFY(b.artworkFits(sibling));sibling["album"]="Other album";QVERIFY(!b.artworkFits(sibling));
     b.save();{Backend copy;copy.setWatchMusicFolders(false);QCOMPARE(copy.sessions().size(),1);QVERIFY(copy.artworkFits(song));}
     b.clearQueue();QVERIFY(b.restoreSession(id));QTRY_VERIFY_WITH_TIMEOUT(b.playing()&&b.position()>=12000,5000);QVERIFY(b.position()<14000);QCOMPARE(b.playbackRate(),1.25);
-    b.setMotion(false);QTRY_COMPARE_WITH_TIMEOUT(b.m_decodeRate,22050,5000);QVERIFY(!b.trackDetails(song).isEmpty());
+    // The decode rate is read from QAudioBufferOutput, which Qt's darwin
+    // backend never feeds.
+#ifndef Q_OS_MACOS
+    b.setMotion(false);QTRY_COMPARE_WITH_TIMEOUT(b.m_decodeRate,22050,5000);
+#endif
+    QVERIFY(!b.trackDetails(song).isEmpty());
     b.m_settings.setValue("pauseOnDisconnect",true);b.m_outputDescription="Test headphones";
     b.inspectOutputPorts({QVariantMap{{"description","Test headphones"},{"active_port","analog-output-headphones"}}});QVERIFY(b.playing());
     b.inspectOutputPorts({QVariantMap{{"description","Test headphones"},{"active_port","analog-output-speaker"}}});QVERIFY(!b.playing());
@@ -282,6 +296,9 @@ private slots:
     AudioLevels decay;decay.process(pcm(100,.45,QAudioFormat::Float));decay.takeLevels();for(int i=0;i<3;++i){decay.process(pcm(100,0,QAudioFormat::Float));decay.takeLevels();}QCOMPARE(decay.takeLevels(),QVariantList({0.,0.,0.,0.,0.}));
   }
   void audioBandsFollowPlayback() {
+#ifdef Q_OS_MACOS
+    QSKIP("Qt's darwin backend never feeds QAudioBufferOutput, so there are no bands to follow");
+#endif
     QTemporaryDir music;const auto path=music.filePath("bands.wav");
     QProcess encode;encode.start("ffmpeg",{"-nostdin","-v","error","-f","lavfi","-i","aevalsrc=if(lt(t\\,1.5)\\,0.45*sin(2*PI*100*t)\\,if(lt(t\\,3)\\,0\\,if(lt(t\\,4.5)\\,0.45*sin(2*PI*3500*t)\\,0))):s=48000:d=6","-c:a","pcm_s16le",path});QVERIFY(encode.waitForFinished(10000));QCOMPARE(encode.exitCode(),0);
     Backend b;b.setVolume(0);b.setMotion(true);b.setUiActive(true);b.setAutoplay(false);b.setPrepareNext(false);b.clearQueue();
@@ -403,14 +420,16 @@ private slots:
     const auto helper=QFileInfo(QString::fromUtf8(qgetenv("SUNG_FIXTURE_HELPER"))).dir().absoluteFilePath("../helper/catalog.py");
     qputenv("SUNG_HELPER",helper.toUtf8());qputenv("SUNG_PYTHON","/usr/bin/python3");
     const auto restore=qScopeGuard([&]{qputenv("SUNG_HELPER",oldHelper);qputenv("SUNG_PYTHON",oldPython);});
-    QTemporaryDir music;
+    // The app plays the canonical path, and on macOS the temp directory sits
+    // behind /var -> /private/var.
+    QTemporaryDir music;const QDir root(QFileInfo(music.path()).canonicalFilePath());
     for(const auto &name:{"First song.flac","Second song.mp3"}){
-      QProcess encode;encode.start("ffmpeg",{"-nostdin","-v","error","-f","lavfi","-i","anullsrc=r=44100:cl=mono","-t","12","-metadata","title=Local melody","-metadata","artist=Fixture artist","-metadata","album=Fixture album",music.filePath(name)});
+      QProcess encode;encode.start("ffmpeg",{"-nostdin","-v","error","-f","lavfi","-i","anullsrc=r=44100:cl=mono","-t","12","-metadata","title=Local melody","-metadata","artist=Fixture artist","-metadata","album=Fixture album",root.filePath(name)});
       QVERIFY(encode.waitForFinished(10000));QCOMPARE(encode.exitCode(),0);
     }
-    QFile lyrics(music.filePath("First song.lrc"));QVERIFY(lyrics.open(QIODevice::WriteOnly));lyrics.write("[00:01] A quiet morning\n[00:03] Another line\n[00:05] A QUIET evening");lyrics.close();
+    QFile lyrics(root.filePath("First song.lrc"));QVERIFY(lyrics.open(QIODevice::WriteOnly));lyrics.write("[00:01] A quiet morning\n[00:03] Another line\n[00:05] A QUIET evening");lyrics.close();
     Backend b;b.setVolume(0);b.setLyricsFallback(false);b.clearQueue();b.setAutoplay(false);
-    const QVariantList urls{QUrl::fromLocalFile(music.filePath("First song.flac")),QUrl::fromLocalFile(music.filePath("Second song.mp3"))};
+    const QVariantList urls{QUrl::fromLocalFile(root.filePath("First song.flac")),QUrl::fromLocalFile(root.filePath("Second song.mp3"))};
     b.importLocalFiles(urls);QTRY_VERIFY_WITH_TIMEOUT(!b.importingLocal(),15000);b.library("files");QCOMPARE(b.results()->count(),2);
     auto first=b.results()->get(0),second=b.results()->get(1);QVERIFY(first.value("videoId").toString().isEmpty());QCOMPARE(first.value("artist").toString(),"Fixture artist");QCOMPARE(first.value("seconds").toInt(),12);
     b.importLocalFiles(urls);QTRY_VERIFY_WITH_TIMEOUT(!b.importingLocal(),10000);QCOMPARE(b.results()->count(),2);
@@ -421,12 +440,12 @@ private slots:
     b.setLyricOffset(250);b.seekLyric(matches.last().toMap().value("start").toLongLong());QCOMPARE(b.position(),4750);
     b.playKeepingQueue(second);QTRY_VERIFY(b.playing()&&b.media()->source()==urls[1].toUrl());QCOMPARE(b.queue()->count(),3);QCOMPARE(b.current().value("id"),second.value("id"));
     b.moveQueueRows({0},3);b.undo();QVERIFY(b.playing());b.pause();b.save();b.load();QCOMPARE(b.m_localTracks.size(),2);
-    QFile exported(music.filePath("library.json"));b.exportLibrary(QUrl::fromLocalFile(exported.fileName()));QVERIFY(exported.open(QIODevice::ReadOnly));QVERIFY(exported.readAll().contains("localTracks"));
-    b.stop();QVERIFY(QFile::rename(music.filePath("First song.flac"),music.filePath("Moved.flac")));b.playItem(first);QVERIFY(!b.playing());QVERIFY(b.error().contains("missing"));QVERIFY(!b.m_processes.contains("play"));
-    b.locateLocalFile(QUrl::fromLocalFile(music.filePath("Moved.flac")),first.value("id").toString());QTRY_VERIFY_WITH_TIMEOUT(!b.importingLocal(),10000);QCOMPARE(b.current().value("id"),first.value("id"));QCOMPARE(b.current().value("localPath").toString(),music.filePath("Moved.flac"));
-    b.retry();QTRY_VERIFY(b.playing());b.pause();b.openPlaylist(playlist);QCOMPARE(b.results()->get(0).value("localPath").toString(),music.filePath("Moved.flac"));
-    b.importLocalFiles({QUrl::fromLocalFile(music.filePath("Moved.flac"))});QTRY_VERIFY(!b.importingLocal());QCOMPARE(b.m_localTracks.size(),2);
-    b.removeLocalFile(first.value("id").toString());QVERIFY(QFile::exists(music.filePath("Moved.flac")));QCOMPARE(b.results()->count(),3);
+    QFile exported(root.filePath("library.json"));b.exportLibrary(QUrl::fromLocalFile(exported.fileName()));QVERIFY(exported.open(QIODevice::ReadOnly));QVERIFY(exported.readAll().contains("localTracks"));
+    b.stop();QVERIFY(QFile::rename(root.filePath("First song.flac"),root.filePath("Moved.flac")));b.playItem(first);QVERIFY(!b.playing());QVERIFY(b.error().contains("missing"));QVERIFY(!b.m_processes.contains("play"));
+    b.locateLocalFile(QUrl::fromLocalFile(root.filePath("Moved.flac")),first.value("id").toString());QTRY_VERIFY_WITH_TIMEOUT(!b.importingLocal(),10000);QCOMPARE(b.current().value("id"),first.value("id"));QCOMPARE(b.current().value("localPath").toString(),root.filePath("Moved.flac"));
+    b.retry();QTRY_VERIFY(b.playing());b.pause();b.openPlaylist(playlist);QCOMPARE(b.results()->get(0).value("localPath").toString(),root.filePath("Moved.flac"));
+    b.importLocalFiles({QUrl::fromLocalFile(root.filePath("Moved.flac"))});QTRY_VERIFY(!b.importingLocal());QCOMPARE(b.m_localTracks.size(),2);
+    b.removeLocalFile(first.value("id").toString());QVERIFY(QFile::exists(root.filePath("Moved.flac")));QCOMPARE(b.results()->count(),3);
     b.applyLyrics({{"ok",true},{"lyrics","Quiet text\nAnother quiet line"}});QCOMPARE(b.searchLyrics("quiet").size(),2);QCOMPARE(b.searchLyrics("quiet").first().toMap().value("start").toInt(),-1);
     b.importLocalFiles(urls);b.cancelLocalImport();QTest::qWait(150);QVERIFY(!b.importingLocal());
     b.stop();b.deletePlaylist(playlist);b.m_localTracks.clear();b.clearQueue();b.setLyricsFallback(true);b.setAutoplay(true);

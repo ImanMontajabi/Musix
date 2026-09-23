@@ -35,7 +35,7 @@ private slots:
   void coverCrossfade() {
     QTemporaryDir dir;QStringList files;for(const auto color:{Qt::red,Qt::blue,Qt::green}){QImage image(128,128,QImage::Format_RGB32);image.fill(color);const auto path=dir.filePath(QString::number(files.size())+".png");QVERIFY(image.save(path));files<<path;}
     RoundedArt art;art.setWidth(100);art.setHeight(100);art.setPixels(128);art.setCrossfade(true);art.setSource(QUrl::fromLocalFile(files[0]));QVERIFY(!art.transitioning());
-    art.setSource(QUrl::fromLocalFile(files[1]));QVERIFY(art.transitioning());QVERIFY(!art.m_previous.isNull());QTest::qWait(110);
+    art.setSource(QUrl::fromLocalFile(files[1]));QVERIFY(art.transitioning());QVERIFY(!art.m_previous.isNull());QVERIFY(art.m_fade);art.m_fade->setCurrentTime(110); // halfway by the clock of the fade, not the wall
     QImage mixed(100,100,QImage::Format_ARGB32_Premultiplied);mixed.fill(Qt::transparent);{QPainter p(&mixed);art.paint(&p);}
     const auto color=mixed.pixelColor(50,50);QVERIFY(color.red()>30&&color.blue()>30);QVERIFY(color.alpha()>250);
     QTRY_VERIFY_WITH_TIMEOUT(!art.transitioning(),1000);QVERIFY(art.m_previous.isNull());
@@ -113,11 +113,18 @@ private slots:
   }
   void animatedCover() {
     QFETCH(QString,extension);QTemporaryDir dir;QVERIFY(dir.isValid());
+#ifdef Q_OS_MACOS
+    if(extension=="webm")QSKIP("AVFoundation cannot open WebM, so a WebM cover does not animate on macOS");
+#endif
     const auto path=dir.filePath("Cover #100% ü."+extension);
     QStringList args={"-nostdin","-v","error","-f","lavfi","-i","testsrc2=size=128x128:rate=10:duration=0.6"};
     if(extension=="mp4" || extension=="webm")args<<"-f"<<"lavfi"<<"-i"<<"sine=frequency=440:duration=0.6";
     args<<"-threads"<<"1"<<"-y"<<path;QProcess ff;ff.start("ffmpeg",args);
-    QVERIFY(ff.waitForFinished(10000));QVERIFY2(ff.exitCode()==0,ff.readAllStandardError());
+    QVERIFY(ff.waitForFinished(10000));
+    // Not every ffmpeg build can write every format -- Homebrew's has no WebP
+    // encoder -- and a fixture that cannot be made says nothing about Musix.
+    if(ff.exitCode()!=0&&ff.readAllStandardError().contains("encoder"))QSKIP("this ffmpeg cannot write the fixture");
+    QVERIFY(ff.exitCode()==0);
     MotionArtwork motion;QVERIFY(!motion.m_player && !motion.m_movie);QSignalSpy frames(&motion,&MotionArtwork::frameChanged);
     motion.setSource(QUrl::fromLocalFile(path));QVERIFY(motion.frame().isNull());
     motion.setRunning(true);QTRY_VERIFY_WITH_TIMEOUT(frames.count()>4 && !motion.frame().isNull(),5000);
