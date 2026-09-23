@@ -11,11 +11,14 @@ spec = importlib.util.spec_from_file_location('catalog', pathlib.Path(__file__).
 catalog = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(catalog)
 
+# The app canonicalises every path before the helper sees it -- QFileInfo::canonicalFilePath
+# on the C++ side, Path.resolve() in the helper -- so the tests hand it canonical paths too.
+# On macOS the temp directory sits behind the /var -> /private/var symlink.
 class LocalArtworkTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
-        self.root = pathlib.Path(self.temp.name)
+        self.root = pathlib.Path(self.temp.name).resolve()
         self.song = self.root/'Été #100%.wav'
         with wave.open(str(self.song), 'wb') as output:
             output.setparams((1, 2, 8000, 8000, 'NONE', 'not compressed'))
@@ -30,8 +33,14 @@ class LocalArtworkTests(unittest.TestCase):
         return path
 
     def test_formats_posters_and_shared_cache(self):
+        # The fixtures are made with whatever ffmpeg is installed, and not every
+        # build can write every format -- Homebrew's has no WebP encoder. That
+        # says nothing about Musix, so the case is skipped by name, not failed.
+        encoders = subprocess.run(['ffmpeg','-hide_banner','-encoders'],capture_output=True,text=True).stdout
         for extension in ('gif','webp','mp4','webm','jpg','png'):
             with self.subTest(extension=extension):
+                if extension == 'webp' and 'libwebp' not in encoders and ' webp ' not in encoders:
+                    self.skipTest('this ffmpeg cannot write WebP, so the fixture cannot be made')
                 cover = self.cover('CoVeR.'+extension)
                 item = catalog.local_files(self.request)['items'][0]
                 self.assertTrue(item['art'])

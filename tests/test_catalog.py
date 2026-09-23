@@ -6,6 +6,9 @@ spec=importlib.util.spec_from_file_location('catalog',pathlib.Path(__file__).par
 catalog=importlib.util.module_from_spec(spec)
 spec.loader.exec_module(catalog)
 
+# The app canonicalises every path before the helper sees it -- QFileInfo::canonicalFilePath
+# on the C++ side, Path.resolve() in the helper -- so the tests hand it canonical paths too.
+# On macOS the temp directory sits behind the /var -> /private/var symlink.
 class CatalogTests(unittest.TestCase):
     def test_lyrics_fallback_matching_and_limits(self):
         from unittest.mock import patch, MagicMock
@@ -49,7 +52,7 @@ class CatalogTests(unittest.TestCase):
         import subprocess, tempfile
         from urllib.parse import urlparse, unquote
         with tempfile.TemporaryDirectory() as directory:
-            root=pathlib.Path(directory);cover=root/'embedded-source.jpg';song=root/'Café #1.flac'
+            root=pathlib.Path(directory).resolve();cover=root/'embedded-source.jpg';song=root/'Café #1.flac'
             def ff(*args): subprocess.run(['ffmpeg','-nostdin','-v','error',*args],check=True,capture_output=True,timeout=10)
             ff('-f','lavfi','-i','color=c=blue:s=32x32','-frames:v','1','-threads','1',str(cover))
             ff('-f','lavfi','-i','anullsrc=r=44100:cl=mono','-i',str(cover),'-map','0:a','-map','1:v','-c:a','flac','-c:v','copy','-disposition:v','attached_pic','-t','1','-metadata','title=Tagged title','-metadata','artist=Artist',str(song))
@@ -65,7 +68,7 @@ class CatalogTests(unittest.TestCase):
     def test_folder_scan_nested_dedup_and_incremental(self):
         import tempfile
         with tempfile.TemporaryDirectory() as directory:
-            root=pathlib.Path(directory); nested=root/'Album';nested.mkdir()
+            root=pathlib.Path(directory).resolve(); nested=root/'Album';nested.mkdir()
             song=nested/'Café.FLAC';song.write_bytes(b'fixture')
             (root/'ignore.txt').write_text('not audio')
             (root/'alias.flac').symlink_to(song)
@@ -82,7 +85,7 @@ class CatalogTests(unittest.TestCase):
     def test_cleanup_exact_identity_and_missing_files(self):
         import tempfile
         with tempfile.TemporaryDirectory() as directory:
-            root=pathlib.Path(directory);song=root/'Song.flac';song.write_bytes(b'audio')
+            root=pathlib.Path(directory).resolve();song=root/'Song.flac';song.write_bytes(b'audio')
             alias=root/'Alias.flac';alias.symlink_to(song)
             rows=[dict(id='a',videoId='a',title='Song'),dict(id='b',videoId='b',title='Song'),dict(id='c',videoId='a'),dict(localPath=str(song)),dict(localPath=str(alias)),dict(localPath=str(root/'Gone.mp3'))]
             issues=catalog.playlist_cleanup({'rows':rows})['issues']

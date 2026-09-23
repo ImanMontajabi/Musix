@@ -8,21 +8,24 @@ spec = importlib.util.spec_from_file_location('catalog', pathlib.Path(__file__).
 catalog = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(catalog)
 
+# The app canonicalises every path before the helper sees it -- QFileInfo::canonicalFilePath
+# on the C++ side, Path.resolve() in the helper -- so the tests hand it canonical paths too.
+# On macOS the temp directory sits behind the /var -> /private/var symlink.
 class ProductFeatureTests(unittest.TestCase):
     def test_scan_reports_missing_only_with_complete_readable_roots(self):
         with tempfile.TemporaryDirectory() as folder:
-            root = pathlib.Path(folder)
+            root = pathlib.Path(folder).resolve()
             present = root / 'song.wav'
             present.write_bytes(b'fixture')
             missing = str(root / 'gone.wav')
             external = str(root.parent / 'outside.wav')
-            result = catalog.scan_music_folders({'folders': [folder], 'known': {missing: 'old', external: 'old'}})
+            result = catalog.scan_music_folders({'folders': [str(root)], 'known': {missing: 'old', external: 'old'}})
             self.assertEqual(result['missing'], [missing])
             self.assertIn(str(present), result['watchPaths'])
-            self.assertIn(folder, result['watchPaths'])
+            self.assertIn(str(root), result['watchPaths'])
             self.assertNotIn(str(root.parent), result['watchPaths'])
             with patch('os.scandir', side_effect=PermissionError()):
-                result = catalog.scan_music_folders({'folders': [folder], 'known': {missing: 'old'}})
+                result = catalog.scan_music_folders({'folders': [str(root)], 'known': {missing: 'old'}})
             self.assertEqual(result['missing'], [])
             self.assertGreater(result['failed'], 0)
 
@@ -39,7 +42,7 @@ class ProductFeatureTests(unittest.TestCase):
         import json
         from types import SimpleNamespace
         with tempfile.TemporaryDirectory() as folder:
-            song = pathlib.Path(folder) / 'song.flac'
+            song = pathlib.Path(folder).resolve() / 'song.flac'
             song.write_bytes(b'fixture')
             data = {'streams': [{'codec_type': 'audio'}], 'format': {'duration': '120', 'tags': {'ALBUM_ARTIST': 'Various Artists', 'ALBUM': 'Compilation', 'ARTIST': 'Performer', 'TRACK': '3/12', 'DISC': '2/2', 'DATE': '2024-01-01'}}}
             with patch('subprocess.run', return_value=SimpleNamespace(returncode=0, stdout=json.dumps(data).encode())):
