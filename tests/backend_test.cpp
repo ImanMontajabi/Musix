@@ -450,6 +450,17 @@ private slots:
     b.importLocalFiles(urls);b.cancelLocalImport();QTest::qWait(150);QVERIFY(!b.importingLocal());
     b.stop();b.deletePlaylist(playlist);b.m_localTracks.clear();b.clearQueue();b.setLyricsFallback(true);b.setAutoplay(true);
   }
+  void seekDuringFetchIsKept() {
+    const auto oldHelper=qgetenv("SUNG_HELPER"),oldPython=qgetenv("SUNG_PYTHON");
+    qputenv("SUNG_HELPER",qgetenv("SUNG_FIXTURE_HELPER"));qputenv("SUNG_PYTHON","/usr/bin/python3");qputenv("SUNG_BUFFER_FIXTURE","1");
+    const auto restore=qScopeGuard([&]{qputenv("SUNG_HELPER",oldHelper);qputenv("SUNG_PYTHON",oldPython);qunsetenv("SUNG_BUFFER_FIXTURE");});
+    // The fixture takes a moment over ids ending in 3, which is the fetch a seek lands in.
+    Backend b;b.clearQueue();b.setAutoplay(false);b.setPrepareNext(false);b.setVolume(0);
+    auto slow=track("seekfetch03");slow["seconds"]=60;b.playItem(slow);QVERIFY(b.resolving());
+    b.seek(20000);QCOMPARE(b.position(),20000);
+    QTRY_VERIFY_WITH_TIMEOUT(b.playing()&&!b.resolving(),10000);QTRY_VERIFY_WITH_TIMEOUT(b.position()>=20000,5000);QVERIFY(b.position()<23000);
+    b.stop();b.clearQueue();b.setAutoplay(true);
+  }
   void listeningFeatures() {
     const auto oldHelper=qgetenv("SUNG_HELPER"),oldPython=qgetenv("SUNG_PYTHON");
     qputenv("SUNG_HELPER",qgetenv("SUNG_FIXTURE_HELPER"));qputenv("SUNG_PYTHON","/usr/bin/python3");qputenv("SUNG_BUFFER_FIXTURE","1");

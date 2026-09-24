@@ -960,7 +960,9 @@ void Backend::seek(qint64 p) {
     const qint64 window=qMax(qint64(crossfadeSeconds())*1000,qint64(2500));
     if(total<=0 || total-target>window){endCrossfade(false);clearSpare();}
   }
-  if(m_media().source().isEmpty()){m_savedPosition=target;emit positionChanged();}
+  // A song still being fetched took its restore point when the request went
+  // out, so a seek made during the fetch has to move that point too.
+  if(m_media().source().isEmpty()){m_savedPosition=target;if(m_resolving)m_restorePosition=target;emit positionChanged();}
   // AVFoundation drops a seek made before the item is ready, so one made while
   // loading waits for seekable with the rest of the deferred seeks.
   else if(!m_media().isSeekable()&&m_media().mediaStatus()==QMediaPlayer::LoadingMedia)m_restorePosition=target;
