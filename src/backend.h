@@ -651,6 +651,7 @@ private:
   QString writableRuntime() const;
   QString bundledRuntime() const;
   void seedRuntime();
+  void installSeed();
   void updateResolver(bool force);
   void finishResolverUpdate(bool ok);
   void outputsChanged();
@@ -664,7 +665,7 @@ private:
   QProcess m_seedProcess,m_resolverProcess;
   // The versions to reinstall if an upgraded resolver will not import.
   QString m_resolverRollback;
-  bool m_resolverBusy=false,m_resolverRetried=false,m_retryAfterUpdate=false;
+  bool m_seedSwapPending=false,m_resolverBusy=false,m_resolverRetried=false,m_retryAfterUpdate=false;
   bool m_resolverReseeded=false;
   QTimer m_portDebounce,m_portTimeout;
   bool m_portDirty=false;

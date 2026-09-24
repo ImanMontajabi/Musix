@@ -48,8 +48,9 @@ QString Backend::pythonExecutable() const {
     return chosen;
   // Prefer the copy that can be written to: it is the one the updater keeps
   // current. The bundle's own runtime carries the version it shipped with.
+  // While a new seed waits to replace it, the old copy is left to drain.
   const auto seeded = writableRuntime() + "/bin/python3";
-  if (QFileInfo::exists(seeded))
+  if (QFileInfo::exists(seeded) && !m_seedSwapPending)
     return seeded;
   if (const auto packaged = bundledRuntime(); !packaged.isEmpty())
     return packaged + "/bin/python3";
@@ -90,7 +91,7 @@ void Backend::seedRuntime() {
   if (marker.open(QIODevice::ReadOnly) &&
       marker.readAll().trimmed() == QCoreApplication::applicationVersion().toUtf8())
     return; // Already current for this build.
-  if (m_seedProcess.state() != QProcess::NotRunning)
+  if (m_seedProcess.state() != QProcess::NotRunning || m_seedSwapPending)
     return;
   QDir().mkpath(QFileInfo(target).absolutePath());
   const auto staging = target + ".new";
@@ -98,32 +99,55 @@ void Backend::seedRuntime() {
   // Copying in a child process keeps a first launch responsive; until it
   // lands, requests run against the bundle's own read-only runtime.
   connect(&m_seedProcess, qOverload<int, QProcess::ExitStatus>(&QProcess::finished),
-          this, [this, target, staging](int code, QProcess::ExitStatus status) {
+          this, [this, staging](int code, QProcess::ExitStatus status) {
             if (code != 0 || status != QProcess::NormalExit) {
               QDir(staging).removeRecursively();
               return;
             }
-            QDir(target).removeRecursively();
-            if (!QDir().rename(staging, target)) {
-              QDir(staging).removeRecursively();
-              return;
-            }
-            QFile stampFile(target + "/.musix-version");
-            if (stampFile.open(QIODevice::WriteOnly))
-              stampFile.write(QCoreApplication::applicationVersion().toUtf8());
-            // Re-seeding has just put the version that shipped in this build
-            // back over whatever the updater had reached, so ask again now
-            // rather than waiting out the daily interval.
-            updateResolver(true);
+            m_seedSwapPending = true;
+            installSeed();
           }, Qt::SingleShotConnection);
   m_seedProcess.start("/bin/cp", {"-a", packaged, staging});
+}
+
+void Backend::installSeed() {
+  // Replacing the copy deletes files a running helper can still open by path:
+  // the first request after an upgrade lost certifi's CA bundle that way and
+  // failed with a TLS error. So the swap waits for everything running from
+  // the old copy, and new requests use the bundle's runtime meanwhile, which
+  // is what lets that wait end.
+  const auto target = writableRuntime();
+  const auto staging = target + ".new";
+  bool busy = m_resolverProcess.state() != QProcess::NotRunning;
+  for (const auto *p : std::as_const(m_processes))
+    busy = busy || (p->state() != QProcess::NotRunning && p->program().startsWith(target + "/"));
+  if (busy) {
+    QTimer::singleShot(250, this, &Backend::installSeed);
+    return;
+  }
+  m_seedSwapPending = false;
+  QDir(target).removeRecursively();
+  if (!QDir().rename(staging, target)) {
+    QDir(staging).removeRecursively();
+    return;
+  }
+  QFile stampFile(target + "/.musix-version");
+  if (stampFile.open(QIODevice::WriteOnly))
+    stampFile.write(QCoreApplication::applicationVersion().toUtf8());
+  // Re-seeding has just put the version that shipped in this build back over
+  // whatever the updater had reached, so ask again now rather than waiting
+  // out the daily interval.
+  updateResolver(true);
 }
 
 void Backend::updateResolver(bool force) {
   // Only ever the two packages that go stale when YouTube changes, and only in
   // the writable copy: the bundle is signed and must not be written to.
   const auto python = writableRuntime() + "/bin/python3";
-  if (!QFileInfo::exists(python) || m_resolverBusy)
+  // Not while a seed is on its way: it would replace this copy under pip, and
+  // it asks for an update itself once it is in place.
+  if (!QFileInfo::exists(python) || m_resolverBusy ||
+      m_seedProcess.state() != QProcess::NotRunning || m_seedSwapPending)
     return;
   const auto now = QDateTime::currentSecsSinceEpoch();
   const auto last = m_settings.value("resolverUpdated").toLongLong();
