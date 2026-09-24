@@ -4,7 +4,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-Musix is a native Material 3 music player built with C++20/Qt 6 (Quick/QML) that plays YouTube Music, local files, and Subsonic/Navidrome or Jellyfin servers. It runs on Linux and on macOS (Apple Silicon); the source, binary and several paths still say `sung`, which is deliberate.
+Musix is a native Material 3 music player built with C++20/Qt 6 (Quick/QML) that plays YouTube Music, local files, and Subsonic/Navidrome or Jellyfin servers. It is a macOS app (Apple Silicon, macOS 14 and later); the source, binary and several paths still say `sung`, which is deliberate.
+
+**Musix is macOS-only from 0.14.0 on.** New features do not need Linux support and are not tested there. The Linux code already in the tree (MPRIS, D-Bus notifications, `windowchrome.cpp`, the XDG paths) stays until it gets in the way, but nothing new has to keep it working.
 
 ## Build, run, test
 
@@ -30,7 +32,9 @@ Pass extra CMake args through `build.sh`, e.g. `./scripts/build.sh -DSUNG_DIAGNO
 - `tests/immersive_regression.py --binary /path/to/diagnostics/sung --output verification/<name>` runs the offscreen immersive/high-DPI/layout-persistence checks against a `-DSUNG_DIAGNOSTICS=ON` build; use a fresh output dir each run.
 - Server integration tests spin up a disposable Navidrome/Jellyfin instance and generated audio fixtures — see `tests/navidrome_integration.py` and `tests/jellyfin_integration.py` (`--test-binary build-tests/sung-subsonic-tests`, optional `--ui-binary`/`--native-ui` for rendered checks). Skip unless you have those server binaries available.
 - Reports/screenshots land in the git-ignored `verification/` directory.
-- A `-DSUNG_DIAGNOSTICS=ON` build also compiles the interactive UI harness in `tests/uitest.cpp` and friends into the `sung` binary itself; each `--foo-test` CLI flag in `src/main.cpp` runs one of these Qt-Test-based UI suites headlessly (offscreen QPA) instead of the normal app.
+- A `-DSUNG_DIAGNOSTICS=ON` build also compiles the interactive UI harness in `tests/uitest.cpp` and friends into the `sung` binary itself; each `--foo-test` CLI flag in `src/main.cpp` runs one of these Qt-Test-based UI suites headlessly (offscreen QPA) instead of the normal app. On macOS, give them `MUSIX_PROFILE` (see below) and a `SUNG_TEST_OUTPUT` directory for fixtures and captures. Anything that plays audio fails under offscreen there: AVFoundation reports back on the main dispatch queue, which only the cocoa platform drains, so a load never leaves `LoadingMedia`. That is why the ctest media targets run on cocoa on macOS.
+- **Launching the app without touching the real profile:** set `MUSIX_PROFILE=<dir>` and pass `--isolated`. The library, caches, runtime copy, settings (an INI file instead of the plist) and QML cache all go under that directory, and the run neither hands off to nor takes the single-instance socket of a Musix that is already running. This is the way to launch the GUI for testing; a second macOS user account does not work, because its processes cannot put windows on this session's screen.
+- `--smoke-test` (in every build, not only diagnostics ones) exercises the running app and exits 0 only if everything worked: the window, a local import through the helper, playback and a seek, the mini player opened three times while playing, the themes and Settings; any QML error from the app's own files fails it. It refuses to run without `MUSIX_PROFILE`. `package-dmg.sh` runs it on the signed bundle and makes no DMG if it fails, so it puts a window on screen for a few seconds during every packaging build.
 
 ## Architecture
 
@@ -80,12 +84,15 @@ already cost something.
   happens to be in front, which has already pulled a private messaging window
   into a transcript. Get the id from a helper that reads
   `CGWindowListCopyWindowInfo` and filters by pid.
-- **Back up the profile before launching the GUI.** `--isolated` does not
-  isolate data and `$HOME` does not reach `NSHomeDirectory()`, so a launched
-  app writes to the real library. Copy `~/Library/Application Support/Sung`
-  and `~/Library/Preferences/com.sung.sung.plist` first, restore both
-  afterwards, `killall cfprefsd` so the restored plist is re-read, and confirm
-  with `shasum -a 256` that they match the backup.
+- **Never launch the GUI on the real profile without a backup.** Use
+  `MUSIX_PROFILE=<scratch dir> … --isolated` instead, which keeps every write
+  under that directory; `--isolated` alone does not isolate data, and `$HOME`
+  does not reach `NSHomeDirectory()`. When the real profile genuinely has to
+  be used (checking an upgrade over the user's own library), copy
+  `~/Library/Application Support/Sung` and
+  `~/Library/Preferences/com.sung.sung.plist` first, restore both afterwards,
+  `killall cfprefsd` so the restored plist is re-read, and confirm with
+  `shasum -a 256` that they match the backup.
 - **Never install anything into `build-packaging/` or the bundled runtime** by
   hand; only the build scripts write there (`build-packaging/tools/` holds the
   build's own tools, such as the Qt downloader, and is never bundled). Those
@@ -102,3 +109,25 @@ already cost something.
   that are true of a plain `NSWindow` are not necessarily true of what Qt
   builds. Window dragging was reported working on exactly that reasoning and
   was in fact broken.
+
+## Releasing
+
+Three releases in a row (V0.12.0, V0.13.0 and the first 0.13.1 build) went out
+with a tag that did not match the build. The steps, in order:
+
+1. Bump `project(Musix VERSION …)` in `CMakeLists.txt`, commit, and make sure
+   the tree is clean: `package-dmg.sh` prints the commit it built from.
+2. Build warm, then cold (delete `build-packaging/{python-runtime,python.tar.gz,
+   qt,ffmpeg-out}` and `make distclean` in `build-packaging/ffmpeg-7.1`), and
+   compare a manifest of every file's SHA-256 in `build-packaging/dmg/Musix.app`
+   between the two. They must be identical. Signature, Gatekeeper, the
+   minimum-macOS guard, the licence audit and the smoke test run inside the
+   build; a failure in any of them stops it.
+3. **Tag the exact commit the DMG build printed, never `HEAD`** or the latest
+   commit. Tags are lowercase: `v<version>`. Push `main`, then the tag.
+4. `gh release create v<version>` with the DMG, the FFmpeg source tarball and
+   `SHA256SUMS.txt`, marked as the latest release.
+5. **Verify the upload**: download every asset again and check its SHA-256
+   against the local file and against `SHA256SUMS.txt`.
+6. The user decides when to publish: draft the notes and wait for their OK.
+
