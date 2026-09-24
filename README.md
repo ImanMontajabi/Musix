@@ -98,6 +98,7 @@ What leaves your Mac, and only when the matching feature is used:
 | `musicbrainz.org`, `coverartarchive.org` | A song's title, artist and album | Only when Apple Music has no match |
 | `lrclib.net` | A song's title, artist, album and duration | Lyrics, when the source has none. Can be turned off in Settings. |
 | Your own server | Whatever Subsonic or Jellyfin needs | Only if you connect one |
+| `api.github.com` | A request for the list of Musix releases; the only thing it says about you is your Musix version, in the user agent | Checking for updates: once a day while Musix is running, and whenever you choose **Check for Updates…**. Turn off **Settings → Updates → Check for updates automatically** to stop the daily check. Musix only tells you a new version exists and opens its GitHub page; it never downloads or installs anything itself. |
 
 Requests identify the app as `Musix/<version> ( https://github.com/ImanMontajabi/Musix )`, which is what MusicBrainz and LRCLIB ask of a client.
 
