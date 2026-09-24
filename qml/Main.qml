@@ -359,6 +359,8 @@ ApplicationWindow {
         return {kind:kind,title:kind==="artist"?item.artist:item.album,browseId:item[kind+"Id"],remoteId:item[kind+"Id"],source:item.source || "",server:item.server || ""}
     }
     function openServerConnection() {serverConnection.open()}
+    // A page Settings opens keeps a way back to the category it came from.
+    function openFromSettings(page) { settingsDialog.close(); page.backTarget=settingsDialog; page.backLabel="Settings"; page.open() }
     function focusSearch() { if(app.page==="server"){searchField.forceActiveFocus();searchField.selectAll();return;}if(immersive)toggleImmersive();side="";app.startSearch();destination="search";searchField.forceActiveFocus();searchField.selectAll(); }
     // Material 3 navigation motion. Rail destinations fade through; the library
     // tabs are peers on one line, so they share the X axis in the direction of
@@ -1985,7 +1987,11 @@ ApplicationWindow {
             }
             ColumnLayout {
                 id: settingsOptions; objectName: "settingsOptions"
-                width: settingsScrollView.availableWidth; spacing: 28
+                // In from both edges by a list item's padding, so the rows that
+                // reach back out to highlight the full width stay inside the
+                // clip, and every row's text shares one edge.
+                x: Theme.listItemPadding
+                width: settingsScrollView.availableWidth - 2*Theme.listItemPadding; spacing: 28
                 ColumnLayout {
                     id: settingsGroup0; objectName:"settingsGroup0"
                     Layout.fillWidth:true;Layout.minimumWidth:0; spacing:12
@@ -2040,8 +2046,8 @@ ApplicationWindow {
                     value:app.precisePointer; onChosen:value=>app.precisePointer=value
                 }
 
-                MSettingRow {opens:true;objectName:"viewLayoutButton";text:"Current view layout";visible:settingsDialog.matches("Current view layout density grid list");onClicked:{settingsDialog.close();viewLayoutDialog.open();}}
-                MSettingRow {opens:true;text:"Current artwork";visible:!!app.current.id && settingsDialog.matches("Current artwork");onClicked:{settingsDialog.close();artworkControls.open();}}
+                MSettingRow {opens:true;objectName:"viewLayoutButton";text:"Current view layout";visible:settingsDialog.matches("Current view layout density grid list");onClicked:{window.openFromSettings(viewLayoutDialog);}}
+                MSettingRow {opens:true;text:"Current artwork";visible:!!app.current.id && settingsDialog.matches("Current artwork");onClicked:{window.openFromSettings(artworkControls);}}
                 MSwitch { Layout.fillWidth:true;Layout.minimumWidth:0; objectName: "animatedArtworkSwitch"; visible: settingsDialog.matches("Animated album artwork"); text: "Animated album artwork"; checked: app.animatedArtwork; onToggled: app.animatedArtwork=checked }
                 MSwitch { Layout.fillWidth:true;Layout.minimumWidth:0; objectName: "onlineArtworkSwitch"; visible: settingsDialog.matches("Online animated covers YouTube Apple Music"); text: "Online animated covers"; checked: app.onlineArtwork; onToggled: app.onlineArtwork=checked }
                 MSwitch { Layout.fillWidth:true;Layout.minimumWidth:0; objectName: "albumCoversSwitch"; visible: settingsDialog.matches("Album covers for music videos YouTube Apple Music"); text: "Album covers for music videos"; checked: app.albumCovers; onToggled: app.albumCovers=checked }
@@ -2094,22 +2100,22 @@ ApplicationWindow {
                     visible: settingsDialog.searchQuery.trim() ? hasMatches : settingsDialog.category===2
                     SungText {heading: true;text:"Library";font.pixelSize:Theme.titleLarge;font.weight:Font.Medium;Layout.bottomMargin:8}
                     ColumnLayout {id:options2;objectName:"settingsRows2";Layout.fillWidth:true;Layout.minimumWidth:0;spacing:12
-                MSettingRow {opens:true;text:"Music folders";visible:settingsDialog.matches("Music folders import manage");onClicked:{settingsDialog.close();musicFoldersDialog.open();}}
+                MSettingRow {opens:true;text:"Music folders";visible:settingsDialog.matches("Music folders import manage");onClicked:{window.openFromSettings(musicFoldersDialog);}}
                 MSwitch { Layout.fillWidth:true;Layout.minimumWidth:0; objectName: "releaseNotificationSwitch"
                     visible: !!releaseNotifier && settingsDialog.matches("Following new releases notifications notify artists channels")
                     text: "Notify me about new releases"
                     hint: "A macOS notification when the daily check finds something new from who you follow. macOS asks for permission the first time."
                     checked: app.releaseNotifications
                     onToggled: { app.releaseNotifications=checked; if(checked && releaseNotifier) releaseNotifier.requestPermission() } }
-                MSettingRow {opens:true;objectName:"shortcutHelpButton";text:"Keyboard shortcuts";visible:settingsDialog.matches("Keyboard shortcuts keys help");onClicked:{settingsDialog.close();shortcutHelp.open()}}
+                MSettingRow {opens:true;objectName:"shortcutHelpButton";text:"Keyboard shortcuts";visible:settingsDialog.matches("Keyboard shortcuts keys help");onClicked:{window.openFromSettings(shortcutHelp)}}
                 MSettingRow {opens:true;text:"Quick actions · "+Keymap.label("Ctrl+Shift+P");visible:settingsDialog.matches("Quick actions commands playlists");onClicked:{settingsDialog.close();commandPalette.open();}}
                 MSwitch { Layout.fillWidth:true;Layout.minimumWidth:0; text: "Update music folders automatically"; visible: settingsDialog.matches("Update music folders automatically watch"); checked: app.watchMusicFolders; onToggled: app.watchMusicFolders=checked }
                 MSwitch { Layout.fillWidth:true;Layout.minimumWidth:0; objectName:"typeAheadSwitch"; text: "Type to jump in lists"; visible: settingsDialog.matches("Type to jump in lists keyboard"); checked: app.typeAheadJump; onToggled: app.typeAheadJump=checked }
                 SungText {text:"Start page";visible:settingsDialog.matches("Start page Home local music server liked");font.pixelSize:Theme.bodyLarge;font.weight:Font.Medium}
                 MSegmentedControl {Layout.fillWidth:true;Layout.minimumWidth:0;visible:settingsDialog.matches("Start page Home local music server liked");accessibleName:"Start page"; options:[{key:"home",label:"Home",name:"startPage_home"},{key:"files",label:"Local",name:"startPage_files"},{key:"server",label:"Server",name:"startPage_server"},{key:"favorites",label:"Liked",name:"startPage_favorites"}];value:app.startPage;onChosen:value=>app.startPage=value}
-                MSettingRow {opens:true;text:"Customize Home";visible:settingsDialog.matches("Customize Home sections order");onClicked:{settingsDialog.close();app.home();homeEditor.open();}}
-                MSettingRow {opens:true;objectName:"sessionsButton";text:"Listening sessions";visible:settingsDialog.matches("Listening sessions saved queues");onClicked:{settingsDialog.close();sessionsDialog.open();}}
-                MSettingRow {opens:true;objectName:"listeningStatsButton";text:"Listening statistics";visible:settingsDialog.matches("Listening statistics top artists albums time");onClicked:{settingsDialog.close();statsDialog.open();}}
+                MSettingRow {opens:true;text:"Customize Home";visible:settingsDialog.matches("Customize Home sections order");onClicked:{app.home();window.openFromSettings(homeEditor);}}
+                MSettingRow {opens:true;objectName:"sessionsButton";text:"Listening sessions";visible:settingsDialog.matches("Listening sessions saved queues");onClicked:{window.openFromSettings(sessionsDialog);}}
+                MSettingRow {opens:true;objectName:"listeningStatsButton";text:"Listening statistics";visible:settingsDialog.matches("Listening statistics top artists albums time");onClicked:{window.openFromSettings(statsDialog);}}
                     }
                 }
                 ColumnLayout {
@@ -2119,7 +2125,7 @@ ApplicationWindow {
                     visible: settingsDialog.searchQuery.trim() ? hasMatches : settingsDialog.category===3
                     SungText {heading: true;text:"Connections";font.pixelSize:Theme.titleLarge;font.weight:Font.Medium;Layout.bottomMargin:8}
                     ColumnLayout {id:options3;objectName:"settingsRows3";Layout.fillWidth:true;Layout.minimumWidth:0;spacing:12
-                MSettingRow {opens:true;objectName:"musicServerButton";text:"Music server";visible:settingsDialog.matches("Music server library");onClicked:{settingsDialog.close();serverConnection.open()}}
+                MSettingRow {opens:true;objectName:"musicServerButton";text:"Music server";visible:settingsDialog.matches("Music server library");onClicked:{window.openFromSettings(serverConnection)}}
                 SungText { visible: settingsDialog.matches("YouTube cookies import replace remove sign in") || settingsDialog.matches("YouTube streaming quality standard data saver bitrate"); text: "YouTube"; font.pixelSize: Theme.labelLarge; font.weight: Font.Medium; color: Theme.muted; Layout.topMargin: 12 }
                 SungText { visible: settingsDialog.matches("YouTube streaming quality standard data saver bitrate"); text: "Streaming quality"; font.pixelSize: Theme.bodyLarge; font.weight: Font.Medium }
                 MSegmentedControl {Layout.fillWidth:true;Layout.minimumWidth:0;

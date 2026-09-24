@@ -10,8 +10,15 @@ MButton {
     property bool opens: false
     trailingSymbol: opens ? "chevron" : ""
     leftAligned: true
-    contentInset: 0
+    // Material's list item padding, inside the highlight. The row reaches out
+    // by the same amount on either side, so its label stays on the text edge
+    // every other row in the column shares while the highlight is the full
+    // width of the list.
+    contentInset: Theme.listItemPadding
+    rightPadding: Theme.listItemPadding
     labelSize: Theme.bodyLarge
     Layout.fillWidth: true
     Layout.minimumWidth: 0
+    Layout.leftMargin: -Theme.listItemPadding
+    Layout.rightMargin: -Theme.listItemPadding
 }

@@ -40,6 +40,16 @@ Dialog {
     // under it when there is one. It is for a prompt that has to be read before
     // it is answered, which is usually one that cannot be undone.
     property string symbol: ""
+    // A dialog opened from another one -- the pages Settings opens -- knows
+    // where it came from. It then carries a back arrow, and Escape and Cmd+[
+    // go back there rather than out; Close still closes. Whoever opens it sets
+    // this, and closing clears it.
+    property var backTarget: null
+    property string backLabel: "Settings"
+    function goBack() { const target = backTarget; backTarget = null; close(); if (target) target.open() }
+    closePolicy: backTarget ? Popup.CloseOnPressOutside : Popup.CloseOnEscape | Popup.CloseOnPressOutside
+    onClosed: backTarget = null
+    Shortcut { sequences: ["Escape", "Ctrl+["]; enabled: dialog.opened && !!dialog.backTarget; onActivated: dialog.goBack() }
     header: Item {
         // A full-screen dialog is headed by a 56dp bar carrying the close
         // affordance and the headline beside it, ruled off from the content.
@@ -48,10 +58,20 @@ Dialog {
         MButton {
             id: closeAffordance
             objectName: "dialogClose"
-            visible: dialog.fullScreen
+            visible: dialog.fullScreen && !dialog.backTarget
             symbol: "close"; tip: "Close"
             x: 8; anchors.verticalCenter: parent.verticalCenter
             onClicked: dialog.reject()
+        }
+        MButton {
+            id: backAffordance
+            objectName: "dialogBack"
+            visible: !!dialog.backTarget
+            symbol: "back"; tip: "Back to " + dialog.backLabel
+            Accessible.name: "Back to " + dialog.backLabel
+            x: dialog.fullScreen ? 8 : 12
+            anchors.verticalCenter: titleLabel.verticalCenter
+            onClicked: dialog.goBack()
         }
         Icon {
             id: dialogIcon
@@ -63,7 +83,8 @@ Dialog {
         }
         SungText {
             id: titleLabel; heading: true; objectName: "dialogTitle"
-            x: dialog.fullScreen ? closeAffordance.x+closeAffordance.width+8 : 24
+            x: backAffordance.visible ? backAffordance.x+backAffordance.width+4
+             : dialog.fullScreen ? closeAffordance.x+closeAffordance.width+8 : 24
             width: parent.width-x-24
             y: dialogIcon.visible ? dialogIcon.y+dialogIcon.height+16
                                   : (parent.height-implicitHeight)/2
