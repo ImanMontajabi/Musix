@@ -108,7 +108,10 @@ Item {
                     // towards the edge the menu opened from.
                     x: root.leadingEdge ? 0 : parent.width - width
                     height: 56
-                    implicitWidth: entryLabel.implicitWidth + 72
+                    // Material's FAB menu items hug their content: 24 on either
+                    // side, the icon and the label 8 apart.
+                    leftPadding: 24; rightPadding: 24
+                    implicitWidth: leftPadding + entryContent.implicitWidth + rightPadding
                     hoverEnabled: true
                     focusPolicy: Qt.StrongFocus
                     Accessible.name: modelData.label
@@ -123,9 +126,16 @@ Item {
                             Behavior on opacity { NumberAnimation { duration: Theme.springFastEffectsMs } }
                         }
                     }
-                    contentItem: Row {
+                    // A control stretches its content item across the padded
+                    // area and ignores anchors on it, which is what left the
+                    // icon and label against the leading edge. The row sits
+                    // in a wrapper that is stretched instead.
+                    contentItem: Item {
+                    implicitWidth: entryContent.implicitWidth
+                    Row {
+                        id: entryContent
                         anchors.centerIn: parent
-                        spacing: 12
+                        spacing: 8
                         Icon { anchors.verticalCenter: parent.verticalCenter; name: entry.modelData.symbol || ""; size: 24; ink: Theme.containerText }
                         SungText {
                             id: entryLabel
@@ -135,6 +145,7 @@ Item {
                             // an emphasized one; the icon beside it is the weight.
                             font.pixelSize: Theme.labelLarge; labelRole: true
                         }
+                    }
                     }
                 }
             }
