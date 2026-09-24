@@ -345,7 +345,10 @@ ApplicationWindow {
         if(immersive)toggleImmersive();
         if(!miniPlayer) miniPlayer=miniComponent.createObject(window);
         if(!miniPlayer)return;
-        compactMode=true;miniPlayer.show();miniPlayer.raise();miniPlayer.requestActivate();window.hide();
+        // Showing it again moved it 20 points up every time, until the menu
+        // bar stopped it; where it was is where it goes back to.
+        const spot=Qt.point(miniPlayer.x,miniPlayer.y);
+        compactMode=true;miniPlayer.show();miniPlayer.x=spot.x;miniPlayer.y=spot.y;miniPlayer.raise();miniPlayer.requestActivate();window.hide();
         if(app.currentIndex>=0)app.fetchLyrics();
     }
     function restorePlayer() {
