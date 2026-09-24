@@ -34,8 +34,10 @@ Item {
 
     RowLayout {
         anchors.fill: parent
-        anchors.leftMargin: 4
-        anchors.rightMargin: 4
+        // A card's content keeps 24 in from its rounded edge while the band is
+        // open; collapsed there is no card, and the row lines up with the list.
+        anchors.leftMargin: 24*(1-hero.collapse)
+        anchors.rightMargin: 16*(1-hero.collapse)
         spacing: 20
 
         Artwork {
@@ -91,7 +93,7 @@ Item {
             }
             RowLayout {
                 objectName: "artistHeroActions"
-                spacing: 10
+                spacing: 8
                 opacity: 1-hero.collapse
                 Layout.maximumHeight: implicitHeight*(1-hero.collapse)
                 clip: true
@@ -103,7 +105,7 @@ Item {
                 }
                 MButton {
                     objectName: "artistHeroShuffle"
-                    text: "Shuffle"; symbol: "shuffle"; elevated: true
+                    text: "Shuffle"; symbol: "shuffle"; tonal: true
                     enabled: app.collection.count>1 || (app.sections, app.hasShelfSongs())
                     onClicked: {if(app.collection.count>0){app.shuffle=true;app.playCollection(Math.floor(Math.random()*app.collection.count));}else app.playShelfSongs(true);}
                 }
@@ -113,7 +115,10 @@ Item {
                     readonly property bool followed: {app.following;return !!followId && app.isFollowing(followId);}
                     visible: !!followId
                     text: followed ? "Following" : "Follow"; symbol: followed ? "check" : "plus"
-                    tonal: !followed; selected: followed
+                    // Filled, tonal, outlined: one step down in emphasis per
+                    // action. Following keeps its outline and says so in the
+                    // label and icon, so it never reads as a second Shuffle.
+                    outlined: true
                     onClicked: followed ? app.unfollow(followId)
                                         : app.follow({id: followId, kind: app.artistInfo.followKind, title: app.title, art: app.artistInfo.art})
                 }
@@ -124,7 +129,7 @@ Item {
             objectName: "artistHeroPin"
             symbol: "pin"
             Layout.alignment: Qt.AlignTop
-            Layout.topMargin: 4
+            Layout.topMargin: 4+12*(1-hero.collapse)
             visible: !!app.collectionItem.id
             selected: {app.pins;return app.isPinned(app.collectionItem);}
             tip: selected?"Unpin from Home":"Pin to Home"
@@ -134,7 +139,7 @@ Item {
             objectName: "artistHeroRefresh"
             symbol: "refresh"
             Layout.alignment: Qt.AlignTop
-            Layout.topMargin: 4
+            Layout.topMargin: 4+12*(1-hero.collapse)
             busy: app.busy && app.results.count>0
             tip: "Refresh"
             enabled: !app.busy

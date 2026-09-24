@@ -124,6 +124,9 @@ private slots:
     }
   }
   void keyringSaveRestoreAndForget() {
+#ifdef Q_OS_MACOS
+    QSKIP("secret-tool needs a Secret Service, which macOS does not have; the keyring is off there.");
+#endif
     mode = "ok";
     const auto oldPath = qgetenv("PATH");
     const auto bin = storage.filePath("bin");

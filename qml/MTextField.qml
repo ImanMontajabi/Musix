@@ -14,7 +14,15 @@ TextField {
     property string variant: "outlined"
     readonly property bool filled: variant === "filled"
     property string label: ""
-    property color labelSurface: Theme.container
+    // The floating label cuts the outline by painting over it, so it has to be
+    // the colour of whatever the field sits on: a dialog is not the page.
+    property color labelSurface: {
+        for (let p = field.parent; p; p = p.parent) {
+            const b = p.background
+            if (b && b.color !== undefined && b.color.a > 0.99) return b.color
+        }
+        return Theme.container
+    }
     // Material's supporting text sits under the field and explains it; when the
     // field is in error the same line carries the reason and everything the
     // field is drawn with moves to the error role.

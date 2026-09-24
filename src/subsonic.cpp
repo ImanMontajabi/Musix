@@ -67,7 +67,13 @@ Subsonic::Subsonic(QObject *parent, bool restore) : QObject(parent) {
 }
 Subsonic::~Subsonic() { stopRequests(); }
 bool Subsonic::keyringAvailable() const {
+#ifdef Q_OS_MACOS
+  // secret-tool talks to a Secret Service, which macOS does not have. The
+  // Keychain is the answer there, once Musix is signed with a stable identity.
+  return false;
+#else
   return !QStandardPaths::findExecutable("secret-tool").isEmpty();
+#endif
 }
 void Subsonic::secret(const QStringList &args, const QByteArray &input,
                       std::function<void(bool, QByteArray)> callback) {

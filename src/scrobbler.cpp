@@ -54,7 +54,13 @@ Scrobbler::~Scrobbler() {
 }
 
 bool Scrobbler::keyringAvailable() const {
+#ifdef Q_OS_MACOS
+  // secret-tool talks to a Secret Service, which macOS does not have. The
+  // Keychain is the answer there, once Musix is signed with a stable identity.
+  return false;
+#else
   return !QStandardPaths::findExecutable("secret-tool").isEmpty();
+#endif
 }
 
 qint64 Scrobbler::thresholdFor(qint64 durationMs) {

@@ -1752,20 +1752,31 @@ ApplicationWindow {
     function openCleanup(id) { cleanupDialog.playlistId=id;app.inspectPlaylist(id);cleanupDialog.open(); }
     MDialog {
         id: musicFoldersDialog; objectName: "musicFoldersDialog"; anchors.centerIn: parent
-        title: "Music folders"; modal: true; width: Math.min(560,window.width-48); height: Math.min(440,window.height-48,240+64*Math.max(1,app.musicFolders.length))
+        title: "Music folders"; modal: true; width: Math.min(560,window.width-48); height: Math.min(440,window.height-48,240+64*(app.musicFolders.length||3))
         standardButtons: Dialog.Close
         ColumnLayout {
             anchors.fill: parent; spacing: 12
-            ListView {
-                objectName: "musicFoldersList"; Layout.fillWidth: true; Layout.fillHeight: true; clip: true
-                model: musicFoldersDialog.visible?app.musicFolders:[]; reuseItems: true
-                ScrollBar.vertical: ScrollBar {}
-                delegate: RowLayout {
-                    required property string modelData; width: ListView.view.width; height: 64; spacing: 8
-                    SungText { text: modelData; Layout.fillWidth: true; elide: Text.ElideMiddle }
-                    MButton { symbol: "close"; tip: "Forget folder; keep songs"; enabled: !app.importingLocal; onClicked: app.forgetMusicFolder(modelData) }
+            Item {
+                Layout.fillWidth: true; Layout.fillHeight: true
+                ListView {
+                    objectName: "musicFoldersList"; anchors.fill: parent; clip: true
+                    model: musicFoldersDialog.visible?app.musicFolders:[]; reuseItems: true
+                    ScrollBar.vertical: ScrollBar {}
+                    delegate: RowLayout {
+                        required property string modelData; width: ListView.view.width; height: 64; spacing: 8
+                        SungText { text: modelData; Layout.fillWidth: true; elide: Text.ElideMiddle }
+                        MButton { symbol: "close"; tip: "Forget folder; keep songs"; enabled: !app.importingLocal; onClicked: app.forgetMusicFolder(modelData) }
+                    }
                 }
-                SungText { anchors.centerIn: parent; visible: app.musicFolders.length===0; text: "Add a folder to import its music"; color: Theme.muted }
+                // Beside the list, not in it: a list's children live in its
+                // content, which is empty exactly when this has to show.
+                Column {
+                    objectName: "musicFoldersEmptyState"; anchors.centerIn: parent; width: Math.min(parent.width,320); spacing: 14
+                    visible: app.musicFolders.length===0
+                    Icon { anchors.horizontalCenter: parent.horizontalCenter; name: "folder"; size: 36; ink: Theme.muted }
+                    SungText { width: parent.width; horizontalAlignment: Text.AlignHCenter; wrapMode: Text.Wrap; text: "No music folders yet"; font.pixelSize: Theme.titleMedium }
+                    SungText { width: parent.width; horizontalAlignment: Text.AlignHCenter; wrapMode: Text.Wrap; text: "Add a folder and its music joins your library. Songs you put there later are added too."; color: Theme.muted; font.pixelSize: Theme.bodyMedium }
+                }
             }
             MButton { objectName: "addMusicFolderButton"; text: "Add folder…"; symbol: "plus"; tonal: true; enabled: !app.importingLocal; onClicked: {musicFoldersDialog.close();musicFolderPath.clear();musicFolderEntry.pathError="";musicFolderEntry.open();} }
         }

@@ -25,7 +25,8 @@ MDialog {
         MTextField { id: username; objectName: "serverUsername"; Layout.fillWidth: true; label: "Username"; enabled: !app.server.connecting; onAccepted: password.forceActiveFocus() }
         MTextField { id: password; objectName: "serverPassword"; Layout.fillWidth: true; label: "Password"; echoMode: TextInput.Password; enabled: !app.server.connecting; onAccepted: if(connectButton.enabled)connectButton.clicked() }
         SungText { text: "HTTP sends traffic without encryption."; visible: address.text.startsWith("http://") && !address.text.startsWith("http://localhost:") && !address.text.startsWith("http://127.0.0.1:"); Layout.fillWidth: true; wrapMode: Text.Wrap; color: Theme.muted; font.pixelSize: Theme.bodySmall }
-        MSwitch { id: remember; objectName: "rememberServer"; text: "Remember in desktop keyring"; checked: app.server.keyringAvailable; enabled: app.server.keyringAvailable }
+        MSwitch { id: remember; objectName: "rememberServer"; text: "Remember in desktop keyring"; visible: app.server.keyringAvailable; checked: app.server.keyringAvailable }
+        SungText { objectName: "serverNotRemembered"; visible: !app.server.keyringAvailable; text: "Musix doesn’t keep your password, so you’ll sign in again after it restarts."; Layout.fillWidth: true; wrapMode: Text.Wrap; color: Theme.muted; font.pixelSize: Theme.bodySmall }
         SungText { objectName: "serverStatus"; text: app.server.error || (app.server.connecting?"Connecting…":app.server.connected?"Connected":app.server.provider==="jellyfin"?"Jellyfin":"Navidrome / Subsonic"); Layout.fillWidth: true; wrapMode: Text.Wrap; color: app.server.error ? Theme.error : app.server.connected?Theme.primary:Theme.muted }
         MButton { text: "Disconnect"; visible: app.server.connected; onClicked: {app.server.disconnectServer();password.clear()} }
         MDivider { Layout.fillWidth: true; visible: app.server.connected }
