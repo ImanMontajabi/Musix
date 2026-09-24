@@ -324,6 +324,13 @@ QtObject {
                                    : role("outline", blend(outlineVariant, muted, 0.5))
     readonly property color outlineVariant: followDesktop ? desktopTheme.colors.outline
                                           : role("outlineVariant", dark ? "#57443b" : "#dcc5b9")
+    // A hint in an empty field, which must not pass for something typed. In
+    // onSurfaceVariant, which labels and helper text also use, it sat a single
+    // step below real input and read as a value already filled in. It starts
+    // from the outline tone instead and is moved only as far as it takes to
+    // stay readable on every surface a field sits on; the outline alone
+    // measured 2.3:1 in the light scheme.
+    readonly property color placeholder: readable(outline, [surface, container, high, highest])
     readonly property color primary: useSource ? role("primary",sourceColor) : followDesktop ? desktopTheme.colors.primary : (dark ? "#ffb596" : "#964829")
     readonly property color primaryText: useSource ? role("onPrimary",luminance(primary)>0.179?"#000000":"#ffffff") : followDesktop ? desktopTheme.colors.primaryText : (dark ? "#572008" : "#ffffff")
     readonly property color primaryContainer: useSource ? role("primaryContainer",blend(container,primary,0.16)) : followDesktop ? desktopTheme.colors.primaryContainer : (dark ? "#75351b" : "#ffdbcb")

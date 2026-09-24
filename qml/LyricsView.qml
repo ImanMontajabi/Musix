@@ -22,7 +22,7 @@ Item {
         MButton { objectName: "closeLyricSearch"; symbol: "back"; tip: "Back to lyrics"; onClicked: lyricPane.closeSearch() }
         MSearchField {
             id: lyricSearch; objectName: "lyricSearchField"; Layout.fillWidth: true; Layout.minimumWidth: 0; implicitHeight: 48
-            placeholderText: "Find in lyrics"; selectByMouse: true; font.family: Theme.fontFamily; font.pixelSize: Theme.bodyMedium; color: Theme.text; placeholderTextColor: Theme.muted
+            placeholderText: "Find in lyrics"; selectByMouse: true; font.family: Theme.fontFamily; font.pixelSize: Theme.bodyMedium; color: Theme.text; placeholderTextColor: Theme.placeholder
             Accessible.name: "Find in lyrics"
             onTextChanged: searchDelay.restart()
             Keys.onDownPressed: {lyricResults.currentIndex=Math.min(lyricPane.matches.length-1,lyricResults.currentIndex+1);}

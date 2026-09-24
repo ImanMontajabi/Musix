@@ -13,7 +13,7 @@ TextField {
     selectByMouse: true
     verticalAlignment: TextInput.AlignVCenter
     font.family: Theme.fontFamily; font.pixelSize: Theme.bodyLarge
-    color: Theme.text; placeholderTextColor: Theme.muted
+    color: Theme.text; placeholderTextColor: Theme.placeholder
     selectionColor: Theme.primary; selectedTextColor: Theme.primaryText
     Accessible.name: placeholderText
     background: Rectangle {

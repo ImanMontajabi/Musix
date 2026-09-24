@@ -3235,6 +3235,13 @@ void runMaterialSizingTests(Backend *b, QQuickWindow *w) {
     const auto calm = support->property("color").value<QColor>();
     c.check(!path->property("errored").toBool() && calm == c.themeColor("muted"),
             "which is quiet while nothing is wrong");
+    const auto frame = path->property("background").value<QQuickItem *>();
+    c.check(frame && qFuzzyCompare(frame->height(), 56.0) &&
+                support->mapToItem(path, QPointF()).y() >= frame->y() + frame->height(),
+            "under the field's frame, which keeps a single line's height, not inside it");
+    c.check(path->property("placeholderTextColor").value<QColor>() == c.themeColor("placeholder") &&
+                c.themeColor("placeholder") != c.themeColor("muted"),
+            "and its placeholder is dimmer than the label and the supporting text");
     c.shot("04-field-supporting");
     path->setProperty("text", QString("/definitely/not/here"));
     QTest::qWait(150);

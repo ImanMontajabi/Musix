@@ -711,7 +711,7 @@ ApplicationWindow {
                         Icon { name: "search"; ink: Theme.text }
                         TextField {
                             font.family: Theme.fontFamily; id: searchField; objectName: "searchField"; Layout.fillWidth: true; Layout.fillHeight: true
-                            placeholderText: app.page==="server"?"Search server":"Search music"; placeholderTextColor: Theme.muted
+                            placeholderText: app.page==="server"?"Search server":"Search music"; placeholderTextColor: Theme.placeholder
                             color: Theme.text; selectionColor: Theme.primaryContainer; selectedTextColor: Theme.text
                             font.pixelSize: Theme.bodyLarge; background: null; selectByMouse: true
                             Accessible.name: app.page==="server"?"Search music server":"Search songs, albums, artists, playlists, or paste a YouTube link"
@@ -1104,7 +1104,7 @@ ApplicationWindow {
                             TextField {
                                 id: collectionSearch; objectName: "collectionSearch"; Layout.fillWidth: true; implicitHeight: 44
                                 font.family: Theme.fontFamily; font.pixelSize: Theme.bodyMedium; color: Theme.text
-                                placeholderText: "Find in this list"; placeholderTextColor: Theme.muted
+                                placeholderText: "Find in this list"; placeholderTextColor: Theme.placeholder
                                 selectionColor: Theme.primaryContainer; selectedTextColor: Theme.text
                                 leftPadding: 14; rightPadding: 14; selectByMouse: true
                                 text: app.collection.query

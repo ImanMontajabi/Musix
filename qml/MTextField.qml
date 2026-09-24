@@ -24,20 +24,23 @@ TextField {
     readonly property color accent: errored ? Theme.error : activeFocus ? Theme.primary : Theme.outline
     readonly property bool floatingLabel: activeFocus || length > 0 || preeditText.length > 0
     readonly property bool handlesTextInput: true
-    implicitHeight: 56
+    // The container is always 56 high. Supporting text goes under it, outside
+    // the frame, and the field grows by that line so a layout makes room for
+    // it; the background and the text area are both kept to the container.
+    readonly property real containerHeight: 56
+    readonly property real supportSpace: supportLine.visible ? supportLine.height + 4 : 0
+    implicitHeight: containerHeight + supportSpace
     leftPadding: 16; rightPadding: 16
     // A filled field floats its label inside the container, so the text it
     // labels sits below it rather than in the middle.
     topPadding: field.filled && field.label.length ? 24 : 16
-    bottomPadding: field.filled && field.label.length ? 8 : 16
+    bottomPadding: (field.filled && field.label.length ? 8 : 16) + supportSpace
     selectByMouse: true
     verticalAlignment: TextInput.AlignVCenter
     font.family: Theme.fontFamily; font.pixelSize: Theme.bodyLarge
-    color: Theme.text; placeholderTextColor: Theme.muted
+    color: Theme.text; placeholderTextColor: Theme.placeholder
     selectionColor: Theme.primary; selectedTextColor: Theme.primaryText
-    // Material reserves the supporting line so a field does not jump when an
-    // error arrives.
-    bottomInset: supportLine.visible ? -supportLine.height-4 : 0
+    bottomInset: supportSpace
     Accessible.name: label || placeholderText
     Accessible.description: errored ? errorText : supporting
     background: Rectangle {
@@ -62,7 +65,7 @@ TextField {
     SungText {
         id: fieldLabel; objectName: "fieldLabel"
         x: field.leftPadding
-        y: field.floatingLabel ? (field.filled ? 8 : -height/2) : (field.height-height)/2
+        y: field.floatingLabel ? (field.filled ? 8 : -height/2) : (field.containerHeight-height)/2
         text: field.label; visible: text.length > 0
         font.pixelSize: field.floatingLabel ? Theme.labelMedium : Theme.bodyLarge
         color: field.errored ? Theme.error : field.activeFocus ? Theme.primary : Theme.muted
@@ -75,7 +78,7 @@ TextField {
         id: supportLine
         objectName: "fieldSupport"
         visible: text.length > 0
-        x: field.leftPadding; y: field.height + 4
+        x: field.leftPadding; y: field.containerHeight + 4
         width: field.width - field.leftPadding - field.rightPadding
         text: field.errored ? field.errorText : field.supporting
         color: field.errored ? Theme.error : Theme.muted
