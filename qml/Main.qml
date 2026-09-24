@@ -2162,7 +2162,7 @@ ApplicationWindow {
                     MButton { objectName: "checkUpdatesButton"; text: "Check for Updates"; symbol: "refresh"; tonal: true; busy: updates.checking; enabled: !updates.checking; onClicked: updates.check(true) }
                     SungText { objectName: "updateStatus"; text: updates.checking ? "Checking…" : updates.status; color: Theme.muted; font.pixelSize: Theme.bodyMedium; wrapMode: Text.Wrap; Layout.fillWidth: true }
                 }
-                MSwitch { Layout.fillWidth:true;Layout.minimumWidth:0; visible: settingsDialog.matches("Check for updates automatically"); objectName: "autoUpdateSwitch"; text: "Check for updates automatically"; hint: "Once a day, Musix asks GitHub whether a newer release is out. It only tells you; it never downloads or installs anything."; checked: updates.automatic; onToggled: updates.automatic=checked }
+                MSwitch { Layout.fillWidth:true;Layout.minimumWidth:0; visible: settingsDialog.matches("Check for updates automatically"); objectName: "autoUpdateSwitch"; text: "Check for updates automatically"; hint: "Once a day, Musix asks GitHub whether a newer release is out. It only tells you; it never downloads or installs a new version of itself."; checked: updates.automatic; onToggled: updates.automatic=checked }
                     }
                 }
                 SungText { objectName: "settingsNoResults"; text: "No settings found"; color: Theme.muted; visible: {settingsDialog.searchQuery;return !!settingsDialog.searchQuery.trim() && !settingsGroup0.hasMatches && !settingsGroup1.hasMatches && !settingsGroup2.hasMatches && !settingsGroup3.hasMatches && !settingsGroup4.hasMatches && !settingsGroup5.hasMatches;} }

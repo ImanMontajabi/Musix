@@ -23,7 +23,7 @@ MDialog {
          : mode==="current" ? "You’re up to date" : "Couldn’t check for updates"
     contentItem: SungText {
         objectName: "updateDialogText"
-        text: dialog.mode==="available" ? "Download opens its release page on GitHub, with the DMG and what changed. Musix never installs anything by itself."
+        text: dialog.mode==="available" ? "Download opens its release page on GitHub, with the DMG and what changed. Musix never installs a new version of itself."
             : dialog.mode==="current" ? "Musix "+updates.currentVersion+" is the newest version."
             : dialog.message
         wrapMode: Text.Wrap; color: Theme.muted; font.pixelSize: Theme.bodyMedium
