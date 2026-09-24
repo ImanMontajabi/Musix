@@ -160,12 +160,17 @@ int main(int argc, char **argv) {
 #endif
   WindowResources windowResources;
   WindowChrome windowChrome;
+  // Declared before the engine so they outlive it: its teardown still
+  // evaluates bindings that read them.
+  UpdateChecker updates(MUSIX_VERSION);
+#ifdef Q_OS_MACOS
+  ReleaseNotifier releaseNotifier;
+#endif
   QQmlApplicationEngine engine;
   engine.rootContext()->setContextProperty("windowResources", &windowResources);
   engine.rootContext()->setContextProperty("windowChrome", &windowChrome);
   engine.addImageProvider("symbols", new Symbols);
   engine.rootContext()->setContextProperty("app", &backend);
-  UpdateChecker updates(MUSIX_VERSION);
   // A local mock can stand in for GitHub; setEndpoint takes nothing else.
   if (const auto endpoint = qEnvironmentVariable("MUSIX_UPDATE_API"); !endpoint.isEmpty() && !updates.setEndpoint(QUrl(endpoint)))
     fprintf(stderr, "MUSIX_UPDATE_API ignored: only a loopback http address is accepted\n");
@@ -174,7 +179,6 @@ int main(int argc, char **argv) {
     backend.startReleaseChecks();
   }
 #ifdef Q_OS_MACOS
-  ReleaseNotifier releaseNotifier;
   QObject::connect(&backend, &Backend::newReleases, &releaseNotifier, [&](int count) {
     if (!backend.releaseNotifications())
       return;

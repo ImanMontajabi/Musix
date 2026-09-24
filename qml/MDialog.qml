@@ -14,11 +14,11 @@ Dialog {
     // the arithmetic.
     function fitWidth(preferred) {
         if (!parent) return preferred
-        return fullScreen ? parent.width : Math.min(parent.width-48, preferred)
+        return fullScreen ? parent.width : Math.min(parent.width-2*Theme.dialogPadding, preferred)
     }
     function fitHeight(preferred) {
         if (!parent) return preferred
-        return fullScreen ? parent.height : Math.min(parent.height-48, preferred)
+        return fullScreen ? parent.height : Math.min(parent.height-2*Theme.dialogPadding, preferred)
     }
     property bool acceptEnabled: true
     property string acceptText: ""
@@ -30,7 +30,13 @@ Dialog {
                                       && scrollSource.contentY < scrollSource.contentHeight-scrollSource.height-1
     focus: true
     onOpened: if (initialFocus) initialFocus.forceActiveFocus(Qt.TabFocusReason)
-    padding: 24
+    // Material measures a floating dialog from its edges: 24 around, the body
+    // 16 under the headline and the actions 24 under the body. The header and
+    // footer carry no padding of their own on those sides, or the gaps add up.
+    readonly property bool titled: title.length > 0
+    padding: Theme.dialogPadding
+    topPadding: fullScreen || !titled ? Theme.dialogPadding : Theme.dialogTitleGap
+    bottomPadding: Theme.dialogActionsGap
     anchors.centerIn: parent
     background: Rectangle {
         color: Theme.high; radius: dialog.fullScreen ? 0 : Theme.shapeExtraLarge
@@ -53,14 +59,14 @@ Dialog {
     header: Item {
         // A full-screen dialog is headed by a 56dp bar carrying the close
         // affordance and the headline beside it, ruled off from the content.
-        implicitHeight: dialog.fullScreen ? 56
-                      : Math.max(72, titleLabel.implicitHeight + 48 + (dialogIcon.visible ? 40 : 0))
+        implicitHeight: dialog.fullScreen ? 56 : !dialog.titled ? 0
+                      : Theme.dialogPadding + titleLabel.implicitHeight + (dialogIcon.visible ? dialogIcon.height+Theme.dialogTitleGap : 0)
         MButton {
             id: closeAffordance
             objectName: "dialogClose"
             visible: dialog.fullScreen && !dialog.backTarget
             symbol: "close"; tip: "Close"
-            x: 8; anchors.verticalCenter: parent.verticalCenter
+            x: Theme.space8; anchors.verticalCenter: parent.verticalCenter
             onClicked: dialog.reject()
         }
         MButton {
@@ -69,7 +75,8 @@ Dialog {
             visible: !!dialog.backTarget
             symbol: "back"; tip: "Back to " + dialog.backLabel
             Accessible.name: "Back to " + dialog.backLabel
-            x: dialog.fullScreen ? 8 : 12
+            // The arrow, not its 48 target, lines up with the dialog's 24 edge.
+            x: dialog.fullScreen ? Theme.space8 : Theme.dialogPadding-12
             anchors.verticalCenter: titleLabel.verticalCenter
             onClicked: dialog.goBack()
         }
@@ -79,15 +86,15 @@ Dialog {
             visible: !dialog.fullScreen && dialog.symbol.length > 0
             name: dialog.symbol; size: 24; ink: Theme.primary
             anchors.horizontalCenter: parent.horizontalCenter
-            y: 24
+            y: Theme.dialogPadding
         }
         SungText {
             id: titleLabel; heading: true; objectName: "dialogTitle"
-            x: backAffordance.visible ? backAffordance.x+backAffordance.width+4
-             : dialog.fullScreen ? closeAffordance.x+closeAffordance.width+8 : 24
-            width: parent.width-x-24
-            y: dialogIcon.visible ? dialogIcon.y+dialogIcon.height+16
-                                  : (parent.height-implicitHeight)/2
+            x: backAffordance.visible ? backAffordance.x+backAffordance.width+Theme.space4
+             : dialog.fullScreen ? closeAffordance.x+closeAffordance.width+Theme.space8 : Theme.dialogPadding
+            width: parent.width-x-Theme.dialogPadding
+            y: dialogIcon.visible ? dialogIcon.y+dialogIcon.height+Theme.dialogTitleGap
+             : dialog.fullScreen ? (parent.height-implicitHeight)/2 : Theme.dialogPadding
             horizontalAlignment: dialogIcon.visible ? Text.AlignHCenter : Text.AlignLeft
             text: dialog.title; font.pixelSize: Theme.headlineSmall; emphasized: true
             wrapMode: Text.Wrap; maximumLineCount: 2
@@ -105,9 +112,11 @@ Dialog {
         alignment: Qt.AlignRight
         buttonLayout: DialogButtonBox.AndroidLayout
         // Material's full-screen dialog puts its actions on a 56dp bar at the
-        // bottom edge; a floating one keeps the 24dp inset it sits in.
-        implicitHeight: dialog.fullScreen ? 56 : contentHeight+48
-        padding: dialog.fullScreen ? 8 : 24; spacing: 8
+        // bottom edge; a floating one keeps the 24dp inset it sits in, less on
+        // top, where the body's own padding already makes the gap.
+        implicitHeight: dialog.fullScreen ? 56 : contentHeight+Theme.dialogPadding
+        padding: dialog.fullScreen ? Theme.space8 : Theme.dialogPadding; topPadding: dialog.fullScreen ? Theme.space8 : 0
+        spacing: Theme.actionGap
         background: Item {
             Rectangle {
                 objectName: "dialogScrollDivider"

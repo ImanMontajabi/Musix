@@ -29,12 +29,12 @@ Window {
         border.width: 1; border.color: Theme.outlineVariant
         MouseArea { anchors.fill: parent; onPressed: mini.startSystemMove() }
         ColumnLayout {
-            anchors.fill: parent; anchors.margins: 16; spacing: 4
+            anchors.fill: parent; anchors.margins: Theme.space16; spacing: Theme.space4
             RowLayout {
-                Layout.fillWidth: true; spacing: 12
+                Layout.fillWidth: true; spacing: Theme.space12
                 Artwork { url: app.current.art || ""; motionUrl: app.currentMotionArt; crossfade:true; Layout.preferredWidth: 54; Layout.preferredHeight: 54; radius: Theme.shapeMedium; pixels: 128; fit:app.currentArtworkFit }
                 ColumnLayout {
-                    Layout.fillWidth: true; spacing: 4
+                    Layout.fillWidth: true; spacing: Theme.space4
                     SungText { text: presentation.shown.title || "Nothing playing"; opacity: presentation.fade; transform: Translate { x: presentation.offset } Layout.fillWidth: true; font.pixelSize: Theme.titleMedium; typeRole: "titleMedium"; font.weight: Font.DemiBold }
                     SungText { text: presentation.shown.artist || ""; opacity: presentation.fade; transform: Translate { x: presentation.offset } Layout.fillWidth: true; font.pixelSize: Theme.bodyMedium; color: Theme.muted }
                 }
@@ -62,7 +62,7 @@ Window {
                 SungText {objectName:"miniLyricLine";anchors.fill:parent;text:lyricLine.shown;opacity:lyricLine.progress;horizontalAlignment:Text.AlignHCenter;font.pixelSize:Theme.bodyMedium;color:Theme.primary;Accessible.name:text}
             }
             RowLayout {
-                Layout.alignment: Qt.AlignHCenter; spacing: 12
+                Layout.alignment: Qt.AlignHCenter; spacing: Theme.space12
                 MButton { symbol: "heart"; tip: app.liked?"Remove from liked songs":"Like"; selected: app.liked; enabled: app.currentIndex>=0; onClicked: app.toggleLike(app.current) }
                 MButton { symbol: "previous"; tip: "Previous"; enabled: app.queue.count>0; onClicked: app.previous() }
                 MButton { objectName: "miniPlayButton"; busy: app.buffering; morphPlayback:true; symbol: app.playing||app.resolving?"pause":"play"; tip: app.playing||app.resolving?"Pause":"Play"; filled: true; implicitWidth: 64; enabled: app.queue.count>0; onClicked: app.toggle() }
@@ -70,7 +70,7 @@ Window {
                 VolumeControl {id:miniVolume;showSlider:false;buttonName:"miniVolumeButton";sliderName:"miniVolumeSlider"}
             }
             RowLayout {
-                Layout.fillWidth: true; spacing: 8
+                Layout.fillWidth: true; spacing: Theme.space8
                 SungText { font.features: {"tnum": 1}; text: app.formatTime(app.position); color: Theme.muted; font.pixelSize: Theme.labelSmall; labelRole: true; Layout.preferredWidth: 34 }
                 SeekBar { Layout.fillWidth: true; implicitHeight: 28 }
                 SungText { font.features: {"tnum": 1}; text: app.formatTime(app.duration); color: Theme.muted; font.pixelSize: Theme.labelSmall; labelRole: true; Layout.preferredWidth: 34; horizontalAlignment: Text.AlignRight }
@@ -78,9 +78,9 @@ Window {
         }
     }
     Rectangle {
-        anchors.left: parent.left; anchors.right: parent.right; anchors.bottom: parent.bottom; anchors.margins: 8
+        anchors.left: parent.left; anchors.right: parent.right; anchors.bottom: parent.bottom; anchors.margins: Theme.space8
         height: 58; radius: Theme.shapeLarge; color: Theme.errorContainer; visible: !!app.error
-        SungText { anchors.left: parent.left; anchors.right: retry.left; anchors.verticalCenter: parent.verticalCenter; anchors.margins: 14; text: app.error; color: Theme.errorContainerText; font.pixelSize: Theme.bodySmall }
+        SungText { anchors.left: parent.left; anchors.right: retry.left; anchors.verticalCenter: parent.verticalCenter; anchors.margins: Theme.space16; text: app.error; color: Theme.errorContainerText; font.pixelSize: Theme.bodySmall }
         MButton { id: retry; anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter; text: app.canRetry?"Retry":"Open"; ink: Theme.errorContainerText; onClicked: app.canRetry?app.retry():mini.restoreRequested() }
     }
 }

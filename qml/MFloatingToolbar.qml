@@ -34,6 +34,6 @@ Rectangle {
         id: row
         objectName: "floatingToolbarRow"
         anchors.centerIn: parent
-        spacing: 8
+        spacing: Theme.space8
     }
 }

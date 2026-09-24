@@ -15,7 +15,7 @@ Rectangle {
     Accessible.name: label
     Behavior on opacity {NumberAnimation {duration:Theme.fast;easing.type:Easing.BezierSpline;easing.bezierCurve:Theme.fastEffectsCurve}}
     Timer {id:dismiss;interval:1100;onTriggered:hud.shown=false}
-    RowLayout {id:contents;anchors.centerIn:parent;spacing:12
+    RowLayout {id:contents;anchors.centerIn:parent;spacing:Theme.space12
         Icon {name:hud.symbol;size:24;ink:Theme.primary}
         SungText {text:hud.label;color:Theme.text;font.pixelSize:Theme.titleMedium;typeRole:"titleMedium";font.features:{"tnum":1}}
     }

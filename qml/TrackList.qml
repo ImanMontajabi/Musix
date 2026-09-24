@@ -97,11 +97,11 @@ ListView {
         id:heading;required property string section
         objectName: list.groupFolders ? "folderHeading" : "sourceHeading"
         width:list.width;height:list.foldable?48:32
-        RowLayout {anchors.fill:parent;spacing:4
+        RowLayout {anchors.fill:parent;spacing:Theme.space4
             MButton {objectName:"toggleGroup_"+heading.section;visible:list.foldable;Layout.fillWidth:true;Layout.minimumWidth:0;leftAligned:true
                 text:(list.groupFolders?app.musicFolderLabel(heading.section):heading.section)+" · "+(list.groupRows[heading.section] || []).length
                 tip:(list.folded[heading.section]?"Expand ":"Collapse ")+heading.section
-                symbol:"";contentInset:12;
+                symbol:"";contentInset:Theme.space12;
                 onClicked:list.toggleGroup(heading.section)
             }
             // Material puts the expander at the trailing edge of the item it
@@ -122,7 +122,7 @@ ListView {
                 TapHandler {onTapped:list.toggleGroup(heading.section)}
                 Accessible.ignored:true
             }
-            SungText {objectName:"groupHeading";visible:!list.foldable;Layout.fillWidth:true;Layout.leftMargin:12;text:heading.section;color:Theme.muted;font.pixelSize:Theme.titleSmall;typeRole:"titleSmall";elide:Text.ElideRight}
+            SungText {objectName:"groupHeading";visible:!list.foldable;Layout.fillWidth:true;Layout.leftMargin:Theme.space12;text:heading.section;color:Theme.muted;font.pixelSize:Theme.titleSmall;typeRole:"titleSmall";elide:Text.ElideRight}
             MButton {objectName:"playGroup_"+heading.section;visible:list.foldable;symbol:"play";tip:"Play "+heading.section;onClicked:app.playGroup(heading.section,list.groupFolders)}
         }
     }

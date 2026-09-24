@@ -14,7 +14,7 @@ MDialog {
     onOpened: {field.clear();list.currentIndex=0;}
     function choose(index) {if(index>=0 && index<matches.length){const c=matches[index];close();chosen(c);}}
     contentItem: ColumnLayout {
-        spacing: 12
+        spacing: Theme.space12
         MSearchField {
             id: field; objectName: "commandSearch"; Layout.fillWidth: true
             placeholderText: "Find an action or playlist"; Accessible.name: "Find an action or playlist"
@@ -25,7 +25,7 @@ MDialog {
         }
         ListView {
             id: list; objectName: "commandResults"; Layout.fillWidth: true; Layout.fillHeight: true
-            clip: true; model: dialog.matches; spacing: 4; boundsBehavior: Flickable.StopAtBounds
+            clip: true; model: dialog.matches; spacing: Theme.space4; boundsBehavior: Flickable.StopAtBounds
             ScrollBar.vertical: MScrollBar {}
             delegate: MButton {
                 required property var modelData; required property int index

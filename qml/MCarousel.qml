@@ -25,9 +25,9 @@ ListView {
     orientation: ListView.Horizontal
     // Material's multi-browse measurements: 16dp at either end of the run and
     // 8dp between the items in it.
-    spacing: 8
-    leftMargin: 16
-    rightMargin: 16
+    spacing: Theme.space8
+    leftMargin: Theme.space16
+    rightMargin: Theme.space16
     clip: true
     boundsBehavior: Flickable.StopAtBounds
     // Items snap into place to keep the layout, rather than resting part-way.

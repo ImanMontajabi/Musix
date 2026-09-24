@@ -1171,9 +1171,9 @@ QStringList Backend::shapeNames() const { return m3::shapeNames(); }
 QVariantList Backend::shapeOutline(const QString &name,int steps) const {
   QVariantList out;for(double radius:m3::shapeOutline(name,steps))out.append(radius);return out;
 }
-QVariantMap Backend::colorScheme(const QColor &source,bool dark) const {
+QVariantMap Backend::colorScheme(const QColor &source,bool dark,const QString &requested) const {
   if(!source.isValid())return {};
-  const auto variant=colorVariant();const double contrast=colorContrast();
+  const auto variant=requested.isEmpty()?colorVariant():requested;const double contrast=colorContrast();
   const QPair<QRgb,QString> key{source.rgb(),
     QString::number(dark)+variant+QString::number(contrast,'f',2)};
   // The seed animates between covers, so the same handful of colors comes back

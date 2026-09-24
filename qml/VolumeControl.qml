@@ -11,7 +11,7 @@ RowLayout {
     MButton {id:button;objectName:control.buttonName;symbol:app.volume>0?"volume":"mute";tip:"Volume · "+Math.round(app.volume*100)+"%";selected:popup.visible;onClicked:popup.open()}
     SeekBar {volumeMode:true;visible:control.showSlider;Layout.preferredWidth:66}
     Popup {
-        id:popup;objectName:"volumePopup";parent:Overlay.overlay;width:264;height:184;padding:16;focus:true
+        id:popup;objectName:"volumePopup";parent:Overlay.overlay;width:264;height:184;padding:Theme.space16;focus:true
         x:Math.max(12,Math.min(parent.width-width-12,button.mapToItem(parent,0,0).x-width+button.width))
         y:Math.max(12,Math.min(parent.height-height-12,button.mapToItem(parent,0,0).y-height-10))
         onOpened:{percent.text=String(Math.round(app.volume*100));percent.forceActiveFocus();percent.selectAll();}
@@ -20,7 +20,7 @@ RowLayout {
         background:Rectangle {radius:Theme.shapeExtraLarge;color:Theme.high;border.width:1;border.color:Theme.outlineVariant}
         enter:Transition {NumberAnimation {property:"opacity";from:0;to:1;duration:Theme.enterDuration}}
         exit:Transition {NumberAnimation {property:"opacity";to:0;duration:Theme.exitDuration}}
-        ColumnLayout {anchors.fill:parent;spacing:8
+        ColumnLayout {anchors.fill:parent;spacing:Theme.space8
             RowLayout {Layout.fillWidth:true
                 SungText {heading:true;text:"Volume";Layout.fillWidth:true;font.pixelSize:Theme.titleMedium}
                 MTextField {id:percent;objectName:"volumePercent";Layout.preferredWidth:72;implicitHeight:40;topPadding:10;bottomPadding:10;maximumLength:3;validator:IntValidator {bottom:0;top:100} inputMethodHints:Qt.ImhDigitsOnly;Accessible.name:"Volume percent";onAccepted:popup.apply()}

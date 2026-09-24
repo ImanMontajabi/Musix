@@ -33,7 +33,7 @@ MDialog {
         id: scroll; objectName: "smartScroll"; anchors.fill: parent; clip: true; contentWidth: availableWidth; contentHeight: fields.implicitHeight; rightPadding: 10
         ScrollBar.vertical: MScrollBar { parent: scroll; x: scroll.width-width; height: scroll.availableHeight; orientation: Qt.Vertical }
         ColumnLayout {
-            id: fields; width: scroll.availableWidth; spacing: 12
+            id: fields; width: scroll.availableWidth; spacing: Theme.space12
             SungText { text: "Name" }
             MTextField { id: nameField; objectName: "smartName"; Layout.fillWidth: true; maximumLength: 120; placeholderText: "Playlist name" }
             SungText { text: "Artist contains" }
@@ -44,14 +44,14 @@ MDialog {
             MTextField { id: albumField; objectName: "smartAlbum"; Layout.fillWidth: true; maximumLength: 120; placeholderText: "Any album" }
             SungText { text: "Released between" }
             RowLayout {
-                Layout.fillWidth: true; spacing: 8
+                Layout.fillWidth: true; spacing: Theme.space8
                 MTextField { id: yearFrom; objectName: "smartYearFrom"; Layout.fillWidth: true; maximumLength: 4; placeholderText: "Any year"; inputMethodHints: Qt.ImhDigitsOnly; validator: IntValidator { bottom: 0; top: 9999 } }
                 SungText { text: "and"; color: Theme.muted }
                 MTextField { id: yearTo; objectName: "smartYearTo"; Layout.fillWidth: true; maximumLength: 4; placeholderText: "Any year"; inputMethodHints: Qt.ImhDigitsOnly; validator: IntValidator { bottom: 0; top: 9999 } }
             }
             SungText { text: "Length in minutes" }
             RowLayout {
-                Layout.fillWidth: true; spacing: 8
+                Layout.fillWidth: true; spacing: Theme.space8
                 MTextField { id: minutesFrom; objectName: "smartMinutesFrom"; Layout.fillWidth: true; maximumLength: 3; placeholderText: "Any length"; inputMethodHints: Qt.ImhDigitsOnly; validator: IntValidator { bottom: 0; top: 600 } }
                 SungText { text: "to"; color: Theme.muted }
                 MTextField { id: minutesTo; objectName: "smartMinutesTo"; Layout.fillWidth: true; maximumLength: 3; placeholderText: "Any length"; inputMethodHints: Qt.ImhDigitsOnly; validator: IntValidator { bottom: 0; top: 600 } }

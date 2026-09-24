@@ -18,7 +18,7 @@ MDialog {
     }
     onClosed:{source="";zoom=1;}
     contentItem:ColumnLayout {
-        spacing:12
+        spacing:Theme.space12
         Flickable {
             id:canvas;objectName:"artworkCanvas";Layout.fillWidth:true;Layout.fillHeight:true
             clip:true;boundsBehavior:Flickable.StopAtBounds
@@ -29,7 +29,7 @@ MDialog {
             }
             WheelHandler {onWheel:event=>{viewer.zoomTo(viewer.zoom*Math.pow(1.0015,event.angleDelta.y));event.accepted=true;}}
         }
-        RowLayout {Layout.alignment:Qt.AlignHCenter;spacing:8
+        RowLayout {Layout.alignment:Qt.AlignHCenter;spacing:Theme.space8
             MButton {objectName:"artworkZoomOut";text:"−";tip:"Zoom out";enabled:viewer.zoom>1;onClicked:viewer.zoomTo(viewer.zoom/1.25)}
             MButton {objectName:"artworkZoomReset";text:Math.round(viewer.zoom*100)+"%";tip:"Reset zoom";onClicked:viewer.zoomTo(1)}
             MButton {objectName:"artworkZoomIn";text:"+";tip:"Zoom in";enabled:viewer.zoom<4;onClicked:viewer.zoomTo(viewer.zoom*1.25)}

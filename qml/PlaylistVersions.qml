@@ -41,7 +41,7 @@ MDialog {
 
     ColumnLayout {
         anchors.fill: parent
-        spacing: 12
+        spacing: Theme.space12
 
         SungText {
             objectName: "playlistVersionsSubtitle"
@@ -59,7 +59,7 @@ MDialog {
             Layout.fillHeight: true
             Layout.minimumHeight: 160
             clip: true
-            spacing: 8
+            spacing: Theme.space8
             reuseItems: true
             model: dialog.versions
             ScrollBar.vertical: MScrollBar {}
@@ -74,12 +74,12 @@ MDialog {
                 color: Theme.high
                 RowLayout {
                     anchors.fill: parent
-                    anchors.leftMargin: 16
-                    anchors.rightMargin: 12
-                    spacing: 12
+                    anchors.leftMargin: Theme.space16
+                    anchors.rightMargin: Theme.space12
+                    spacing: Theme.space12
                     ColumnLayout {
                         Layout.fillWidth: true
-                        spacing: 2
+                        spacing: Theme.textGap
                         SungText {
                             objectName: "playlistVersionWhen_"+version.index
                             text: dialog.spell(version.modelData.at)
@@ -103,7 +103,7 @@ MDialog {
             }
             Column {
                 anchors.centerIn: parent
-                spacing: 10
+                spacing: Theme.space8
                 visible: list.count === 0
                 SungText {
                     objectName: "playlistVersionsEmpty"

@@ -9,7 +9,7 @@ TextField {
     signal cleared()
     implicitHeight: 56
     leftPadding: 52; rightPadding: clearEnabled ? 52 : 16
-    topPadding: 8; bottomPadding: 8
+    topPadding: Theme.space8; bottomPadding: Theme.space8
     selectByMouse: true
     verticalAlignment: TextInput.AlignVCenter
     font.family: Theme.fontFamily; font.pixelSize: Theme.bodyLarge
@@ -28,7 +28,7 @@ TextField {
     Icon { name: "search"; size: 24; x: 16; anchors.verticalCenter: parent.verticalCenter; ink: Theme.text; Accessible.ignored: true }
     MButton {
         objectName: "clearSearchButton"
-        anchors.right: parent.right; anchors.rightMargin: 4; anchors.verticalCenter: parent.verticalCenter
+        anchors.right: parent.right; anchors.rightMargin: Theme.space4; anchors.verticalCenter: parent.verticalCenter
         width: 48; height: 48; symbol: "close"; tip: field.clearTip
         visible: field.clearEnabled && field.length > 0
         onClicked: { field.clear(); field.textEdited(); field.cleared(); field.forceActiveFocus(); }

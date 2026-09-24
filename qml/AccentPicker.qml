@@ -10,7 +10,7 @@ import QtQuick.Layouts
 ColumnLayout {
     id: picker
     objectName: "accentPicker"
-    spacing: 12
+    spacing: Theme.space12
     readonly property var seeds: ["","#6750a4","#386a20","#00658e","#8f4c38","#7d5260","#6b5f00"]
     readonly property var names: ["Default","Purple","Green","Blue","Terracotta","Mauve","Olive"]
 
@@ -63,7 +63,7 @@ ColumnLayout {
 
     SungText { text: "Material"; color: Theme.muted; font.pixelSize: Theme.labelLarge; labelRole: true }
     Flow {
-        Layout.fillWidth: true; spacing: 10
+        Layout.fillWidth: true; spacing: Theme.space8
         Repeater {
             model: picker.seeds
             Swatch {
@@ -80,10 +80,10 @@ ColumnLayout {
             id: group
             required property var modelData
             objectName: "accentPalette_"+modelData.key
-            Layout.fillWidth: true; spacing: 12
-            SungText { text: group.modelData.name; color: Theme.muted; font.pixelSize: Theme.labelLarge; labelRole: true; Layout.topMargin: 4 }
+            Layout.fillWidth: true; spacing: Theme.space12
+            SungText { text: group.modelData.name; color: Theme.muted; font.pixelSize: Theme.labelLarge; labelRole: true; Layout.topMargin: Theme.space4 }
             Flow {
-                Layout.fillWidth: true; spacing: 10
+                Layout.fillWidth: true; spacing: Theme.space8
                 Repeater {
                     model: group.modelData.accents
                     Swatch {

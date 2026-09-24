@@ -28,7 +28,7 @@ Menu {
     onCountChanged: Qt.callLater(restyle)
     Component.onCompleted: restyle()
 
-    width: 244; padding: segmented ? 4 : 8; margins: 12
+    width: 244; padding: segmented ? 4 : 8; margins: Theme.space12
     height: Math.min(implicitHeight, Math.max(100, (Overlay.overlay ? Overlay.overlay.height : 600)-24))
     delegate: MMenuItem {}
     contentItem: ListView {

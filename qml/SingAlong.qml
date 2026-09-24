@@ -161,7 +161,7 @@ Item {
         objectName: "singAlongWaiting"
         anchors.horizontalCenter: parent.horizontalCenter
         anchors.bottom: parent.bottom
-        spacing: 12
+        spacing: Theme.space12
         visible: root.ready && root.activeIndex<0
         SungText {
             objectName: "singAlongCue"

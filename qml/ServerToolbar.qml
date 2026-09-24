@@ -6,7 +6,7 @@ ColumnLayout {
     readonly property bool dialogOpen: newPlaylist.visible || restoreQueue.visible || options.visible || filters.visible || folders.visible
     readonly property string searchFilter: filter.value
     signal connectRequested()
-    spacing: 8
+    spacing: Theme.space8
     RowLayout {
         Layout.fillWidth: true
         Flickable {
@@ -17,7 +17,7 @@ ColumnLayout {
             function reveal(item) {const left=item.x;const right=left+item.width;if(left<contentX)contentX=left;else if(right>contentX+width)contentX=right-width;contentX=Math.max(0,Math.min(contentX,Math.max(0,contentWidth-width)))}
             onWidthChanged: contentX=Math.max(0,Math.min(contentX,Math.max(0,contentWidth-width)))
             Row {
-                id: categoryRow; spacing: 6
+                id: categoryRow; spacing: Theme.space8
                 Repeater {
                     model: [{key:"albums",label:"Albums"},{key:"artists",label:"Artists"},{key:"genres",label:"Genres"},{key:"playlists",label:"Playlists"},{key:"favorites",label:"Favorites"},{key:"random",label:"Discover"}]
                     MChip { required property var modelData; text: modelData.label; selected: app.serverRequest.mode===modelData.key; enabled: app.server.connected; onClicked: app.browseServer(modelData.key); onActiveFocusChanged: if(activeFocus)categories.reveal(this) }

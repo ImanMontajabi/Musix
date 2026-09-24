@@ -39,7 +39,7 @@ MDialog {
     ColumnLayout {
         objectName: "statsBody"
         anchors.fill: parent
-        spacing: 12
+        spacing: Theme.space12
 
         MSegmentedControl {
             objectName: "statsPeriod"
@@ -56,8 +56,8 @@ MDialog {
             Layout.fillWidth: true
             // Four across where there is room, two where there is not.
             columns: width < 520 ? 2 : 4
-            columnSpacing: 12
-            rowSpacing: 12
+            columnSpacing: Theme.space12
+            rowSpacing: Theme.space12
             Repeater {
                 model: [{name:"statsTime", label:"Listened", value:dialog.spell(dialog.stats.seconds || 0)},
                         {name:"statsPlays", label:"Plays", value:String(dialog.stats.plays || 0)},
@@ -78,8 +78,8 @@ MDialog {
                     color: Theme.primaryFixed
                     ColumnLayout {
                         anchors.fill: parent
-                        anchors.margins: 14
-                        spacing: 2
+                        anchors.margins: Theme.cardPadding
+                        spacing: Theme.textGap
                         SungText { text: figure.modelData.label; color: Theme.primaryFixedVariantText; font.pixelSize: Theme.labelMedium }
                         SungText {
                             objectName: figure.modelData.name+"Value"
@@ -100,7 +100,7 @@ MDialog {
             objectName: "statsDaily"
             Layout.fillWidth: true
             visible: (dialog.stats.daily || []).length > 1
-            spacing: 6
+            spacing: Theme.space8
             SungText { text: "By day"; color: Theme.muted; font.pixelSize: Theme.labelMedium }
             RowLayout {
                 objectName: "statsDailyBars"
@@ -109,7 +109,7 @@ MDialog {
                 // The bars carry the whole point of the row, so they keep a
                 // floor rather than collapsing into a rule.
                 Layout.minimumHeight: 56
-                spacing: 4
+                spacing: Theme.space4
                 Repeater {
                     model: (dialog.stats.daily || []).slice(-14)
                     ColumnLayout {
@@ -117,7 +117,7 @@ MDialog {
                         readonly property real peak: Math.max(1, ...(dialog.stats.daily || [{seconds:1}]).slice(-14).map(d => d.seconds))
                         Layout.fillWidth: true
                         Layout.fillHeight: true
-                        spacing: 4
+                        spacing: Theme.space4
                         Item {
                             Layout.fillWidth: true
                             Layout.fillHeight: true
@@ -164,7 +164,7 @@ MDialog {
             // own rather than being squeezed out by the figures above it.
             Layout.minimumHeight: 140
             clip: true
-            spacing: 4
+            spacing: Theme.space4
             reuseItems: true
             model: dialog.ranking === "artists" ? (dialog.stats.topArtists || [])
                  : dialog.ranking === "albums" ? (dialog.stats.topAlbums || [])
@@ -180,9 +180,9 @@ MDialog {
                 color: index % 2 === 0 ? Theme.container : "transparent"
                 RowLayout {
                     anchors.fill: parent
-                    anchors.leftMargin: 14
-                    anchors.rightMargin: 14
-                    spacing: 12
+                    anchors.leftMargin: Theme.cardPadding
+                    anchors.rightMargin: Theme.cardPadding
+                    spacing: Theme.space12
                     SungText {
                         text: String(parent.parent.index+1)
                         color: Theme.muted

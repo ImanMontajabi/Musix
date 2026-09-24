@@ -4,7 +4,7 @@ import QtQuick.Layouts
 MDialog {
     id:dialog;objectName:"viewLayoutDialog";title:"View layout";modal:true;standardButtons:Dialog.Close
     width:Math.min(500,parent.width-32);height:Math.min(parent.height-32,implicitHeight)
-    contentItem: ColumnLayout {spacing:12
+    contentItem: ColumnLayout {spacing:Theme.space12
         SungText {text:"Density";font.pixelSize:Theme.titleMedium;typeRole:"titleMedium"}
         MSegmentedControl {
             accessibleName:"View density"

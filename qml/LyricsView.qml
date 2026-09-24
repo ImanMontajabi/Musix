@@ -18,7 +18,7 @@ Item {
     Connections { target: app; function onLyricsChanged(){if(lyricPane.searchOpen)lyricPane.refreshSearch();} }
     RowLayout {
         id: searchControls; anchors.left: parent.left; anchors.right: parent.right; anchors.top: parent.top
-        height: visible?48:0; visible: lyricPane.searchOpen; spacing: 6
+        height: visible?48:0; visible: lyricPane.searchOpen; spacing: Theme.space8
         MButton { objectName: "closeLyricSearch"; symbol: "back"; tip: "Back to lyrics"; onClicked: lyricPane.closeSearch() }
         MSearchField {
             id: lyricSearch; objectName: "lyricSearchField"; Layout.fillWidth: true; Layout.minimumWidth: 0; implicitHeight: 48
@@ -35,7 +35,7 @@ Item {
     Timer { id: searchDelay; interval: 90; onTriggered: lyricPane.refreshSearch() }
     ListView {
         id: lyricResults; objectName: "lyricSearchResults"; anchors.fill: parent; anchors.topMargin: searchControls.height+8; clip: true
-        visible: lyricPane.searchOpen && lyricSearch.text.length>0; model: lyricPane.matches; reuseItems: true; spacing: 8
+        visible: lyricPane.searchOpen && lyricSearch.text.length>0; model: lyricPane.matches; reuseItems: true; spacing: Theme.space8
         currentIndex: -1; highlightMoveDuration: app.motion?Theme.fast:0
         ScrollBar.vertical: MScrollBar {}
         delegate: AbstractButton {
@@ -44,8 +44,8 @@ Item {
             Accessible.name: modelData.text; Accessible.description: modelData.start>=0 ? "Seek to "+app.formatTime(Math.max(0,modelData.start-app.lyricOffset)) : "Untimed lyric"
             onClicked: lyricPane.jumpMatch(index)
             background: Rectangle { radius: Theme.shapeMedium; color: parent.ListView.isCurrentItem?Theme.high:"transparent" }
-            SungText { font.features: {"tnum": 1}; anchors.right: parent.right; anchors.rightMargin: 12; anchors.verticalCenter: parent.verticalCenter; visible: modelData.start>=0; text: app.formatTime(Math.max(0,modelData.start-app.lyricOffset)); color: Theme.muted; font.pixelSize: Theme.labelMedium; labelRole: true }
-            contentItem: MatchText { id: matchText; sourceText: modelData.text; query: lyricSearch.text; leftPadding: 12; rightPadding: modelData.start>=0?64:12; topPadding: 12; bottomPadding: 12; wrapMode: Text.Wrap; font.pixelSize: Theme.bodyLarge; color: Theme.text }
+            SungText { font.features: {"tnum": 1}; anchors.right: parent.right; anchors.rightMargin: Theme.space12; anchors.verticalCenter: parent.verticalCenter; visible: modelData.start>=0; text: app.formatTime(Math.max(0,modelData.start-app.lyricOffset)); color: Theme.muted; font.pixelSize: Theme.labelMedium; labelRole: true }
+            contentItem: MatchText { id: matchText; sourceText: modelData.text; query: lyricSearch.text; leftPadding: Theme.space12; rightPadding: modelData.start>=0?64:12; topPadding: Theme.space12; bottomPadding: Theme.space12; wrapMode: Text.Wrap; font.pixelSize: Theme.bodyLarge; color: Theme.text }
         }
         SungText { anchors.centerIn: parent; visible: lyricPane.matches.length===0; text: "No matches"; color: Theme.muted }
     }
@@ -60,7 +60,7 @@ Item {
     MLoadingIndicator { objectName: "lyricsSpinner"; anchors.centerIn: parent; running: app.lyricsBusy; label: "Loading lyrics" }
     ListView {
         id: liveLyrics; objectName: "liveLyrics"
-        anchors.fill: parent; anchors.topMargin: searchControls.height; anchors.bottomMargin:gapCue.visible?44:0; clip: true; spacing: 12
+        anchors.fill: parent; anchors.topMargin: searchControls.height; anchors.bottomMargin:gapCue.visible?44:0; clip: true; spacing: Theme.space12
         visible: !app.lyricsBusy && app.lyricLines.length>0 && !(lyricPane.searchOpen && lyricSearch.text.length>0)
         model: app.lyricLines; reuseItems: true; cacheBuffer: 100
         function centerCurrent() {
@@ -99,7 +99,7 @@ Item {
             contentItem: SungText {
                 id: lyricLabel; objectName: "lyricLabel"
                 text: lyricLine.modelData.text || "…"
-                leftPadding: 8; rightPadding: 8; topPadding: 10; bottomPadding: 10
+                leftPadding: Theme.space8; rightPadding: Theme.space8; topPadding: Theme.space12; bottomPadding: Theme.space12
                 // Reserve the active size so emphasis never reflows adjacent lines.
                 scaled: true
                 font.pixelSize: lyricPane.expanded ? Math.max(24,Math.min(app.lyricTextSize*1.68,width/14*app.lyricTextSize/25)) : app.lyricTextSize; font.weight: Font.Medium

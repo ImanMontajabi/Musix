@@ -33,7 +33,7 @@ Item {
     Rectangle {
         objectName: "unreadBadge"
         visible: !!card.track.unread
-        anchors.left: art.left; anchors.top: art.top; anchors.margins: 10
+        anchors.left: art.left; anchors.top: art.top; anchors.margins: Theme.overlayInset
         width: newLabel.implicitWidth + 16; height: 24; radius: height/2
         color: Theme.primary
         Accessible.ignored: true
@@ -47,14 +47,14 @@ Item {
         onClicked: {if(card.openHandler)card.openHandler(card.track,art);else app.open(card.track);}
         background: Rectangle { radius: art.radius; border.width: openCard.activeFocus?3:0; border.color: Theme.focusRing; color: "transparent"; opacity: 1; Behavior on opacity { NumberAnimation { duration: Theme.fast; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.fastEffectsCurve } } }
     }
-    MButton { id: cardAction; objectName: "cardAction"; anchors.right: art.right; anchors.bottom: art.bottom; anchors.margins: 10; busy: card.loadingCover; symbol: card.playableCover ? "play" : "chevron"; tip: (card.playableCover ? "Play " : "Open ") + (card.track.title || ""); filled: true; opacity: hover.hovered || openCard.activeFocus || cardAction.activeFocus || card.loadingCover ? 1 : 0; visible: opacity>0; Behavior on opacity { NumberAnimation { duration: Theme.fast; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.fastEffectsCurve } } onClicked: {if(card.playableCover)app.playCover(card.track);else app.open(card.track);} }
+    MButton { id: cardAction; objectName: "cardAction"; anchors.right: art.right; anchors.bottom: art.bottom; anchors.margins: Theme.overlayInset; busy: card.loadingCover; symbol: card.playableCover ? "play" : "chevron"; tip: (card.playableCover ? "Play " : "Open ") + (card.track.title || ""); filled: true; opacity: hover.hovered || openCard.activeFocus || cardAction.activeFocus || card.loadingCover ? 1 : 0; visible: opacity>0; Behavior on opacity { NumberAnimation { duration: Theme.fast; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.fastEffectsCurve } } onClicked: {if(card.playableCover)app.playCover(card.track);else app.open(card.track);} }
     MButton {
-        anchors.right: art.right; anchors.top: art.top; anchors.margins: 10
+        anchors.right: art.right; anchors.top: art.top; anchors.margins: Theme.overlayInset
         symbol: "pin"; tonal: true; toggle: true; selected: {app.pins;return app.isPinned(card.track);}
         tip: selected?"Unpin from Home":"Pin to Home"
         visible: !String(card.track.kind).startsWith("local-") && !(card.track.videoId || card.track.localPath) && (hover.hovered || openCard.activeFocus || activeFocus || selected)
         onClicked: app.togglePin(card.track)
     }
-    MatchText { anchors.top: art.bottom; anchors.topMargin: 12; width: parent.width; revealFocused: openCard.activeFocus; sourceText: card.track.title || ""; font.pixelSize: Theme.bodyLarge; font.weight: Font.Medium }
+    MatchText { anchors.top: art.bottom; anchors.topMargin: Theme.space12; width: parent.width; revealFocused: openCard.activeFocus; sourceText: card.track.title || ""; font.pixelSize: Theme.bodyLarge; font.weight: Font.Medium }
     MatchText { anchors.top: art.bottom; anchors.topMargin: 36; width: parent.width; sourceText: card.track.followId ? [card.track.artist, card.track.releaseType || (card.track.kind==="video" ? "Video" : ""), card.track.year].filter(x => !!x).join(" · ") : card.track.count!==undefined ? ((card.track.artist?card.track.artist+" · ":"")+card.track.count+(card.track.count===1?" track":" tracks")) : card.track.artist || (card.track.kind === "album" ? "Album" : (card.track.kind === "artist" || card.track.kind === "local-artist") ? "Artist" : "Playlist"); font.pixelSize: Theme.bodySmall; color: Theme.muted }
 }

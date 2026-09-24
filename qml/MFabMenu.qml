@@ -71,14 +71,14 @@ Item {
         y: root.downward ? fab.height + 12 : -height - 12
         // What keeps the actions reachable: a menu wider than the room on that
         // side is moved back inside the window rather than hanging off it.
-        margins: 12
+        margins: Theme.space12
         enter: Transition { NumberAnimation { property: "opacity"; from: 0; to: 1; duration: app.motion ? Theme.springFastEffectsMs : 0 } }
         exit: Transition { NumberAnimation { property: "opacity"; from: 1; to: 0; duration: app.motion ? Theme.springFastEffectsMs : 0 } }
 
         contentItem: Column {
             id: items
             objectName: "fabMenuItems"
-            spacing: 8
+            spacing: Theme.space8
             // Items arrive from the FAB, nearest first. The column owns their
             // y, so the arrival is its own add transition: an item that
             // animates its own y fights the column, and every item lands on
@@ -110,7 +110,7 @@ Item {
                     height: 56
                     // Material's FAB menu items hug their content: 24 on either
                     // side, the icon and the label 8 apart.
-                    leftPadding: 24; rightPadding: 24
+                    leftPadding: Theme.space24; rightPadding: Theme.space24
                     implicitWidth: leftPadding + entryContent.implicitWidth + rightPadding
                     hoverEnabled: true
                     focusPolicy: Qt.StrongFocus
@@ -135,7 +135,7 @@ Item {
                     Row {
                         id: entryContent
                         anchors.centerIn: parent
-                        spacing: 8
+                        spacing: Theme.space8
                         Icon { anchors.verticalCenter: parent.verticalCenter; name: entry.modelData.symbol || ""; size: 24; ink: Theme.containerText }
                         SungText {
                             id: entryLabel

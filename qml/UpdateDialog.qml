@@ -29,9 +29,11 @@ MDialog {
         wrapMode: Text.Wrap; color: Theme.muted; font.pixelSize: Theme.bodyMedium
     }
     footer: Item {
-        implicitHeight: 88
+        implicitHeight: updateActions.implicitHeight+Theme.dialogPadding
         RowLayout {
-            anchors.fill: parent; anchors.leftMargin: 24; anchors.rightMargin: 24; anchors.topMargin: 16; anchors.bottomMargin: 24; spacing: 8
+            id: updateActions
+            anchors.left: parent.left; anchors.right: parent.right; anchors.bottom: parent.bottom
+            anchors.leftMargin: Theme.dialogPadding; anchors.rightMargin: Theme.dialogPadding; anchors.bottomMargin: Theme.dialogPadding; spacing: Theme.actionGap
             MButton { objectName: "updateSkip"; visible: dialog.mode==="available"; text: "Skip This Version"; onClicked: { updates.skip(); dialog.close() } }
             Item { Layout.fillWidth: true }
             MButton { objectName: "updateLater"; visible: dialog.mode==="available"; text: "Later"; onClicked: { updates.later(); dialog.close() } }

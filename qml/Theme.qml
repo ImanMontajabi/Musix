@@ -20,7 +20,11 @@ QtObject {
     // The scheme depends on the variant and the contrast level as much as on
     // the source colour, so the binding has to read them or a change to either
     // would never reach the window.
-    readonly property var roles: useSource ? (app.colorVariant, app.colorContrast, app.colorScheme(sourceColor,dark)) : ({})
+    // A named palette is chosen for its colours, so its accents take the
+    // variant that stays closest to the seed; the built-in accents and the
+    // cover keep whichever variant the person picked.
+    readonly property bool paletteAccent: useAccent && !app.accentColor.startsWith("#")
+    readonly property var roles: useSource ? (app.colorVariant, app.colorContrast, app.colorScheme(sourceColor,dark,paletteAccent?"content":"")) : ({})
     function role(name,fallback) {const c=roles[name];return c===undefined?fallback:c;}
     function blend(a,b,t) {return Qt.rgba(a.r+(b.r-a.r)*t,a.g+(b.g-a.g)*t,a.b+(b.b-a.b)*t,1);}
     function luminance(c) {
@@ -238,9 +242,32 @@ QtObject {
     readonly property int rowHeight: app.viewCompactDensity ? 56 : 72
     readonly property int rowArtwork: app.viewCompactDensity ? 36 : 48
     readonly property int gridCell: app.viewCompactDensity ? 148 : 180
+    // Spacing. Material lays everything on a 4 grid, and a gap is one of these
+    // steps; the roles below name the ones Material specifies, so a component
+    // says what a gap is for rather than repeating its size.
+    readonly property int space4: 4
+    readonly property int space8: 8
+    readonly property int space12: 12
+    readonly property int space16: 16
+    readonly property int space24: 24
+    readonly property int space32: 32
+    // Between lines of text stacked as one block: a title and its subtitle.
+    readonly property int textGap: space4
+    // Between buttons in a row; buttonGap is the one inside a button.
+    readonly property int actionGap: space8
     // Material's list item keeps its text and trailing element 16 in from the
     // edges of its container, which is what a hover or selection fills.
-    readonly property int listItemPadding: 16
+    readonly property int listItemPadding: space16
+    readonly property int cardPadding: space16
+    // What sits on top of artwork: badges and the card's own button.
+    readonly property int overlayInset: space8
+    readonly property int heroPadding: space24
+    readonly property int dialogPadding: space24
+    readonly property int dialogTitleGap: space16
+    readonly property int dialogActionsGap: space24
+    readonly property int formGap: space16
+    readonly property int emptyStateGap: space16
+    readonly property int sectionGap: space24
     readonly property int bodyLarge: 16
     readonly property int bodyMedium: 14
     readonly property int labelLarge: 14

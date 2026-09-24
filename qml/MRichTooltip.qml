@@ -20,7 +20,7 @@ ToolTip {
     // out from under the reader.
     delay: 500
     timeout: -1
-    padding: 16
+    padding: Theme.space16
     implicitWidth: Math.min(312, Math.max(200, bodyColumn.implicitWidth + padding*2))
 
     contentItem: Column {
@@ -30,7 +30,7 @@ ToolTip {
         Accessible.role: Accessible.ToolTip
         Accessible.name: tip.subhead
         Accessible.description: tip.supporting
-        spacing: 4
+        spacing: Theme.space4
         SungText {
             objectName: "richTooltipSubhead"
             visible: tip.subhead.length > 0

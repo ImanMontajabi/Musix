@@ -78,7 +78,7 @@ Slider {
         x: slider.leftPadding + slider.visualPosition*(slider.availableWidth-width)
         // Material holds the value indicator a fixed distance off the handle.
         y: -height - 12
-        padding: 8
+        padding: Theme.space8
         contentItem: SungText { objectName: "sliderValueText"; text: slider.valueLabel; color: Theme.inverseSurfaceText; font.pixelSize: Theme.labelLarge; labelRole: true }
         background: Rectangle { color: Theme.inverseSurface; radius: Theme.shapeFull(height) }
     }

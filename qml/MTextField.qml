@@ -38,7 +38,7 @@ TextField {
     readonly property real containerHeight: 56
     readonly property real supportSpace: supportLine.visible ? supportLine.height + 4 : 0
     implicitHeight: containerHeight + supportSpace
-    leftPadding: 16; rightPadding: 16
+    leftPadding: Theme.space16; rightPadding: Theme.space16
     // A filled field floats its label inside the container, so the text it
     // labels sits below it rather than in the middle.
     topPadding: field.filled && field.label.length ? 24 : 16

@@ -7,18 +7,18 @@ MDialog {
     property var selectedSession: ({})
     property string action: ""
     ColumnLayout {
-        anchors.fill:parent;spacing:12
+        anchors.fill:parent;spacing:Theme.space12
         RowLayout {Layout.fillWidth:true
             MTextField {id:nameField;objectName:"sessionName";Layout.fillWidth:true;placeholderText:"Session name";maximumLength:80;Accessible.name:"New session name";onAccepted:saveButton.clicked()}
             MButton {id:saveButton;objectName:"saveSessionButton";text:"Save queue";filled:true;enabled:app.queue.count>0 && !!nameField.text.trim();onClicked:{if(enabled&&app.saveSession(nameField.text))nameField.clear();}}
         }
         ListView {
-            id:list;objectName:"sessionsList";Layout.fillWidth:true;Layout.fillHeight:true;clip:true;spacing:8;reuseItems:true;model:dialog.visible?app.sessions:[]
+            id:list;objectName:"sessionsList";Layout.fillWidth:true;Layout.fillHeight:true;clip:true;spacing:Theme.space8;reuseItems:true;model:dialog.visible?app.sessions:[]
             ScrollBar.vertical:MScrollBar {}
             delegate:Rectangle {
                 required property var modelData;width:list.width;height:88;radius:Theme.shapeLarge;color:Theme.high
-                RowLayout {anchors.fill:parent;anchors.margins:12;spacing:8
-                    ColumnLayout {Layout.fillWidth:true;spacing:3
+                RowLayout {anchors.fill:parent;anchors.margins:Theme.space12;spacing:Theme.space8
+                    ColumnLayout {Layout.fillWidth:true;spacing:Theme.textGap
                         SungText {text:modelData.title;Layout.fillWidth:true;font.weight:Font.Medium}
                         SungText {text:modelData.song || "";Layout.fillWidth:true;color:Theme.muted;font.pixelSize:Theme.bodySmall}
                         SungText {text:modelData.count+(modelData.count===1?" track · ":" tracks · ")+Math.floor(modelData.position/60000)+":"+String(Math.floor(modelData.position/1000)%60).padStart(2,"0");color:Theme.muted;font.pixelSize:Theme.bodySmall}

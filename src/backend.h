@@ -390,7 +390,7 @@ public:
   void setCurrentArtworkFit(bool enabled);
   // Material derives every color role from one source color. The result only
   // changes when that color or the theme does, so it is worth remembering.
-  Q_INVOKABLE QVariantMap colorScheme(const QColor &source,bool dark) const;
+  Q_INVOKABLE QVariantMap colorScheme(const QColor &source,bool dark,const QString &variant=QString()) const;
   // Material's shape library. `shapeOutline` hands back the radii the named
   // shape carries at `steps` even angles, which is what the loading indicator
   // morphs between and what masks artwork.

@@ -54,6 +54,9 @@ ItemDelegate {
     Behavior on implicitHeight {enabled:app.motion && visible && !dragging;NumberAnimation {id:rowResize;duration:220;easing.type:Easing.InOutCubic}}
     Connections {target:app;function onSettingsChanged(){if(!app.motion)rowResize.complete();}}
     implicitHeight: queueMode ? (app.compactDensity?56:72) : Theme.rowHeight
+    // Material's 16 either side; the trailing element is a 48 button, so its
+    // glyph rather than its target is what sits 16 in.
+    leftPadding: Theme.listItemPadding; rightPadding: Theme.listItemPadding-12
     width: ListView.view ? ListView.view.width : 500
     hoverEnabled: true
     enabled: track.available !== false
@@ -139,7 +142,7 @@ ItemDelegate {
         }
     }
     MouseArea {
-        id: pointer; anchors.fill: parent; anchors.rightMargin: 60
+        id: pointer; anchors.fill: parent; anchors.rightMargin: row.rightPadding+48
         enabled: !!row.selection; acceptedButtons: Qt.LeftButton | Qt.RightButton; hoverEnabled: true; preventStealing: true
         onPressed: mouse=> {if(mouse.button===Qt.RightButton){if(row.track.kind!=="smart")row.menuRequested(row.track,row.rowIndex,row);return;}row.pressPoint=Qt.point(mouse.x,mouse.y);row.pressModifiers=mouse.modifiers;row.dragging=false;row.forceActiveFocus();row.listOwner.currentIndex=row.selectionIndex;}
         onPositionChanged: mouse=> {
@@ -165,7 +168,7 @@ ItemDelegate {
     contentItem: RowLayout {
         // Material's list item keeps 12dp between the leading element and what
         // it introduces.
-        spacing: 12
+        spacing: Theme.space12
         transform: Translate { x: row.swipe }
         Item {
             Layout.preferredWidth: row.queueMode?(app.compactDensity?36:48):Theme.rowArtwork; Layout.preferredHeight: Layout.preferredWidth
@@ -188,12 +191,12 @@ ItemDelegate {
             }
         }
         ColumnLayout {
-            Layout.fillWidth: true; spacing: 3
+            Layout.fillWidth: true; spacing: Theme.textGap
             MatchText { objectName: "trackTitle"; query: row.matchQuery; tooltipEnabled: row.titleRevealAllowed; revealFocused: row.keyboardCurrent; sourceText: row.track.title || ""; Layout.fillWidth: true; font.pixelSize: Theme.bodyLarge; font.weight: row.active ? Font.DemiBold : Font.Medium; color: row.titleInk }
             MatchText { visible: row.track.kind!=="smart"; query: row.matchQuery; tooltipEnabled: row.titleRevealAllowed; revealFocused: row.keyboardCurrent; sourceText: row.track.artist || (row.track.kind === "artist" ? "Artist" : row.track.kind === "album" ? "Album" : row.track.kind === "playlist" ? "Playlist" : ""); Layout.fillWidth: true; color: row.supportInk; font.pixelSize: Theme.bodyMedium }
         }
         PlayingIndicator { ink: row.titleInk; visible: row.active }
-        SungText { font.features: {"tnum": 1}; visible: !row.queueMode || row.width>350; text: row.track.duration || (row.track.seconds ? app.formatTime(row.track.seconds*1000) : ""); font.pixelSize: Theme.bodySmall; color: row.supportInk; Layout.rightMargin: 2 }
+        SungText { font.features: {"tnum": 1}; visible: !row.queueMode || row.width>350; text: row.track.duration || (row.track.seconds ? app.formatTime(row.track.seconds*1000) : ""); font.pixelSize: Theme.bodySmall; color: row.supportInk }
         MButton { visible: row.track.kind!=="smart"; symbol: "more"; tip: "Track actions"; Accessible.name: "Actions for "+(row.track.title||"track"); ink: row.actionInk; onClicked: row.menuRequested(row.track,row.rowIndex,this) }
     }
 }

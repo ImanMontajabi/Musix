@@ -18,7 +18,7 @@ Item {
     // row and still as a plain line in the menu; `name` keeps a button findable
     // under the name it had before it joined the row.
     property var actions: []
-    property real spacing: 4
+    property real spacing: Theme.space4
     property real itemWidth: 48
 
     FontMetrics { id: metrics; font.family: Theme.fontFamily; font.pixelSize: Theme.labelLarge; font.weight: Font.Medium }

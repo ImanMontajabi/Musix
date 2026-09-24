@@ -23,7 +23,7 @@ Popup {
     y: 0
     width: Math.min(360, parent ? parent.width-56 : 360)
     height: parent ? parent.height : 0
-    padding: 12
+    padding: Theme.space12
 
     Overlay.modal: Rectangle { color: Theme.scrimColor() }
     background: Rectangle {

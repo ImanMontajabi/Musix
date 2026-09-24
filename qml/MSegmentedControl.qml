@@ -119,7 +119,7 @@ Item {
                     // ends of a connected group are the asymmetric ones.
                     x: (parent.width-width)/2 + Theme.opticalShift(button.leading && !button.selected ? Theme.shapeFull(40) : Theme.shapeSmall,
                                                                    button.trailing && !button.selected ? Theme.shapeFull(40) : Theme.shapeSmall)
-                    spacing: 8
+                    spacing: Theme.space8
                     Icon { name: "check"; size: 18; visible: button.selected; ink: Theme.secondaryContainerText; anchors.verticalCenter: parent.verticalCenter }
                     SungText { text: button.text; font.pixelSize: Theme.labelLarge; font.weight: Font.Medium; color: button.selected ? Theme.secondaryContainerText : Theme.text; elide: Text.ElideRight; width: Math.min(implicitWidth, button.width-(button.selected?42:24)) }
                 }

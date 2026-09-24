@@ -62,7 +62,7 @@ Item {
             Icon {
                 objectName: "dropdownChevron"
                 name: "chevron"; size: 20; ink: Theme.muted
-                anchors.right: parent.right; anchors.rightMargin: 12
+                anchors.right: parent.right; anchors.rightMargin: Theme.space12
                 anchors.verticalCenter: parent.verticalCenter
                 rotation: control.open ? 270 : 90
                 Behavior on rotation { enabled: app.motion; NumberAnimation { duration: Theme.springFastEffectsMs; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.springFastEffects } }

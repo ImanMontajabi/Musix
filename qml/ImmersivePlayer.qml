@@ -78,7 +78,7 @@ Item {
     NumberAnimation on opacity { from: 0; to: 1; duration: Theme.normal; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.effectsCurve }
     AmbientBackdrop { anchors.fill: parent; url: app.current.art || "" }
     ColumnLayout {
-        anchors.fill: parent; anchors.margins: player.width<900?24:40; spacing: 20
+        anchors.fill: parent; anchors.margins: player.width<900?Theme.space24:40; spacing: Theme.space24
         RowLayout {
             objectName: "immersiveTopControls"
             Layout.fillWidth: true; opacity: player.controlsShown?1:0
@@ -97,14 +97,14 @@ Item {
             Item {Layout.fillWidth:true;visible:player.displayedLayout==="artwork"}
             ColumnLayout {
                 visible:player.displayedLayout!=="lyrics" && player.displayedLayout!=="singalong"
-                Layout.preferredWidth: player.coverSize; Layout.minimumWidth: player.coverSize; Layout.maximumWidth: player.coverSize; Layout.fillHeight: true; Layout.minimumHeight: 0; spacing: 12
+                Layout.preferredWidth: player.coverSize; Layout.minimumWidth: player.coverSize; Layout.maximumWidth: player.coverSize; Layout.fillHeight: true; Layout.minimumHeight: 0; spacing: Theme.space12
                 Item { Layout.fillHeight: true }
                 Artwork { id: immersiveArt; objectName: "immersiveArtwork"; Layout.preferredWidth: player.coverSize; Layout.preferredHeight: player.coverSize; Layout.maximumHeight: player.coverSize; url: app.current.art || ""; motionUrl: app.currentMotionArt; crossfade:true; opacity: player.coverHidden?0:1; radius: Theme.shapeExtraLarge; pixels: 850; highResolution: true; fit:app.currentArtworkFit
                     AbstractButton {anchors.fill:parent;Accessible.name:"View artwork";focusPolicy:Qt.StrongFocus;onClicked:player.artworkRequested();background:Rectangle {color:"transparent";radius:Theme.shapeExtraLarge;border.width:parent.visualFocus?2:0;border.color:Theme.focusRing}}
                 }
                 SungText { text: presentation.shown.title || "Nothing playing"; opacity: presentation.fade*player.detailsOpacity; transform: Translate { x: presentation.offset } Layout.fillWidth: true; font.pixelSize: player.width<900?22:30; font.weight: Font.DemiBold; wrapMode: Text.Wrap; maximumLineCount: 2 }
                 AbstractButton {
-                    objectName:"immersiveArtistButton";Layout.fillWidth:true;implicitHeight:48;leftPadding:0;rightPadding:8
+                    objectName:"immersiveArtistButton";Layout.fillWidth:true;implicitHeight:48;leftPadding:0;rightPadding:Theme.space8
                     enabled:!!player.artistTarget.kind && presentation.shown.id===app.current.id;focusPolicy:Qt.StrongFocus
                     Accessible.name: "Open artist · "+(app.current.artist || "")
                     onClicked: player.collectionRequested(player.artistTarget)
@@ -112,7 +112,7 @@ Item {
                     background:Rectangle {color:parent.down?Theme.high:parent.hovered&&parent.enabled?Qt.rgba(Theme.primary.r,Theme.primary.g,Theme.primary.b,Theme.hoverOpacity):"transparent";radius:Theme.shapeMedium;border.width:parent.visualFocus?2:0;border.color:Theme.focusRing}
                 }
                 AbstractButton {
-                    objectName:"immersiveAlbumButton";Layout.fillWidth:true;implicitHeight:40;leftPadding:0;rightPadding:8;visible:!!app.current.album
+                    objectName:"immersiveAlbumButton";Layout.fillWidth:true;implicitHeight:40;leftPadding:0;rightPadding:Theme.space8;visible:!!app.current.album
                     enabled:!!player.albumTarget.kind && presentation.shown.id===app.current.id;focusPolicy:Qt.StrongFocus
                     Accessible.name: "Open album · "+(app.current.album || "")
                     onClicked: player.collectionRequested(player.albumTarget)
@@ -154,7 +154,7 @@ Item {
             ]
         }
         RowLayout {
-            Layout.alignment: Qt.AlignHCenter; Layout.preferredWidth: Math.min(800,player.width-80); spacing: 12; opacity:player.controlsShown?1:0
+            Layout.alignment: Qt.AlignHCenter; Layout.preferredWidth: Math.min(800,player.width-80); spacing: Theme.space12; opacity:player.controlsShown?1:0
             Behavior on opacity {NumberAnimation {duration:Theme.normal;easing.type:Easing.BezierSpline;easing.bezierCurve:Theme.effectsCurve}}
             SungText { font.features: {"tnum": 1}; text: app.formatTime(app.position); color: Theme.muted; font.pixelSize: Theme.labelMedium; labelRole: true; Layout.preferredWidth: 40 }
             SeekBar { Layout.fillWidth: true }

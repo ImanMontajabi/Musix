@@ -76,7 +76,7 @@ Item {
         // button reads as one of them rather than as a lookalike.
         contentItem: Item {
             Row {
-                spacing: 8
+                spacing: Theme.space8
                 anchors.verticalCenter: parent.verticalCenter
                 // The leading half is full cornered on the outside and small on
                 // the inside, so Material nudges its content towards the flat

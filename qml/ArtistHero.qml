@@ -38,7 +38,7 @@ Item {
         // open; collapsed there is no card, and the row lines up with the list.
         anchors.leftMargin: 24*(1-hero.collapse)
         anchors.rightMargin: 16*(1-hero.collapse)
-        spacing: 20
+        spacing: Theme.heroPadding
 
         Artwork {
             objectName: "artistHeroPortrait"
@@ -62,7 +62,7 @@ Item {
         ColumnLayout {
             Layout.fillWidth: true
             Layout.alignment: Qt.AlignVCenter
-            spacing: 8
+            spacing: Theme.space8
             SungText {
                 objectName: "artistHeroName"
                 heading: true
@@ -93,7 +93,7 @@ Item {
             }
             RowLayout {
                 objectName: "artistHeroActions"
-                spacing: 8
+                spacing: Theme.space8
                 opacity: 1-hero.collapse
                 Layout.maximumHeight: implicitHeight*(1-hero.collapse)
                 clip: true

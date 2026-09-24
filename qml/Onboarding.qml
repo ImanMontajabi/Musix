@@ -37,7 +37,7 @@ MDialog {
     }
     onOpened: step=0
     contentItem: ColumnLayout {
-        spacing: 16
+        spacing: Theme.space16
         SungText {
             objectName: "onboardingBlurb"
             Layout.fillWidth: true; Layout.minimumWidth: 0
@@ -51,20 +51,20 @@ MDialog {
         ColumnLayout {
             objectName: "onboardingAppearance"
             visible: root.step===0
-            Layout.fillWidth: true; Layout.minimumWidth: 0; spacing: 12
+            Layout.fillWidth: true; Layout.minimumWidth: 0; spacing: Theme.space12
             SungText { text: "Theme"; font.weight: Font.Medium }
             MSegmentedControl {
                 accessibleName: "Theme"
                 options: [{key:"system",label:desktopTheme.available?"Noctalia":"System",name:"onboardTheme_system"},{key:"light",label:"Light",name:"onboardTheme_light"},{key:"dark",label:"Dark",name:"onboardTheme_dark"}]
                 value: app.theme; onChosen: value=>app.theme=value
             }
-            SungText { text: "Accent color"; font.weight: Font.Medium; Layout.topMargin: 4 }
+            SungText { text: "Accent color"; font.weight: Font.Medium; Layout.topMargin: Theme.space4 }
             AccentPicker { Layout.fillWidth: true; Layout.minimumWidth: 0 }
         }
         ColumnLayout {
             objectName: "onboardingMusic"
             visible: root.step===1
-            Layout.fillWidth: true; Layout.minimumWidth: 0; spacing: 12
+            Layout.fillWidth: true; Layout.minimumWidth: 0; spacing: Theme.space12
             MTextField {
                 id: folderPath; objectName: "onboardingFolderPath"
                 Layout.fillWidth: true; Layout.minimumWidth: 0
@@ -78,7 +78,7 @@ MDialog {
             MWavyProgress { objectName: "onboardingImportProgress"; Layout.fillWidth: true; Layout.minimumWidth: 0; visible: app.importingLocal; progress: app.localImportProgress; label: "Importing music" }
             SungText { objectName: "onboardingFolderDone"; Layout.fillWidth: true; Layout.minimumWidth: 0; visible: root.folderAdded && !app.importingLocal; text: "Folder added. Sung keeps it up to date while it is running."; color: Theme.muted; font.pixelSize: Theme.bodyMedium; wrapMode: Text.Wrap }
             RowLayout {
-                spacing: 8
+                spacing: Theme.space8
                 MButton { objectName: "onboardingBrowse"; text: "Browse…"; symbol: "folder"; outlined: true; enabled: !app.importingLocal; onClicked: root.browseRequested() }
                 MButton { objectName: "onboardingAddFolder"; text: "Add folder"; tonal: true; enabled: folderPath.text.trim().length>0 && !app.importingLocal; busy: app.importingLocal; onClicked: root.addFolder() }
             }
@@ -86,7 +86,7 @@ MDialog {
         ColumnLayout {
             objectName: "onboardingStart"
             visible: root.step===2
-            Layout.fillWidth: true; Layout.minimumWidth: 0; spacing: 12
+            Layout.fillWidth: true; Layout.minimumWidth: 0; spacing: Theme.space12
             MSegmentedControl {
                 accessibleName: "Start page"
                 options: [{key:"home",label:"Home",name:"onboardStart_home"},{key:"files",label:"Local",name:"onboardStart_files"},{key:"server",label:"Server",name:"onboardStart_server"},{key:"favorites",label:"Liked",name:"onboardStart_favorites"}]
@@ -97,9 +97,11 @@ MDialog {
         }
     }
     footer: Item {
-        implicitHeight: 76
+        implicitHeight: onboardingActions.implicitHeight+Theme.dialogPadding
         RowLayout {
-            anchors.fill: parent; anchors.leftMargin: 24; anchors.rightMargin: 24; spacing: 8
+            id: onboardingActions
+            anchors.left: parent.left; anchors.right: parent.right; anchors.bottom: parent.bottom
+            anchors.leftMargin: Theme.dialogPadding; anchors.rightMargin: Theme.dialogPadding; anchors.bottomMargin: Theme.dialogPadding; spacing: Theme.actionGap
             SungText { objectName: "onboardingProgress"; text: "Step "+(root.step+1)+" of "+root.steps; color: Theme.muted; font.pixelSize: Theme.labelMedium }
             Item { Layout.fillWidth: true }
             MButton { objectName: "onboardingSkip"; text: "Skip"; visible: !root.lastStep; onClicked: root.finish() }

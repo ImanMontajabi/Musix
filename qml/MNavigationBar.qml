@@ -32,8 +32,8 @@ Rectangle {
 
     RowLayout {
         anchors.fill: parent
-        anchors.leftMargin: 8
-        anchors.rightMargin: 8
+        anchors.leftMargin: Theme.space8
+        anchors.rightMargin: Theme.space8
         spacing: 0
         Repeater {
             model: bar.destinations
@@ -56,7 +56,7 @@ Rectangle {
                     anchors.centerIn: parent
                     // The short bar lays the same two pieces out side by side.
                     flow: bar.short ? GridLayout.LeftToRight : GridLayout.TopToBottom
-                    columnSpacing: 8; rowSpacing: 4
+                    columnSpacing: Theme.space8; rowSpacing: Theme.space4
                     // The active indicator marks one destination, and only one.
                     Rectangle {
                         objectName: "navBarIndicator_" + destination.modelData.key

@@ -88,8 +88,8 @@ AbstractButton {
             objectName: "navigationRow"
             // Material's horizontal rail item: 16dp either side of the row,
             // and 8dp between the glyph and the words.
-            anchors.fill: parent; anchors.leftMargin: 16; anchors.rightMargin: 16
-            spacing: 8
+            anchors.fill: parent; anchors.leftMargin: Theme.space16; anchors.rightMargin: Theme.space16
+            spacing: Theme.space8
             visible: opacity>0; opacity: control.expanded ? 1 : 0
             Behavior on opacity { NumberAnimation { duration: Theme.fast } }
             Item {

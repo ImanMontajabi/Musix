@@ -11,17 +11,17 @@ MDialog {
     onAboutToShow: { address.text=app.server.address;username.text=app.server.username;password.clear() }
     onClosed: password.clear()
     contentItem: ScrollView {
-        id: connectionScroll; clip: true; contentWidth: availableWidth; contentHeight: connectionFields.implicitHeight; rightPadding: 12; topPadding: 8
+        id: connectionScroll; clip: true; contentWidth: availableWidth; contentHeight: connectionFields.implicitHeight; rightPadding: Theme.space12; topPadding: Theme.space8
         ScrollBar.vertical: MScrollBar { parent: connectionScroll; x: connectionScroll.width-width; y: connectionScroll.topPadding; height: connectionScroll.availableHeight; orientation: Qt.Vertical }
     ColumnLayout {
-        id: connectionFields; objectName: "connectionFields"; width: connectionScroll.availableWidth; spacing: 16
+        id: connectionFields; objectName: "connectionFields"; width: connectionScroll.availableWidth; spacing: Theme.space16
         MSegmentedControl {
             objectName: "serverProvider"; accessibleName: "Server type"
             options: [{key:"subsonic",label:"Subsonic",name:"serverType_subsonic"},{key:"jellyfin",label:"Jellyfin",name:"serverType_jellyfin"}]
             value: app.server.provider; enabled: !app.server.connecting
             onChosen: value=>{app.server.selectProvider(value);address.text=app.server.address;username.text=app.server.username;password.clear()}
         }
-        MTextField { id: address; objectName: "serverAddress"; Layout.fillWidth: true; Layout.topMargin: 8; label: "Server address"; inputMethodHints: Qt.ImhUrlCharactersOnly; enabled: !app.server.connecting; onAccepted: username.forceActiveFocus() }
+        MTextField { id: address; objectName: "serverAddress"; Layout.fillWidth: true; Layout.topMargin: Theme.space8; label: "Server address"; inputMethodHints: Qt.ImhUrlCharactersOnly; enabled: !app.server.connecting; onAccepted: username.forceActiveFocus() }
         MTextField { id: username; objectName: "serverUsername"; Layout.fillWidth: true; label: "Username"; enabled: !app.server.connecting; onAccepted: password.forceActiveFocus() }
         MTextField { id: password; objectName: "serverPassword"; Layout.fillWidth: true; label: "Password"; echoMode: TextInput.Password; enabled: !app.server.connecting; onAccepted: if(connectButton.enabled)connectButton.clicked() }
         SungText { text: "HTTP sends traffic without encryption."; visible: address.text.startsWith("http://") && !address.text.startsWith("http://localhost:") && !address.text.startsWith("http://127.0.0.1:"); Layout.fillWidth: true; wrapMode: Text.Wrap; color: Theme.muted; font.pixelSize: Theme.bodySmall }
@@ -40,14 +40,15 @@ MDialog {
     }
     scrollSource: connectionScroll.contentItem
     footer: Item {
-        implicitHeight: 96
+        implicitHeight: serverActions.implicitHeight+Theme.dialogPadding
         Rectangle {
             objectName: "dialogScrollDivider"
             anchors.top: parent.top; anchors.left: parent.left; anchors.right: parent.right
             height: 1; color: Theme.outlineVariant; visible: dialog.moreBelow
         }
         Row {
-            anchors.right: parent.right; anchors.bottom: parent.bottom; anchors.margins: 24; spacing: 8
+            id: serverActions
+            anchors.right: parent.right; anchors.bottom: parent.bottom; anchors.margins: Theme.dialogPadding; spacing: Theme.actionGap
             MButton { text: "Close"; ink: Theme.primary; onClicked: dialog.close() }
             MButton {
                 id: connectButton; objectName: "connectServerButton"; text: "Connect"; filled: true

@@ -14,7 +14,7 @@ ToolTip {
     id: tip
 
     // Material publishes no padding for the plain tooltip, so this is ours.
-    padding: 8
+    padding: Theme.space8
     contentItem: SungText {
         text: tip.text
         font.pixelSize: Theme.bodySmall

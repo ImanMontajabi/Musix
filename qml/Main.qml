@@ -102,7 +102,7 @@ ApplicationWindow {
     readonly property bool atLeastMedium: width >= 600
     readonly property bool atLeastExpanded: width >= 840
     readonly property bool atLeastLarge: width >= 1200
-    readonly property int paneMargin: sizeClass==="compact"?16:24
+    readonly property int paneMargin: sizeClass==="compact"?Theme.space16:Theme.space24
     readonly property int paneGutter: sizeClass==="compact"||sizeClass==="medium"?16:24
     readonly property int feedCardWidth: sizeClass==="large"?210:sizeClass==="extraLarge"?230:190
     // Material scrims the page while the search view is open, so what the view
@@ -482,14 +482,14 @@ ApplicationWindow {
     Drawer {
         id:immersiveQueue;objectName:"immersiveQueueSheet";edge:Qt.RightEdge
         width:Math.min(420,window.width-32);height:window.height;modal:true;dim:true;focus:true;interactive:false
-        padding:24;leftPadding:24;rightPadding:24;topPadding:24;bottomPadding:24;closePolicy:Popup.CloseOnEscape|Popup.CloseOnPressOutside
+        padding:Theme.space24;leftPadding:Theme.space24;rightPadding:Theme.space24;topPadding:Theme.space24;bottomPadding:Theme.space24;closePolicy:Popup.CloseOnEscape|Popup.CloseOnPressOutside
         background:Rectangle {color:Theme.container;radius:Theme.shapeExtraLarge}
         Overlay.modal:Rectangle {color:Theme.scrimColor()}
         enter:Transition {NumberAnimation {property:"position";to:1;duration:app.motion?350:0;easing.type:Easing.BezierSpline;easing.bezierCurve:Theme.curve}}
         exit:Transition {NumberAnimation {property:"position";to:0;duration:Theme.normal;easing.type:Easing.BezierSpline;easing.bezierCurve:Theme.exitCurve}}
         onOpened:{if(immersiveQueueLoader.item)immersiveQueueLoader.item.revealCurrent();}
         onClosed:{trackDrag.cancel();if(immersiveLoader.item){immersiveLoader.item.forceActiveFocus(Qt.PopupFocusReason);immersiveLoader.item.wake();}}
-        contentItem:ColumnLayout {spacing:16
+        contentItem:ColumnLayout {spacing:Theme.space16
     Shortcut { sequence:"Escape";enabled:immersiveQueue.visible && !window.otherModalOpen;onActivated:{
         if(trackDrag.owner)trackDrag.cancel();
         else if(window.selectedView().selection.count)window.selectedView().selection.clear();
@@ -604,7 +604,7 @@ ApplicationWindow {
             Layout.preferredWidth: shownWidth; Layout.minimumWidth: shownWidth; Layout.maximumWidth: shownWidth
             // Material's collapsed rail is 96dp wide and sets 4dp between its
             // destinations; the header above them keeps 8dp of its own.
-            Layout.fillHeight: true; Layout.topMargin: 24; spacing: 4
+            Layout.fillHeight: true; Layout.topMargin: Theme.space24; spacing: Theme.space4
             MButton {
                 objectName: "navigationMenuButton"
                 symbol: navigationRail.expanded ? "menu_open" : "menu"
@@ -625,7 +625,7 @@ ApplicationWindow {
                 Layout.preferredHeight: visible ? libraryFab.height : 0
                 Layout.alignment: navigationRail.expanded ? Qt.AlignLeft : Qt.AlignHCenter
                 Layout.leftMargin: navigationRail.expanded ? 16 : 0
-                Layout.topMargin: 4; Layout.bottomMargin: 4
+                Layout.topMargin: Theme.space4; Layout.bottomMargin: Theme.space4
             }
             Repeater {
                 model: [{key:"home",icon:"home",label:"Home"},{key:"search",icon:"search",label:"Search"},{key:"library",icon:"library",label:"Library"}]
@@ -654,7 +654,7 @@ ApplicationWindow {
                 }
             }
             // Secondary destinations the collapsed rail has no room to show.
-            MDivider { objectName: "navigationDivider"; visible: navigationRail.pinned.length>0; Layout.preferredWidth: navigationRail.shownWidth-32; Layout.alignment: Qt.AlignLeft; Layout.leftMargin: 16; Layout.topMargin: 4 }
+            MDivider { objectName: "navigationDivider"; visible: navigationRail.pinned.length>0; Layout.preferredWidth: navigationRail.shownWidth-32; Layout.alignment: Qt.AlignLeft; Layout.leftMargin: Theme.space16; Layout.topMargin: Theme.space4 }
             SungText { objectName: "navigationPinnedLabel"; visible: navigationRail.pinned.length>0; text: "Pinned"; color: Theme.muted; font.pixelSize: Theme.titleSmall; typeRole: "titleSmall"; Layout.leftMargin: 20; Layout.alignment: Qt.AlignLeft }
             Repeater {
                 model: navigationRail.pinned
@@ -672,7 +672,7 @@ ApplicationWindow {
             }
             Item { Layout.fillHeight: true }
             MButton { objectName: "miniPlayerButton"; symbol: "mini"; tip: "Mini player · "+Keymap.label(Keymap.miniPlayer); text: navigationRail.expanded?"Mini player":""; leftAligned: navigationRail.expanded; Layout.preferredWidth: navigationRail.expanded?navigationRail.shownWidth-32:48; Layout.alignment: navigationRail.expanded ? Qt.AlignLeft : Qt.AlignHCenter; Layout.leftMargin: navigationRail.expanded ? 16 : 0; onClicked: window.openMiniPlayer() }
-            MButton { objectName: "settingsButton"; symbol: "settings"; tip: Keymap.mac ? "Settings · "+Keymap.label(Keymap.settings) : "Settings"; text: navigationRail.expanded?"Settings":""; leftAligned: navigationRail.expanded; Layout.preferredWidth: navigationRail.expanded?navigationRail.shownWidth-32:48; Layout.alignment: navigationRail.expanded ? Qt.AlignLeft : Qt.AlignHCenter; Layout.leftMargin: navigationRail.expanded ? 16 : 0; Layout.bottomMargin: 20; onClicked: settingsDialog.open() }
+            MButton { objectName: "settingsButton"; symbol: "settings"; tip: Keymap.mac ? "Settings · "+Keymap.label(Keymap.settings) : "Settings"; text: navigationRail.expanded?"Settings":""; leftAligned: navigationRail.expanded; Layout.preferredWidth: navigationRail.expanded?navigationRail.shownWidth-32:48; Layout.alignment: navigationRail.expanded ? Qt.AlignLeft : Qt.AlignHCenter; Layout.leftMargin: navigationRail.expanded ? 16 : 0; Layout.bottomMargin: Theme.space24; onClicked: settingsDialog.open() }
         }
         ColumnLayout {
             id: headerColumn
@@ -682,12 +682,12 @@ ApplicationWindow {
             Layout.fillWidth: true; Layout.fillHeight: true
             Layout.leftMargin: window.compactWindow ? 12 : 0
             Layout.rightMargin: window.compactWindow ? 0 : 16
-            Layout.topMargin: 16
+            Layout.topMargin: Theme.space16
             Layout.bottomMargin: window.compactWindow ? 0 : 16
-            spacing: 12
+            spacing: Theme.space12
             RowLayout {
                 id: headerRow
-                Layout.fillWidth: true; spacing: 12
+                Layout.fillWidth: true; spacing: Theme.space12
                 MButton {
                     objectName: "drawerButton"; symbol: "menu"; tip: "Navigation"
                     visible: window.compactWindow
@@ -708,7 +708,7 @@ ApplicationWindow {
                     // sitting in the page with it.
                     MElevation { objectName: "searchBarShade"; anchors.fill: parent; radius: parent.radius; level: 3 }
                     RowLayout {
-                        anchors.fill: parent; anchors.leftMargin: 18; anchors.rightMargin: 8; spacing: 12
+                        anchors.fill: parent; anchors.leftMargin: Theme.space16; anchors.rightMargin: Theme.space8; spacing: Theme.space12
                         // The leading icon says what the bar is for, so it is
                         // drawn in the surface ink; the trailing clear button
                         // is an action on it and stays in the variant.
@@ -765,7 +765,7 @@ ApplicationWindow {
                         height: fullScreen ? Math.max(120,window.height-190)
                                            : Math.min(window.height-220,suggestionList.contentHeight+16)
                         visible: searchField.activeFocus && !searchField.dismissed && searchField.suggestions.length>0
-                        focus: false; padding: 8; closePolicy: Popup.CloseOnPressOutside
+                        focus: false; padding: Theme.space8; closePolicy: Popup.CloseOnPressOutside
                         enter: Transition { NumberAnimation { property: "opacity"; from: 0; to: 1; duration: app.motion?Theme.fast:0; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.fastEffectsCurve } }
                         exit: Transition { NumberAnimation { property: "opacity"; to: 0; duration: app.motion?Theme.fast:0; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.fastEffectsCurve } }
                         onClosed: searchField.dismissed=true
@@ -804,14 +804,14 @@ ApplicationWindow {
                                     AbstractButton {
                                         id: suggestionButton; objectName: "suggestion_"+index; hoverEnabled: true
                                         anchors.fill: parent; anchors.rightMargin: modelData.recent?40:0; focusPolicy: Qt.NoFocus
-                                        leftPadding: 64; rightPadding: 12
+                                        leftPadding: 64; rightPadding: Theme.space12
                                         Accessible.name: modelData.title+(modelData.artist?", "+modelData.artist:"")+(modelData.origin?", "+modelData.origin:"")
                                         Accessible.selected: suggestionRow.highlighted
                                         onClicked: searchField.choose(index)
                                         contentItem: Item {
                                             Column {
                                                 objectName: "suggestionLabels"
-                                                width: parent.width; anchors.verticalCenter: parent.verticalCenter; spacing: 2
+                                                width: parent.width; anchors.verticalCenter: parent.verticalCenter; spacing: Theme.textGap
                                                 SungText { width: parent.width; text: modelData.title; color: suggestionRow.highlighted?Theme.secondaryContainerText:Theme.text; font.pixelSize: Theme.bodyMedium }
                                                 SungText { width: parent.width; visible: !!modelData.origin; text: (modelData.artist?modelData.artist+" · ":"")+(modelData.origin||""); font.pixelSize: Theme.bodySmall; color: suggestionRow.highlighted?Theme.secondaryContainerText:Theme.muted }
                                             }
@@ -849,7 +849,7 @@ ApplicationWindow {
                 // to one; the third is where the panel starts before anyone
                 // drags it somewhere else.
                 readonly property real supportingWidth: Math.max(320,Math.min(480,Math.round(width/3)))
-                Layout.fillWidth: true; Layout.fillHeight: true; spacing: 12
+                Layout.fillWidth: true; Layout.fillHeight: true; spacing: Theme.space12
                 Rectangle {
                     id: listPane
                     objectName: "listPane"
@@ -861,7 +861,7 @@ ApplicationWindow {
                     color: window.washed(Theme.surfaceLow)
                     Behavior on Layout.preferredWidth { enabled: app.motion; NumberAnimation { duration: Theme.springSpatialMs; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.springSpatial } }
                     ColumnLayout {
-                        anchors.fill: parent; anchors.margins: 16; spacing: 12
+                        anchors.fill: parent; anchors.margins: Theme.space16; spacing: Theme.space12
                         RowLayout {
                             Layout.fillWidth: true
                             SungText { objectName: "listPaneTitle"; text: app.listPaneTitle; font.pixelSize: Theme.titleLarge; Layout.fillWidth: true }
@@ -952,7 +952,7 @@ ApplicationWindow {
                         // transform keeps that off the layout's own geometry.
                         property real shift: 0
                         transform: Translate { x: contentColumn.shift }
-                        anchors.fill: parent; anchors.margins: localGroups.visible?Math.max(12,window.paneMargin-8):window.paneMargin; spacing: app.page==="server"?8:localGroups.visible?12:18
+                        anchors.fill: parent; anchors.margins: localGroups.visible?Math.max(Theme.space12,window.paneMargin-Theme.space8):window.paneMargin; spacing: Theme.sectionGap
                         ArtistHero {
                             objectName: "artistHero"
                             Layout.fillWidth: true
@@ -961,14 +961,14 @@ ApplicationWindow {
                         }
                         RowLayout {
                             visible: !window.artistPage
-                            Layout.fillWidth: true; spacing: 16
+                            Layout.fillWidth: true; spacing: Theme.space16
                             Artwork { id:collectionArtwork;objectName:"collectionArtwork";opacity:window.albumFlying?0:1;visible: !!app.cover; url: app.cover; Layout.preferredWidth: content.headerExtent; Layout.preferredHeight: content.headerExtent; radius: (app.page==="artist" || app.page==="local-artist") ? width/2 : app.albumInfo.summary?24:12; shape: (app.page==="artist" || app.page==="local-artist") ? "cookie9Sided" : ""; pixels: app.albumInfo.summary?384:180
                                 AbstractButton {anchors.fill:parent;objectName:"inspectCollectionArtwork";Accessible.name:"View artwork";focusPolicy:Qt.StrongFocus;onClicked:artworkViewer.inspect(app.cover)
                                     background:Rectangle {color:"transparent";radius:Theme.shapeExtraLarge;border.width:parent.visualFocus?2:0;border.color:Theme.primary}
                                 }
                             }
                             ColumnLayout {
-                                Layout.fillWidth: true; spacing: 6
+                                Layout.fillWidth: true; spacing: Theme.textGap
                             SungText {heading: true; text: window.serverDisconnected ? "Music server" : window.destination==="library"&&window.libraryTab==="playlists"&&!window.localPlaylist ? "Playlists" : app.title; objectName: "collectionHeaderTitle"; emphasized: true; scaled: true; font.pixelSize: app.page==="home"?Theme.displaySmall:Theme.headlineMedium-(Theme.headlineMedium-Theme.titleLarge)*content.headerCollapse; Behavior on font.pixelSize { NumberAnimation { duration: app.motion?Theme.normal:0; easing.type: Easing.OutCubic } } Layout.fillWidth: true; wrapMode: Text.Wrap; maximumLineCount: 2 }
                                 SungText { objectName: "albumArtist"; visible: !!app.albumInfo.artist;opacity:1-content.headerCollapse;Layout.maximumHeight:implicitHeight*(1-content.headerCollapse);clip:true; Layout.fillWidth: true; text: app.albumInfo.artist || ""; font.pixelSize: Theme.bodyLarge; color: Theme.muted; maximumLineCount: 2; wrapMode: Text.Wrap }
                                 SungText { objectName: "albumSummary"; visible: !!app.albumInfo.summary;opacity:1-content.headerCollapse;Layout.maximumHeight:implicitHeight*(1-content.headerCollapse);clip:true; Layout.fillWidth: true; text: app.albumInfo.summary || ""; font.pixelSize: Theme.appBarSubtitle.medium; color: Theme.muted; wrapMode: Text.Wrap }
@@ -1009,7 +1009,7 @@ ApplicationWindow {
                         }
                         Flow {
                             objectName: "searchFilters"
-                            visible: app.page==="search"; Layout.fillWidth: true; spacing: 8
+                            visible: app.page==="search"; Layout.fillWidth: true; spacing: Theme.space8
                             Repeater {
                                 model: [{label:"Songs",key:"songs"},{label:"Albums",key:"albums"},{label:"Artists",key:"artists"},{label:"Playlists",key:"playlists"},{label:"Videos",key:"videos"}]
                                 MChip { required property var modelData; objectName: "filter_"+modelData.key; text: modelData.label; selected: window.filter===modelData.key; onClicked: {window.filter=modelData.key;if(searchField.text.trim())app.search(searchField.text,window.filter);} }
@@ -1044,7 +1044,7 @@ ApplicationWindow {
                         }
                         RowLayout {
                             visible: window.destination==="library" && ["releases","following"].indexOf(window.libraryTab)>=0
-                            Layout.fillWidth: true; spacing: 8
+                            Layout.fillWidth: true; spacing: Theme.space8
                             LibraryTabs {
                                 objectName: "followFacetTabs"
                                 secondary: true
@@ -1061,7 +1061,7 @@ ApplicationWindow {
                         }
                         RowLayout {
                             visible: window.destination==="library" && ["files","local-albums","local-artists"].indexOf(window.libraryTab)>=0
-                            Layout.fillWidth: true; spacing: 8
+                            Layout.fillWidth: true; spacing: Theme.space8
                             LibraryTabs {
                                 objectName: "localFacetTabs"
                                 secondary: true
@@ -1084,7 +1084,7 @@ ApplicationWindow {
                         }
                         ServerToolbar { id: serverToolbar; Layout.fillWidth: true; visible: app.page==="server" && !window.serverDisconnected; onConnectRequested: serverConnection.open() }
                         Flow {
-                            visible: app.page==="home" && window.destination!=="library"; Layout.fillWidth: true; spacing: 8
+                            visible: app.page==="home" && window.destination!=="library"; Layout.fillWidth: true; spacing: Theme.space8
                             Repeater {
                                 model: [{title:"Feel good",q:"feel good songs"},{title:"Focus",q:"instrumental focus"},{title:"Unwind",q:"chill evening"},{title:"Energize",q:"workout energy"}]
                                 MChip { required property var modelData; text: modelData.title; selectable: false; onClicked: {searchField.text=modelData.q;window.destination="search";app.search(modelData.q,"songs");} }
@@ -1095,7 +1095,7 @@ ApplicationWindow {
                             // open; the row takes them back as it collapses, so
                             // exactly one Play is ever on screen.
                             visible: tracks.selection.count===0 && app.results.count>0 && !window.feedShowing && !(window.destination==="library" && window.libraryTab==="playlists" && !window.localPlaylist) && !!(app.results.get(0).videoId || app.results.get(0).localPath || app.results.get(0).serverSong) && (!window.artistPage || content.compactHeader)
-                            Layout.fillWidth: true; spacing: 10
+                            Layout.fillWidth: true; spacing: Theme.actionGap
                             MSplitButton {
                                 objectName: "collectionPlay"
                                 text: "Play"; symbol: "play"; filled: true
@@ -1128,13 +1128,13 @@ ApplicationWindow {
                         }
                         RowLayout {
                             visible: window.hasSongCollection && window.collectionTools
-                            Layout.fillWidth: true; spacing: 8
+                            Layout.fillWidth: true; spacing: Theme.space8
                             TextField {
                                 id: collectionSearch; objectName: "collectionSearch"; Layout.fillWidth: true; implicitHeight: 44
                                 font.family: Theme.fontFamily; font.pixelSize: Theme.bodyMedium; color: Theme.text
                                 placeholderText: "Find in this list"; placeholderTextColor: Theme.placeholder
                                 selectionColor: Theme.primaryContainer; selectedTextColor: Theme.text
-                                leftPadding: 14; rightPadding: 14; selectByMouse: true
+                                leftPadding: Theme.space16; rightPadding: Theme.space16; selectByMouse: true
                                 text: app.collection.query
                                 onTextEdited: app.collection.query=text
                                 onAccepted: {if(app.collection.count>0)app.playCollection(0);content.forceActiveFocus();}
@@ -1193,7 +1193,7 @@ ApplicationWindow {
                                 objectName: "contentFabHost"
                                 anchors.right: parent.right
                                 anchors.bottom: parent.bottom
-                                anchors.margins: 8
+                                anchors.margins: Theme.space8
                                 // The button asks to sit above the content, but
                                 // its own z counts among this slot's children,
                                 // not the slot's siblings. Without this the
@@ -1227,12 +1227,12 @@ ApplicationWindow {
                             transform: Translate { x: contentBody.shift }
                             Layout.fillWidth: true; Layout.fillHeight: true
                             Column {
-                                objectName: "serverEmptyState"; anchors.centerIn: parent; spacing: 16
+                                objectName: "serverEmptyState"; anchors.centerIn: parent; spacing: Theme.space16
                                 visible: window.serverDisconnected
                                 SungText { anchors.horizontalCenter: parent.horizontalCenter; text: "Connect your music library"; font.pixelSize: Theme.titleLarge }
                                 MButton { objectName: "serverEmptyConnect"; anchors.horizontalCenter: parent.horizontalCenter; text: "Connect server"; filled: true; onClicked: serverConnection.open() }
                             }
-                            Column {anchors.centerIn:parent;spacing:12;visible:app.page==="home"&&!app.busy&&window.homeSections.length===0&&app.homeSections(true).length>0
+                            Column {anchors.centerIn:parent;spacing:Theme.space12;visible:app.page==="home"&&!app.busy&&window.homeSections.length===0&&app.homeSections(true).length>0
                                 SungText {text:"Home sections are hidden";color:Theme.muted;anchors.horizontalCenter:parent.horizontalCenter}
                                 MButton {objectName:"restoreHomeSections";text:"Restore sections";tonal:true;anchors.horizontalCenter:parent.horizontalCenter;onClicked:app.resetHomeLayout()}
                             }
@@ -1245,7 +1245,7 @@ ApplicationWindow {
                                 ScrollBar.vertical: ScrollBar {}
                                 delegate: ColumnLayout {
                                     required property var modelData
-                                    width: shelves.width; height: implicitHeight; spacing: 12
+                                    width: shelves.width; height: implicitHeight; spacing: Theme.space12
                                     RowLayout {
                                         Layout.fillWidth: true
                                         SungText { heading: true; text: modelData.title; font.pixelSize: Theme.titleLarge; font.weight: Font.Medium; Layout.fillWidth: true }
@@ -1300,7 +1300,7 @@ ApplicationWindow {
                                     MButton { objectName:"loadMoreButton"; anchors.centerIn: parent; text: app.busy ? "Loading…" : "Load more"; busy: app.busy; enabled: !app.busy; tonal: true; visible: app.canMore && tracks.count>0; onClicked: app.more() }
                                 }
                                 Column {
-                                    objectName: "collectionEmptyState"; anchors.centerIn: parent; width: Math.min(parent.width,320); spacing: 14
+                                    objectName: "collectionEmptyState"; anchors.centerIn: parent; width: Math.min(parent.width,320); spacing: Theme.emptyStateGap
                                     visible: app.collection.count===0 && !app.busy && !window.serverDisconnected
                                     Icon { anchors.horizontalCenter: parent.horizontalCenter; name: app.error?"refresh":app.collection.query || app.page==="search"?"search":"library"; size: 36; ink: Theme.muted }
                                     SungText { width: parent.width; horizontalAlignment: Text.AlignHCenter; wrapMode: Text.Wrap; text: app.collection.query ? "No matching songs" : app.error ? "Couldn’t load music" : app.page==="library" ? (window.libraryTab==="releases"?(app.following.length?"Nothing new yet. New albums, singles and uploads from who you follow will show up here.":"Follow an artist or channel from their page, and their new releases will show up here."):window.libraryTab==="following"?"Not following anyone yet. Follow an artist or channel from their page.":window.libraryTab==="files"?"No local music yet":window.libraryTab==="history"?"Nothing played yet":window.libraryTab.startsWith("mix-")?"No matching songs yet":"No liked songs yet") : app.page==="local" ? "No songs yet" : app.page==="search" && !app.query ? "Search music" : "No results"; color: Theme.muted; font.pixelSize: Theme.bodyLarge }
@@ -1322,25 +1322,25 @@ ApplicationWindow {
                                 delegate:ArtCard {required property var modelData;width:playlistGrid.cellWidth-16
                                     track:Object.assign({},modelData,{kind:"local",art:modelData.customCover||"",artworks:modelData.customCover?[]:modelData.artworks})
                                     openHandler:window.openCollection
-                                    MButton {anchors.left:parent.left;anchors.top:parent.top;anchors.margins:8;symbol:"more";tonal:true;tip:"Playlist actions";onClicked:{window.editPlaylistId=modelData.id;playlistName.text=modelData.title;playlistActions.popup(this,width-playlistActions.width,height+4);}}
+                                    MButton {anchors.left:parent.left;anchors.top:parent.top;anchors.margins:Theme.space8;symbol:"more";tonal:true;tip:"Playlist actions";onClicked:{window.editPlaylistId=modelData.id;playlistName.text=modelData.title;playlistActions.popup(this,width-playlistActions.width,height+4);}}
                                 }
                                 SungText {anchors.centerIn:parent;visible:playlistGrid.count===0;text:"Create your first playlist";color:Theme.muted}
                             }
                             ListView {
-                                id: localPlaylists; anchors.fill: parent; clip: true; spacing: 8
+                                id: localPlaylists; anchors.fill: parent; clip: true; spacing: Theme.space8
                                 visible: window.destination==="library"&&window.libraryTab==="playlists"&&!window.localPlaylist&&app.viewMode!=="grid"
                                 model: app.playlists
                                 delegate: Rectangle {
                                     required property var modelData; width: localPlaylists.width; height:app.viewCompactDensity?64:76; radius: Theme.shapeLarge; color: Theme.container
                                     RowLayout {
-                                        anchors.fill: parent; anchors.margins: 12; spacing: 12
+                                        anchors.fill: parent; anchors.margins: Theme.space12; spacing: Theme.space12
                                         AbstractButton { Layout.preferredWidth: 48; Layout.preferredHeight: 48; focusPolicy: Qt.StrongFocus; Accessible.name: "Open "+modelData.title; contentItem: PlaylistCover { artworks: modelData.artworks || [] } background: Rectangle { color: "transparent"; radius: Theme.shapeMedium; border.width: parent.activeFocus?2:0; border.color: Theme.focusRing } onClicked: {window.localPlaylist=modelData.id;app.openPlaylist(modelData.id);} }
-                                        AbstractButton { Layout.fillWidth: true; Layout.fillHeight: true; focusPolicy: Qt.StrongFocus; Accessible.name: modelData.title; background: Rectangle { color: "transparent"; radius: Theme.shapeSmall; border.width: parent.activeFocus?2:0; border.color: Theme.focusRing } onClicked: {window.localPlaylist=modelData.id;app.openPlaylist(modelData.id);} contentItem: Column { spacing: 4; SungText { text: modelData.title; font.pixelSize: Theme.bodyLarge; width: parent.width } SungText { text: modelData.smart?"Smart playlist":window.countText(modelData.count); color: Theme.muted; font.pixelSize: Theme.bodySmall } } }
+                                        AbstractButton { Layout.fillWidth: true; Layout.fillHeight: true; focusPolicy: Qt.StrongFocus; Accessible.name: modelData.title; background: Rectangle { color: "transparent"; radius: Theme.shapeSmall; border.width: parent.activeFocus?2:0; border.color: Theme.focusRing } onClicked: {window.localPlaylist=modelData.id;app.openPlaylist(modelData.id);} contentItem: Column { spacing: Theme.space4; SungText { text: modelData.title; font.pixelSize: Theme.bodyLarge; width: parent.width } SungText { text: modelData.smart?"Smart playlist":window.countText(modelData.count); color: Theme.muted; font.pixelSize: Theme.bodySmall } } }
                                         MButton { symbol: "more"; tip: "Playlist actions"; onClicked: {window.editPlaylistId=modelData.id;playlistName.text=modelData.title;playlistActions.popup(this,width-playlistActions.width,height+4);} }
                                     }
                                 }
                                 Column {
-                                    anchors.centerIn: parent; spacing: 18; visible: app.playlists.length===0
+                                    anchors.centerIn: parent; spacing: Theme.emptyStateGap; visible: app.playlists.length===0
                                     Icon { anchors.horizontalCenter: parent.horizontalCenter; name: "library"; size: 36; ink: Theme.muted }
                                     SungText { anchors.horizontalCenter: parent.horizontalCenter; text: "No playlists yet"; color: Theme.muted; font.pixelSize: Theme.bodyLarge }
                                     MButton { anchors.horizontalCenter: parent.horizontalCenter; text: "New playlist"; symbol: "plus"; filled: true; onClicked: {window.playlistAction="create";playlistName.clear();playlistDialog.open();} }
@@ -1413,13 +1413,13 @@ ApplicationWindow {
                 Accessible.name: "Playback"
                 Layout.fillWidth: true; Layout.preferredHeight: 112; color: window.washed(Theme.container); radius: Theme.shapeExtraLarge
                 RowLayout {
-                    anchors.fill: parent; anchors.leftMargin: 16; anchors.rightMargin: 16; spacing: 16
+                    anchors.fill: parent; anchors.leftMargin: Theme.space16; anchors.rightMargin: Theme.space16; spacing: Theme.space16
                     AbstractButton { id: nowButton; objectName: "nowButton"; Layout.preferredWidth: 64; Layout.preferredHeight: 64; enabled: app.currentIndex>=0; focusPolicy: Qt.StrongFocus; Accessible.name: "Now playing"; onClicked: window.activateSide("now")
                         contentItem: Artwork { id: nowArtwork; objectName: "nowArtwork"; url: app.current.art || ""; motionUrl: app.currentMotionArt; crossfade:true; radius: Theme.shapeMedium; pixels: 150; fit:app.currentArtworkFit; opacity: window.coverFlying?0:1 }
                         background: Rectangle { anchors.fill: parent; anchors.margins: -3; color: "transparent"; radius: Theme.shapeLarge; border.width: parent.activeFocus?2:0; border.color: Theme.focusRing }
                     }
                     ColumnLayout {
-                        Layout.preferredWidth: Math.max(100,Math.min(220,window.width*0.17)); spacing: 6; opacity: nowPresentation.fade*window.coverDetailsOpacity; transform: Translate { x: nowPresentation.offset }
+                        Layout.preferredWidth: Math.max(100,Math.min(220,window.width*0.17)); spacing: Theme.space8; opacity: nowPresentation.fade*window.coverDetailsOpacity; transform: Translate { x: nowPresentation.offset }
                         AbstractButton { Layout.fillWidth: true; implicitHeight: 24; focusPolicy: Qt.StrongFocus; enabled: app.currentIndex>=0; Accessible.name: "Now playing: " + (app.current.title || "Nothing playing"); onClicked: window.activateSide("now"); contentItem: MatchText { revealFocused: parent.activeFocus; sourceText: nowPresentation.shown.title || "Nothing playing"; font.pixelSize: Theme.titleMedium; font.weight: Font.DemiBold } background: Rectangle { color: "transparent"; radius: Theme.shapeExtraSmall; border.width: parent.activeFocus?1:0; border.color: Theme.focusRing } }
                         AbstractButton { Layout.fillWidth: true; implicitHeight: 24; focusPolicy: Qt.StrongFocus; enabled: !!app.current.artistId; Accessible.name: "Go to " + (app.current.artist || "artist"); onClicked: app.open(window.relatedItem(app.current,"artist")); contentItem: MatchText { revealFocused: parent.activeFocus; sourceText: nowPresentation.shown.artist || ""; color: Theme.muted; font.pixelSize: Theme.bodyMedium } background: Rectangle { color: "transparent"; radius: Theme.shapeExtraSmall; border.width: parent.activeFocus?1:0; border.color: Theme.focusRing } }
                     }
@@ -1427,7 +1427,7 @@ ApplicationWindow {
                     ColumnLayout {
                         Layout.fillWidth: true; Layout.maximumWidth: 520; spacing: 0
                         RowLayout {
-                            Layout.alignment: Qt.AlignHCenter; spacing: 6
+                            Layout.alignment: Qt.AlignHCenter; spacing: Theme.space8
                             MButton { objectName: "playerShuffle"; symbol: "shuffle"; tip: "Shuffle"; toggle: true; selected: app.shuffle; onClicked: app.shuffle=!app.shuffle; visible: window.width>=980 }
                             MButton { symbol: "previous"; tip: "Previous · "+Keymap.label("Ctrl+←"); enabled: app.queue.count>0; onClicked: app.previous() }
                             MButton { objectName: "playButton"; morphPlayback:true; symbol: app.playing||app.resolving?"pause":"play"; tip: app.playing||app.resolving?"Pause · Space":"Play · Space"; filled: true; size: "medium"; implicitWidth: 72; enabled: app.queue.count>0; onClicked: app.toggle(); busy: app.buffering }
@@ -1435,7 +1435,7 @@ ApplicationWindow {
                             MButton { symbol: app.repeat===2?"repeat_one":"repeat"; tip: app.repeat===0?"Repeat off":app.repeat===1?"Repeat queue":"Repeat song"; toggle: true; selected: app.repeat>0; onClicked: app.repeat=(app.repeat+1)%3; visible: window.width>=980 }
                         }
                         RowLayout {
-                            Layout.fillWidth: true; spacing: 10
+                            Layout.fillWidth: true; spacing: Theme.space8
                             SungText { font.features: {"tnum": 1}; text: app.formatTime(app.position); color: Theme.muted; font.pixelSize: Theme.labelSmall; labelRole: true; Layout.preferredWidth: 34 }
                             SeekBar { Layout.fillWidth: true; objectName: "seekBar" }
                             SungText { font.features: {"tnum": 1}; text: app.formatTime(app.duration); color: Theme.muted; font.pixelSize: Theme.labelSmall; labelRole: true; Layout.preferredWidth: 34; horizontalAlignment: Text.AlignRight }
@@ -1484,7 +1484,7 @@ ApplicationWindow {
                 objectName: "navigationBar"
                 Layout.fillWidth: true
                 Layout.leftMargin: -parent.Layout.leftMargin
-                Layout.topMargin: 4
+                Layout.topMargin: Theme.space4
                 visible: window.compactWindow
                 // A window with little height to spare takes Material's short
                 // bar, which sets each label beside its icon instead of under.
@@ -1524,7 +1524,7 @@ ApplicationWindow {
                     if(row)queueList.contentY=Math.max(queueList.originY,Math.min(queueList.originY+Math.max(0,queueList.contentHeight-queueList.height),row.y-(queueList.height-row.height)/2));
                 }
             }
-            spacing: 8
+            spacing: Theme.space8
             // Material puts a choice between two views of the same place on a
             // segmented button rather than a second destination.
             MSegmentedControl {
@@ -1544,7 +1544,7 @@ ApplicationWindow {
                 onActivate: (row,item)=>app.playKeepingQueue(item)
                 onMenuRequested: (item,index,anchor)=>window.trackMenu(item,index,anchor,false)
                 onAddSelected: window.addBatch(recentList)
-                Column { anchors.centerIn: parent; spacing: 14; visible: app.recentlyPlayed.count===0
+                Column { anchors.centerIn: parent; spacing: Theme.emptyStateGap; visible: app.recentlyPlayed.count===0
                     Icon { anchors.horizontalCenter: parent.horizontalCenter; name: "history"; size: 36; ink: Theme.muted }
                     SungText { anchors.horizontalCenter: parent.horizontalCenter; text: "Nothing played yet"; color: Theme.muted }
                 }
@@ -1562,7 +1562,7 @@ ApplicationWindow {
                 onMenuRequested: (item,index,anchor)=>window.trackMenu(item,index,anchor,true)
                 onRemoveSelected: app.removeQueueRows(sourceRows())
                 onAddSelected: window.addBatch(queueList)
-                Column { anchors.centerIn: parent; spacing: 14; visible: app.queue.count===0
+                Column { anchors.centerIn: parent; spacing: Theme.emptyStateGap; visible: app.queue.count===0
                     Icon { anchors.horizontalCenter: parent.horizontalCenter; name: "queue"; size: 36; ink: Theme.muted }
                     SungText { anchors.horizontalCenter: parent.horizontalCenter; text: "Your queue is empty"; color: Theme.muted }
                     MButton { anchors.horizontalCenter: parent.horizontalCenter; text: "Search music"; tonal: true; onClicked: window.focusSearch() }
@@ -1574,10 +1574,10 @@ ApplicationWindow {
                 MButton { objectName: "saveQueueButton"; symbol: "plus"; tip: "Save queue as playlist"; enabled: app.queue.count>0; onClicked: {window.playlistAction="queue";playlistName.clear();playlistDialog.open();} }
                 MButton { objectName: "smartShuffleQueueButton"; symbol: "shuffle"; tip: "Shuffle upcoming · spread out artists"; enabled: app.queue.count-Math.max(0,app.currentIndex+1)>1; onClicked: app.smartShuffleQueue() }
                 ColumnLayout {
-                    Layout.fillWidth: true; spacing: 2
+                    Layout.fillWidth: true; spacing: Theme.textGap
                     SungText { text: window.countText(app.queue.count); color: Theme.muted; Layout.fillWidth: true }
                     ColumnLayout {
-                        Layout.fillWidth: true; spacing: 2; visible: !!app.queueTime
+                        Layout.fillWidth: true; spacing: Theme.textGap; visible: !!app.queueTime
                         SungText {objectName:"queueTimeLabel"; text:app.queueTime; color:Theme.muted; font.pixelSize:Theme.bodySmall; Layout.fillWidth:true}
                         SungText {objectName:"queueEndLabel"; text:app.queueEnd; visible:!!text; color:Theme.muted; font.pixelSize:Theme.bodySmall; Layout.fillWidth:true}
                     }
@@ -1593,7 +1593,7 @@ ApplicationWindow {
             id: nowScroll
             contentWidth: availableWidth; clip: true
             ColumnLayout {
-                width: nowScroll.availableWidth; spacing: 18
+                width: nowScroll.availableWidth; spacing: Theme.sectionGap
                 Artwork { Layout.alignment: Qt.AlignHCenter; Layout.preferredWidth: Math.min(320,nowScroll.availableWidth); Layout.preferredHeight: width; url: app.current.art || ""; motionUrl: app.currentMotionArt || ""; radius: Theme.shapeExtraLarge; pixels: 650; highResolution:true;crossfade:true; fit:app.currentArtworkFit }
                 SungText { text: app.current.title || "Nothing playing"; Layout.fillWidth: true; font.pixelSize: Theme.headlineSmall; font.weight: Font.Medium; wrapMode: Text.Wrap; elide: Text.ElideNone }
                 SungText { text: app.current.artist || ""; Layout.fillWidth: true; font.pixelSize: Theme.bodyLarge; color: Theme.muted }
@@ -1644,7 +1644,7 @@ ApplicationWindow {
         modal: true
         open: window.sheetMode && !!window.side && !window.immersive && !window.compactMode
         onClosed: window.side=""
-        Item { id: sheetHost; anchors.fill: parent; anchors.margins: 18; anchors.topMargin: 6 }
+        Item { id: sheetHost; anchors.fill: parent; anchors.margins: Theme.space16; anchors.topMargin: Theme.space8 }
     }
 
     MNavigationDrawer {
@@ -1652,7 +1652,7 @@ ApplicationWindow {
         parent: window.contentItem
         ColumnLayout {
             anchors.fill: parent
-            spacing: 4
+            spacing: Theme.space4
             Repeater {
                 model: [{key:"home",icon:"home",label:"Home"},{key:"search",icon:"search",label:"Search"},{key:"library",icon:"library",label:"Library"}]
                 MNavigationItem {
@@ -1674,8 +1674,8 @@ ApplicationWindow {
                     }
                 }
             }
-            MDivider { objectName: "drawerDivider"; inset: 16; visible: app.pins.length>0; Layout.fillWidth: true; Layout.topMargin: 4 }
-            SungText { visible: app.pins.length>0; text: "Pinned"; color: Theme.muted; font.pixelSize: Theme.titleSmall; typeRole: "titleSmall"; Layout.leftMargin: 16 }
+            MDivider { objectName: "drawerDivider"; inset: 16; visible: app.pins.length>0; Layout.fillWidth: true; Layout.topMargin: Theme.space4 }
+            SungText { visible: app.pins.length>0; text: "Pinned"; color: Theme.muted; font.pixelSize: Theme.titleSmall; typeRole: "titleSmall"; Layout.leftMargin: Theme.space16 }
             Repeater {
                 model: app.pins.slice(0,6)
                 MNavigationItem {
@@ -1706,7 +1706,7 @@ ApplicationWindow {
     }
     MMenu {
         id: actions; objectName: "trackActions"
-        width: 230; padding: 8
+        width: 230; padding: Theme.space8
         background: Rectangle { color: Theme.high; radius: Theme.shapeLargeIncreased; border.color: Theme.outlineVariant }
         MMenuItem { text: "Open"; visible: !(window.menuItem.videoId || window.menuItem.localPath || window.menuItem.serverSong); onTriggered: app.open(window.menuItem) }
         MMenuItem { objectName: "playKeepQueueAction"; symbol: "play"; text: "Play now, keep queue"; visible: !!(window.menuItem.videoId || window.menuItem.localPath || window.menuItem.serverSong); onTriggered: app.playKeepingQueue(window.menuItem) }
@@ -1755,7 +1755,7 @@ ApplicationWindow {
         title: "Music folders"; modal: true; width: Math.min(560,window.width-48); height: Math.min(440,window.height-48,240+64*(app.musicFolders.length||3))
         standardButtons: Dialog.Close
         ColumnLayout {
-            anchors.fill: parent; spacing: 12
+            anchors.fill: parent; spacing: Theme.space12
             Item {
                 Layout.fillWidth: true; Layout.fillHeight: true
                 ListView {
@@ -1763,7 +1763,7 @@ ApplicationWindow {
                     model: musicFoldersDialog.visible?app.musicFolders:[]; reuseItems: true
                     ScrollBar.vertical: ScrollBar {}
                     delegate: RowLayout {
-                        required property string modelData; width: ListView.view.width; height: 64; spacing: 8
+                        required property string modelData; width: ListView.view.width; height: 64; spacing: Theme.space8
                         SungText { text: modelData; Layout.fillWidth: true; elide: Text.ElideMiddle }
                         MButton { symbol: "close"; tip: "Forget folder; keep songs"; enabled: !app.importingLocal; onClicked: app.forgetMusicFolder(modelData) }
                     }
@@ -1771,7 +1771,7 @@ ApplicationWindow {
                 // Beside the list, not in it: a list's children live in its
                 // content, which is empty exactly when this has to show.
                 Column {
-                    objectName: "musicFoldersEmptyState"; anchors.centerIn: parent; width: Math.min(parent.width,320); spacing: 14
+                    objectName: "musicFoldersEmptyState"; anchors.centerIn: parent; width: Math.min(parent.width,320); spacing: Theme.emptyStateGap
                     visible: app.musicFolders.length===0
                     Icon { anchors.horizontalCenter: parent.horizontalCenter; name: "folder"; size: 36; ink: Theme.muted }
                     SungText { width: parent.width; horizontalAlignment: Text.AlignHCenter; wrapMode: Text.Wrap; text: "No music folders yet"; font.pixelSize: Theme.titleMedium }
@@ -1818,7 +1818,7 @@ ApplicationWindow {
             if(!pathError){musicFolderPath.clear();close();}else musicFolderPath.forceActiveFocus();
         }
         contentItem: ColumnLayout {
-            spacing: 12
+            spacing: Theme.space12
             MTextField {
                 id: musicFolderPath; objectName: "musicFolderPath"; Layout.fillWidth: true
                 label: "Folder path"; placeholderText: activeFocus?"/path/to/Music or ~/Music":""
@@ -1830,9 +1830,11 @@ ApplicationWindow {
             MButton { objectName: "browseMusicFolderButton"; text: "Browse…"; symbol: "folder"; enabled: !app.importingLocal; onClicked: {musicFolderEntry.close();window.openFileDialog("folder");} }
         }
         footer: Item {
-            implicitHeight: 88
+            implicitHeight: folderEntryActions.implicitHeight+Theme.dialogPadding
             RowLayout {
-                anchors.fill: parent; anchors.leftMargin: 24; anchors.rightMargin: 24; anchors.topMargin: 16; anchors.bottomMargin: 24; spacing: 8
+                id: folderEntryActions
+                anchors.left: parent.left; anchors.right: parent.right; anchors.bottom: parent.bottom
+                anchors.leftMargin: Theme.dialogPadding; anchors.rightMargin: Theme.dialogPadding; anchors.bottomMargin: Theme.dialogPadding; spacing: Theme.actionGap
                 Item { Layout.fillWidth: true }
                 MButton { text: "Cancel"; onClicked: musicFolderEntry.close() }
                 MButton { objectName: "confirmMusicFolderButton"; text: "Add folder"; filled: true; enabled: !!musicFolderPath.text.trim() && !app.importingLocal; onClicked: musicFolderEntry.submit() }
@@ -1847,7 +1849,7 @@ ApplicationWindow {
         Loader {
             anchors.fill: parent; active: cleanupDialog.visible
             sourceComponent: ColumnLayout {
-                id: cleanupContent; spacing: 12
+                id: cleanupContent; spacing: Theme.space12
                 property bool removeDuplicates: true
                 property bool removeMissing: false
                 readonly property int selectedCount: app.cleanupItems.filter(r=>(removeDuplicates&&r.duplicate)||(removeMissing&&r.missing)).length
@@ -1859,14 +1861,14 @@ ApplicationWindow {
                     MButton { symbol: "refresh"; busy: app.cleanupBusy; tip: "Check again"; enabled: !app.cleanupBusy&&!app.importingLocal; onClicked: app.inspectPlaylist(cleanupDialog.playlistId) }
                 }
                 ListView {
-                    objectName: "cleanupList"; Layout.fillWidth: true; Layout.fillHeight: true; clip: true; reuseItems: true; spacing: 4
+                    objectName: "cleanupList"; Layout.fillWidth: true; Layout.fillHeight: true; clip: true; reuseItems: true; spacing: Theme.space4
                     model: app.cleanupItems
                     ScrollBar.vertical: ScrollBar {}
                     delegate: RowLayout {
-                        required property var modelData; width: ListView.view.width; height: 76; spacing: 12
+                        required property var modelData; width: ListView.view.width; height: 76; spacing: Theme.space12
                         opacity: (cleanupContent.removeDuplicates&&modelData.duplicate)||(cleanupContent.removeMissing&&modelData.missing)?1:0.6
                         ColumnLayout {
-                            Layout.fillWidth: true; spacing: 3
+                            Layout.fillWidth: true; spacing: Theme.textGap
                             SungText { text: modelData.title; Layout.fillWidth: true; elide: Text.ElideRight }
                             SungText { text: [modelData.duplicate?"Duplicate":"",modelData.missing?"Missing file":""].filter(Boolean).join(" · "); color: Theme.muted; font.pixelSize: Theme.labelMedium }
                         }
@@ -1936,15 +1938,14 @@ ApplicationWindow {
     }
     MDialog {
         id: serverRatingDialog; objectName: "serverRatingDialog"; anchors.centerIn: parent; width: 380; modal: true; title: "Rate song"; standardButtons: Dialog.Cancel
-        Column { width: parent.width; spacing: 8
-            Row { anchors.horizontalCenter: parent.horizontalCenter; spacing: 8; Repeater { model:5; MButton { required property int index; objectName: "rating_"+(index+1); text:String(index+1); tip: "Rate " + (index+1) + " out of 5"; width: 48; selected: window.menuItem.rating===index+1; onClicked:{app.rateServerSong(window.menuItem,index+1);serverRatingDialog.close()} } } }
+        Column { width: parent.width; spacing: Theme.space8
+            Row { anchors.horizontalCenter: parent.horizontalCenter; spacing: Theme.space8; Repeater { model:5; MButton { required property int index; objectName: "rating_"+(index+1); text:String(index+1); tip: "Rate " + (index+1) + " out of 5"; width: 48; selected: window.menuItem.rating===index+1; onClicked:{app.rateServerSong(window.menuItem,index+1);serverRatingDialog.close()} } } }
             MButton { objectName: "clearRatingButton"; anchors.horizontalCenter: parent.horizontalCenter; text: "Clear rating"; enabled: !!window.menuItem.rating; onClicked: {app.rateServerSong(window.menuItem,0);serverRatingDialog.close()} }
         }
     }
     ServerConnection { id: serverConnection }
     MDialog {
         id: settingsDialog; objectName: "settingsDialog"; width: fitWidth(880); height: fitHeight(740); modal: true; title: "Settings"
-        padding: 24
         palette.windowText: Theme.text; palette.buttonText: Theme.text; palette.text: Theme.text
         standardButtons: Dialog.Close
         scrollSource: contentItem.item ? contentItem.item.scrollFlickable : null
@@ -1965,7 +1966,7 @@ ApplicationWindow {
 
         Column {
             id:settingsCategories;objectName:"settingsCategories";visible:parent.width>=720
-            y:settingsSearch.height+20;width:180;spacing:6
+            y:settingsSearch.height+Theme.space24;width:180;spacing:Theme.space8
             Repeater {model:settingsDialog.categories
                 MButton {required property string modelData;required property int index;objectName:"settingsCategory_"+index
                     width:180;text:modelData;leftAligned:true;selected:!settingsDialog.searchQuery.trim() && settingsDialog.category===index
@@ -1987,7 +1988,7 @@ ApplicationWindow {
         }
         ScrollView {
             id: settingsScrollView; objectName: "settingsScroll"
-            rightPadding: 12
+            rightPadding: Theme.space12
             ScrollBar.horizontal.policy:ScrollBar.AlwaysOff
             anchors.fill: parent; anchors.leftMargin: parent.width>=720?204:0; anchors.topMargin: settingsSearch.height+(parent.width>=720?20:76); contentWidth: availableWidth; contentHeight: settingsOptions.implicitHeight; clip: true
             ScrollBar.vertical: MScrollBar {
@@ -2002,26 +2003,26 @@ ApplicationWindow {
                 // reach back out to highlight the full width stay inside the
                 // clip, and every row's text shares one edge.
                 x: Theme.listItemPadding
-                width: settingsScrollView.availableWidth - 2*Theme.listItemPadding; spacing: 28
+                width: settingsScrollView.availableWidth - 2*Theme.listItemPadding; spacing: Theme.sectionGap
                 ColumnLayout {
                     id: settingsGroup0; objectName:"settingsGroup0"
-                    Layout.fillWidth:true;Layout.minimumWidth:0; spacing:12
+                    Layout.fillWidth:true;Layout.minimumWidth:0; spacing:Theme.space12
                     property bool hasMatches: settingsDialog.matches("Appearance theme system Noctalia light dark") || settingsDialog.matches("Appearance artwork accent color") || settingsDialog.matches("Accent color source palette Catppuccin Gruvbox Rosé Pine") || settingsDialog.matches("Ambient artwork backdrop immersive now playing") || settingsDialog.matches("Backdrop follows the music audio") || settingsDialog.matches("Album covers for music videos YouTube Apple Music") || settingsDialog.matches("Color scheme variant neutral tonal spot vibrant expressive content") || settingsDialog.matches("Contrast standard medium high accessibility") || settingsDialog.matches("Density compact comfortable spacing") || settingsDialog.matches("Pointer density precise mouse touch target") || settingsDialog.matches("Current view layout density grid list") || (!!app.current.id && settingsDialog.matches("Current artwork")) || settingsDialog.matches("Animated album artwork") || settingsDialog.matches("Online animated covers YouTube Apple Music") || settingsDialog.matches("Animations")
                     visible: settingsDialog.searchQuery.trim() ? hasMatches : settingsDialog.category===0
-                    SungText {heading: true;text:"Appearance";font.pixelSize:Theme.titleLarge;font.weight:Font.Medium;Layout.bottomMargin:8}
-                    ColumnLayout {id:options0;objectName:"settingsRows0";Layout.fillWidth:true;Layout.minimumWidth:0;spacing:12
+                    SungText {heading: true;text:"Appearance";font.pixelSize:Theme.titleLarge;font.weight:Font.Medium;Layout.bottomMargin:Theme.space8}
+                    ColumnLayout {id:options0;objectName:"settingsRows0";Layout.fillWidth:true;Layout.minimumWidth:0;spacing:Theme.space12
                 SungText { visible: settingsDialog.matches("Appearance theme system Noctalia light dark"); text: "Theme"; font.pixelSize: Theme.titleMedium; typeRole: "titleMedium" }
                 MSegmentedControl {Layout.fillWidth:true;Layout.minimumWidth:0; visible: settingsDialog.matches("Appearance theme system Noctalia light dark"); accessibleName:"Theme"; options:[{key:"system",label:desktopTheme.available?"Noctalia":"System",name:"themeSystem"},{key:"light",label:"Light",name:"themeLight"},{key:"dark",label:"Dark",name:"themeDark"}]; value:app.theme; onChosen:value=>app.theme=value }
 
                 MSwitch { Layout.fillWidth:true;Layout.minimumWidth:0; objectName:"artworkAccentSwitch"; text:"Use artwork accent"; checked:app.artworkAccent; onToggled:app.artworkAccent=checked; visible:settingsDialog.matches("Appearance artwork accent color") }
-                SungText {text:"Accent color";visible:settingsDialog.matches("Accent color source palette Catppuccin Gruvbox Rosé Pine");font.pixelSize:Theme.bodyLarge;font.weight:Font.Medium;Layout.topMargin:4}
+                SungText {text:"Accent color";visible:settingsDialog.matches("Accent color source palette Catppuccin Gruvbox Rosé Pine");font.pixelSize:Theme.bodyLarge;font.weight:Font.Medium;Layout.topMargin:Theme.space4}
                 AccentPicker {Layout.fillWidth:true;Layout.minimumWidth:0;visible:settingsDialog.matches("Accent color source palette Catppuccin Gruvbox Rosé Pine")}
                 MSwitch { Layout.fillWidth:true;Layout.minimumWidth:0; objectName:"ambientBackdropSwitch"; text:"Ambient artwork backdrop"; checked:app.ambientBackdrop; onToggled:app.ambientBackdrop=checked; visible:settingsDialog.matches("Ambient artwork backdrop immersive now playing") }
                 MSwitch { Layout.fillWidth:true;Layout.minimumWidth:0; objectName:"backdropPulseSwitch"; text:"Backdrop follows the music"; checked:app.backdropPulse; enabled:app.ambientBackdrop; onToggled:app.backdropPulse=checked; visible:settingsDialog.matches("Backdrop follows the music audio") }
                 // Material spreads the same five palettes differently for each of
                 // its scheme variants, which is what decides how much of the
                 // cover the interface takes on.
-                SungText {text:"Color scheme";visible:settingsDialog.matches("Color scheme variant neutral tonal spot vibrant expressive content");font.pixelSize:Theme.bodyLarge;font.weight:Font.Medium;Layout.topMargin:4}
+                SungText {text:"Color scheme";visible:settingsDialog.matches("Color scheme variant neutral tonal spot vibrant expressive content");font.pixelSize:Theme.bodyLarge;font.weight:Font.Medium;Layout.topMargin:Theme.space4}
                 MSegmentedControl {Layout.fillWidth:true;Layout.minimumWidth:0;
                     objectName:"colorVariantControl"
                     visible:settingsDialog.matches("Color scheme variant neutral tonal spot vibrant expressive content")
@@ -2033,7 +2034,8 @@ ApplicationWindow {
                              {key:"content",label:"Faithful",name:"variantContent"}]
                     value:app.colorVariant; onChosen:value=>app.colorVariant=value
                 }
-                SungText {text:"Contrast";visible:settingsDialog.matches("Contrast standard medium high accessibility");font.pixelSize:Theme.bodyLarge;font.weight:Font.Medium;Layout.topMargin:4}
+                SungText {objectName:"paletteVariantNote";text:"Catppuccin, Gruvbox and Rosé Pine accents always use Faithful, so they stay close to their palettes.";visible:Theme.paletteAccent && settingsDialog.matches("Color scheme variant neutral tonal spot vibrant expressive content");Layout.fillWidth:true;wrapMode:Text.Wrap;color:Theme.muted;font.pixelSize:Theme.bodySmall}
+                SungText {text:"Contrast";visible:settingsDialog.matches("Contrast standard medium high accessibility");font.pixelSize:Theme.bodyLarge;font.weight:Font.Medium;Layout.topMargin:Theme.space4}
                 MSegmentedControl {Layout.fillWidth:true;Layout.minimumWidth:0;
                     objectName:"contrastControl"
                     visible:settingsDialog.matches("Contrast standard medium high accessibility")
@@ -2048,7 +2050,7 @@ ApplicationWindow {
                 // Material draws its controls tighter when a precision pointer
                 // is driving them, because the 48dp minimum is a rule about
                 // disambiguating touches.
-                SungText {text:"Pointer";visible:settingsDialog.matches("Pointer density precise mouse touch target");font.pixelSize:Theme.bodyLarge;font.weight:Font.Medium;Layout.topMargin:4}
+                SungText {text:"Pointer";visible:settingsDialog.matches("Pointer density precise mouse touch target");font.pixelSize:Theme.bodyLarge;font.weight:Font.Medium;Layout.topMargin:Theme.space4}
                 MSegmentedControl {Layout.fillWidth:true;Layout.minimumWidth:0;
                     objectName:"pointerControl"
                     visible:settingsDialog.matches("Pointer density precise mouse touch target")
@@ -2067,11 +2069,11 @@ ApplicationWindow {
                 }
                 ColumnLayout {
                     id: settingsGroup1; objectName:"settingsGroup1"
-                    Layout.fillWidth:true;Layout.minimumWidth:0; spacing:12
+                    Layout.fillWidth:true;Layout.minimumWidth:0; spacing:Theme.space12
                     property bool hasMatches: settingsDialog.matches("Autoplay similar songs") || settingsDialog.matches("Track notifications") || settingsDialog.matches("Volume step") || settingsDialog.matches("Playback speed rate") || settingsDialog.matches("Sleep timer") || settingsDialog.matches("Pause headphones audio output disconnects") || settingsDialog.matches("Audio output device speakers headphones") || settingsDialog.matches("Prepare next track") || settingsDialog.matches("Gapless playback join pause between songs") || settingsDialog.matches("Crossfade overlap songs fade") || settingsDialog.matches("Volume normalization loudness level ReplayGain") || settingsDialog.matches("Resume recordings over 20 minutes mixes sets position") || settingsDialog.matches("Find missing lyrics on LRCLIB") || settingsDialog.matches("Sleep timer fade out volume")
                     visible: settingsDialog.searchQuery.trim() ? hasMatches : settingsDialog.category===1
-                    SungText {heading: true;text:"Playback";font.pixelSize:Theme.titleLarge;font.weight:Font.Medium;Layout.bottomMargin:8}
-                    ColumnLayout {id:options1;objectName:"settingsRows1";Layout.fillWidth:true;Layout.minimumWidth:0;spacing:12
+                    SungText {heading: true;text:"Playback";font.pixelSize:Theme.titleLarge;font.weight:Font.Medium;Layout.bottomMargin:Theme.space8}
+                    ColumnLayout {id:options1;objectName:"settingsRows1";Layout.fillWidth:true;Layout.minimumWidth:0;spacing:Theme.space12
                 MSwitch { Layout.fillWidth:true;Layout.minimumWidth:0; visible: settingsDialog.matches("Autoplay similar songs"); text: "Autoplay similar songs"; checked: app.autoplay; onToggled: app.autoplay=checked }
                 MSwitch { Layout.fillWidth:true;Layout.minimumWidth:0; visible: settingsDialog.matches("Track notifications"); objectName: "trackNotificationsSwitch"; text: "Track notifications"; checked: app.trackNotifications; onToggled: app.trackNotifications=checked }
                 RowLayout { visible: settingsDialog.matches("Volume step"); Layout.fillWidth: true;Layout.minimumWidth:0; SungText { text: "Volume step"; font.pixelSize: Theme.bodyLarge; Layout.fillWidth: true } MButton { objectName: "volumeStepButton"; text: app.volumeStep+"%"; tonal: true; onClicked: volumeStepMenu.popup(this,width-volumeStepMenu.width,height+4) } }
@@ -2085,7 +2087,7 @@ ApplicationWindow {
                 MSwitch { Layout.fillWidth:true;Layout.minimumWidth:0; objectName:"gaplessSwitch"; visible: settingsDialog.matches("Gapless playback join pause between songs"); text: "Gapless playback"; hint: "Hands the next song straight to the output as the current one ends, so albums recorded without breaks keep none."; checked: app.gapless; onToggled: app.gapless=checked }
                 ColumnLayout {
                     objectName: "crossfadeSetting"
-                    visible: settingsDialog.matches("Crossfade overlap songs fade"); Layout.fillWidth: true; Layout.minimumWidth: 0; spacing: 2
+                    visible: settingsDialog.matches("Crossfade overlap songs fade"); Layout.fillWidth: true; Layout.minimumWidth: 0; spacing: Theme.textGap
                     RowLayout {
                         Layout.fillWidth: true
                         SungText { text: "Crossfade"; font.pixelSize: Theme.bodyLarge; Layout.fillWidth: true }
@@ -2106,11 +2108,11 @@ ApplicationWindow {
                 }
                 ColumnLayout {
                     id: settingsGroup2; objectName:"settingsGroup2"
-                    Layout.fillWidth:true;Layout.minimumWidth:0; spacing:12
+                    Layout.fillWidth:true;Layout.minimumWidth:0; spacing:Theme.space12
                     property bool hasMatches: settingsDialog.matches("Following new releases notifications notify artists channels") || settingsDialog.matches("Music folders import manage") || settingsDialog.matches("Keyboard shortcuts keys help") || settingsDialog.matches("Quick actions commands playlists") || settingsDialog.matches("Update music folders automatically watch") || settingsDialog.matches("Type to jump in lists keyboard") || settingsDialog.matches("Start page Home local music server liked") || settingsDialog.matches("Customize Home sections order") || settingsDialog.matches("Listening sessions saved queues") || settingsDialog.matches("Listening statistics top artists albums time")
                     visible: settingsDialog.searchQuery.trim() ? hasMatches : settingsDialog.category===2
-                    SungText {heading: true;text:"Library";font.pixelSize:Theme.titleLarge;font.weight:Font.Medium;Layout.bottomMargin:8}
-                    ColumnLayout {id:options2;objectName:"settingsRows2";Layout.fillWidth:true;Layout.minimumWidth:0;spacing:12
+                    SungText {heading: true;text:"Library";font.pixelSize:Theme.titleLarge;font.weight:Font.Medium;Layout.bottomMargin:Theme.space8}
+                    ColumnLayout {id:options2;objectName:"settingsRows2";Layout.fillWidth:true;Layout.minimumWidth:0;spacing:Theme.space12
                 MSettingRow {opens:true;text:"Music folders";visible:settingsDialog.matches("Music folders import manage");onClicked:{window.openFromSettings(musicFoldersDialog);}}
                 MSwitch { Layout.fillWidth:true;Layout.minimumWidth:0; objectName: "releaseNotificationSwitch"
                     visible: !!releaseNotifier && settingsDialog.matches("Following new releases notifications notify artists channels")
@@ -2131,13 +2133,13 @@ ApplicationWindow {
                 }
                 ColumnLayout {
                     id: settingsGroup3; objectName:"settingsGroup3"
-                    Layout.fillWidth:true;Layout.minimumWidth:0; spacing:12
+                    Layout.fillWidth:true;Layout.minimumWidth:0; spacing:Theme.space12
                     property bool hasMatches: settingsDialog.matches("Music server library") || settingsDialog.matches("YouTube cookies import replace remove sign in") || settingsDialog.matches("YouTube streaming quality standard data saver bitrate")
                     visible: settingsDialog.searchQuery.trim() ? hasMatches : settingsDialog.category===3
-                    SungText {heading: true;text:"Connections";font.pixelSize:Theme.titleLarge;font.weight:Font.Medium;Layout.bottomMargin:8}
-                    ColumnLayout {id:options3;objectName:"settingsRows3";Layout.fillWidth:true;Layout.minimumWidth:0;spacing:12
+                    SungText {heading: true;text:"Connections";font.pixelSize:Theme.titleLarge;font.weight:Font.Medium;Layout.bottomMargin:Theme.space8}
+                    ColumnLayout {id:options3;objectName:"settingsRows3";Layout.fillWidth:true;Layout.minimumWidth:0;spacing:Theme.space12
                 MSettingRow {opens:true;objectName:"musicServerButton";text:"Music server";visible:settingsDialog.matches("Music server library");onClicked:{window.openFromSettings(serverConnection)}}
-                SungText { visible: settingsDialog.matches("YouTube cookies import replace remove sign in") || settingsDialog.matches("YouTube streaming quality standard data saver bitrate"); text: "YouTube"; font.pixelSize: Theme.labelLarge; font.weight: Font.Medium; color: Theme.muted; Layout.topMargin: 12 }
+                SungText { visible: settingsDialog.matches("YouTube cookies import replace remove sign in") || settingsDialog.matches("YouTube streaming quality standard data saver bitrate"); text: "YouTube"; font.pixelSize: Theme.labelLarge; font.weight: Font.Medium; color: Theme.muted; Layout.topMargin: Theme.space12 }
                 SungText { visible: settingsDialog.matches("YouTube streaming quality standard data saver bitrate"); text: "Streaming quality"; font.pixelSize: Theme.bodyLarge; font.weight: Font.Medium }
                 MSegmentedControl {Layout.fillWidth:true;Layout.minimumWidth:0;
                     objectName:"streamingQualityControl"
@@ -2154,11 +2156,11 @@ ApplicationWindow {
                 }
                 ColumnLayout {
                     id: settingsGroup4; objectName:"settingsGroup4"
-                    Layout.fillWidth:true;Layout.minimumWidth:0; spacing:12
+                    Layout.fillWidth:true;Layout.minimumWidth:0; spacing:Theme.space12
                     property bool hasMatches: settingsDialog.matches("Pause history this session privacy") || settingsDialog.matches("Clear artwork cache") || settingsDialog.matches("Clear history") || settingsDialog.matches("Export library backup") || settingsDialog.matches("Import library restore") || settingsDialog.matches("Musix version")
                     visible: settingsDialog.searchQuery.trim() ? hasMatches : settingsDialog.category===4
-                    SungText {heading: true;text:"Privacy & data";font.pixelSize:Theme.titleLarge;font.weight:Font.Medium;Layout.bottomMargin:8}
-                    ColumnLayout {id:options4;objectName:"settingsRows4";Layout.fillWidth:true;Layout.minimumWidth:0;spacing:12
+                    SungText {heading: true;text:"Privacy & data";font.pixelSize:Theme.titleLarge;font.weight:Font.Medium;Layout.bottomMargin:Theme.space8}
+                    ColumnLayout {id:options4;objectName:"settingsRows4";Layout.fillWidth:true;Layout.minimumWidth:0;spacing:Theme.space12
                 MSwitch { Layout.fillWidth:true;Layout.minimumWidth:0; visible: settingsDialog.matches("Pause history this session privacy"); objectName: "historyPauseSwitch"; text: "Pause history this session"; checked: app.historyPaused; onToggled: app.historyPaused=checked }
                 MSettingRow {objectName:"clearCacheButton";text:"Clear artwork cache";visible:settingsDialog.matches("Clear artwork cache");onClicked:app.clearCache()}
                 MSettingRow {objectName:"clearHistoryButton";text:"Clear history";visible:settingsDialog.matches("Clear history");onClicked:app.clearHistory()}
@@ -2168,14 +2170,14 @@ ApplicationWindow {
                 }
                 ColumnLayout {
                     id: settingsGroup5; objectName:"settingsGroup5"
-                    Layout.fillWidth:true;Layout.minimumWidth:0; spacing:12
+                    Layout.fillWidth:true;Layout.minimumWidth:0; spacing:Theme.space12
                     property bool hasMatches: settingsDialog.matches("Updates Musix version") || settingsDialog.matches("Check for updates new version") || settingsDialog.matches("Check for updates automatically")
                     visible: settingsDialog.searchQuery.trim() ? hasMatches : settingsDialog.category===5
-                    SungText {heading: true;text:"Updates";font.pixelSize:Theme.titleLarge;font.weight:Font.Medium;Layout.bottomMargin:8}
-                    ColumnLayout {id:options5;objectName:"settingsRows5";Layout.fillWidth:true;Layout.minimumWidth:0;spacing:12
+                    SungText {heading: true;text:"Updates";font.pixelSize:Theme.titleLarge;font.weight:Font.Medium;Layout.bottomMargin:Theme.space8}
+                    ColumnLayout {id:options5;objectName:"settingsRows5";Layout.fillWidth:true;Layout.minimumWidth:0;spacing:Theme.space12
                 SungText { objectName:"settingsVersion"; visible: settingsDialog.matches("Updates Musix version"); text: "Musix " + updates.currentVersion; font.pixelSize: Theme.bodyLarge; Layout.fillWidth: true }
                 RowLayout {
-                    visible: settingsDialog.matches("Check for updates new version"); Layout.fillWidth: true; spacing: 12
+                    visible: settingsDialog.matches("Check for updates new version"); Layout.fillWidth: true; spacing: Theme.space12
                     MButton { objectName: "checkUpdatesButton"; text: "Check for Updates"; symbol: "refresh"; tonal: true; busy: updates.checking; enabled: !updates.checking; onClicked: updates.check(true) }
                     SungText { objectName: "updateStatus"; text: updates.checking ? "Checking…" : updates.status; color: Theme.muted; font.pixelSize: Theme.bodyMedium; wrapMode: Text.Wrap; Layout.fillWidth: true }
                 }
@@ -2201,7 +2203,7 @@ ApplicationWindow {
             trim=app.trackTrim(trackId);open();
         }
         contentItem: ColumnLayout {
-            spacing: 10
+            spacing: Theme.space12
             SungText { objectName: "trimTitle"; text: trimDialog.track.title || ""; Layout.fillWidth: true; elide: Text.ElideRight; color: Theme.muted; font.pixelSize: Theme.bodyMedium }
             SungText { objectName: "trimValue"; text: (trimDialog.trim>0?"+":"")+Number(trimDialog.trim).toFixed(1)+" dB"; font.pixelSize: Theme.headlineLarge; Layout.alignment: Qt.AlignHCenter }
             SettingSlider {
@@ -2232,7 +2234,7 @@ ApplicationWindow {
         // wears them: an error is the one thing on screen that should not look
         // like everything else.
         radius: Theme.shapeLarge; color: Theme.errorContainer; visible: !!app.error; z: 50
-        SungText { id: errorText; anchors.fill: parent; anchors.margins: 16; anchors.rightMargin: app.canRetry?140:58; text: app.error; wrapMode: Text.Wrap; elide: Text.ElideRight; maximumLineCount: 5; color: Theme.errorContainerText; font.pixelSize: Theme.bodyMedium }
+        SungText { id: errorText; anchors.fill: parent; anchors.margins: Theme.space16; anchors.rightMargin: app.canRetry?140:58; text: app.error; wrapMode: Text.Wrap; elide: Text.ElideRight; maximumLineCount: 5; color: Theme.errorContainerText; font.pixelSize: Theme.bodyMedium }
         MButton { anchors.right: parent.right; anchors.rightMargin: 48; anchors.verticalCenter: parent.verticalCenter; text: "Retry"; visible: app.canRetry; ink: Theme.errorContainerText; onClicked: app.retry() }
         MButton { anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter; symbol: "close"; ink: Theme.errorContainerText; tip: "Dismiss error"; onClicked: app.dismissError() }
     }
@@ -2275,7 +2277,7 @@ ApplicationWindow {
         Behavior on opacity { NumberAnimation { duration: Theme.fast; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.fastEffectsCurve } }
         MButton { id: toastUndo; objectName: "toastUndo"; anchors.right: toastDismiss.left; anchors.bottom: parent.bottom; anchors.bottomMargin: (toastBar.restingHeight-height)/2; text: "Undo"; ink: Theme.inversePrimary; visible: window.toastHasUndo; onClicked: app.undo() }
         MButton { id: toastDismiss; objectName: "toastDismiss"; anchors.right: parent.right; anchors.bottom: parent.bottom; anchors.bottomMargin: (toastBar.restingHeight-height)/2; symbol: "close"; tip: "Dismiss notification"; ink: Theme.inverseSurfaceText; visible: window.toastHasUndo; onClicked: window.toastPending=false }
-        SungText { id: toastLabel; anchors.bottom: parent.bottom; anchors.bottomMargin: (toastBar.restingHeight-height)/2; anchors.left: parent.left; anchors.leftMargin: 16; anchors.right: parent.right; anchors.rightMargin: window.toastHasUndo?148:16; wrapMode: Text.Wrap; maximumLineCount: 2; text: window.toastText; font.pixelSize: Theme.bodyMedium; color: Theme.inverseSurfaceText }
+        SungText { id: toastLabel; anchors.bottom: parent.bottom; anchors.bottomMargin: (toastBar.restingHeight-height)/2; anchors.left: parent.left; anchors.leftMargin: Theme.space16; anchors.right: parent.right; anchors.rightMargin: window.toastHasUndo?148:16; wrapMode: Text.Wrap; maximumLineCount: 2; text: window.toastText; font.pixelSize: Theme.bodyMedium; color: Theme.inverseSurfaceText }
     }
     Timer { id: toastTimer; interval: 5000; running: window.toastPending && !window.toastHasUndo && !app.error && !window.modalOpen && !toastHover.hovered && !toastUndo.activeFocus && !toastDismiss.activeFocus; onTriggered: window.toastPending=false }
     Connections {
@@ -2333,7 +2335,7 @@ ApplicationWindow {
             active: audioDeviceDialog.contentReady
             sourceComponent: Component {
         ListView {
-            anchors.fill: parent; clip: true; spacing: 4; model: app.audioDevices
+            anchors.fill: parent; clip: true; spacing: Theme.space4; model: app.audioDevices
             ScrollBar.vertical: ScrollBar {}
             delegate: MButton {
                 required property var modelData
@@ -2355,11 +2357,11 @@ ApplicationWindow {
             active: rateDialog.contentReady
             sourceComponent: Component {
         ColumnLayout {
-            anchors.fill: parent; spacing: 10
+            anchors.fill: parent; spacing: Theme.space8
             SungText { text: Number(app.playbackRate.toFixed(2))+"×"; font.pixelSize: Theme.headlineLarge; Layout.alignment: Qt.AlignHCenter }
             SettingSlider { objectName: "playbackRateSlider"; from: 0.5; to: 2; stepSize: 0.05; value: app.playbackRate; Layout.fillWidth: true; onMoved: app.playbackRate=value; Accessible.name: "Playback speed" }
             RowLayout {
-                Layout.alignment: Qt.AlignHCenter; spacing: 8
+                Layout.alignment: Qt.AlignHCenter; spacing: Theme.space8
                 Repeater { model: [0.75,1,1.5]; MButton { required property real modelData; text: modelData+"×"; selected: Math.abs(app.playbackRate-modelData)<0.01; implicitHeight: 40; onClicked: app.playbackRate=modelData } }
             }
             MSwitch { text: "Preserve pitch"; visible: app.pitchAdjustable; checked: app.preservePitch; onToggled: app.preservePitch=checked; Layout.fillWidth: true }
@@ -2378,7 +2380,7 @@ ApplicationWindow {
         ScrollView {
             id: lyricControls; anchors.fill: parent; contentWidth: availableWidth; clip: true
         ColumnLayout {
-            width: lyricControls.availableWidth; spacing: 16
+            width: lyricControls.availableWidth; spacing: Theme.space16
             RowLayout {
                 Layout.fillWidth: true
                 SungText { text: "Text size"; Layout.fillWidth: true }
@@ -2395,7 +2397,7 @@ ApplicationWindow {
             SungText { text: (app.lyricOffset>0?"+":"")+(app.lyricOffset/1000).toFixed(2)+" s"; font.pixelSize: Theme.headlineMedium; Layout.alignment: Qt.AlignHCenter }
             SettingSlider { objectName: "lyricTimingSlider"; from: -10000; to: 10000; stepSize: 250; value: app.lyricOffset; Layout.fillWidth: true; onMoved: app.lyricOffset=value; Accessible.name: "Lyric timing; positive shows lyrics earlier" }
             RowLayout {
-                Layout.alignment: Qt.AlignHCenter; spacing: 8
+                Layout.alignment: Qt.AlignHCenter; spacing: Theme.space8
                 MButton { objectName: "lyricsLaterButton"; text: "Later"; enabled: app.lyricOffset> -10000; onClicked: app.lyricOffset-=250 }
                 MButton { text: "Reset"; tonal: true; enabled: app.lyricOffset!==0; onClicked: app.lyricOffset=0 }
                 MButton { objectName: "lyricsEarlierButton"; text: "Earlier"; enabled: app.lyricOffset<10000; onClicked: app.lyricOffset+=250 }

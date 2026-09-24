@@ -38,7 +38,7 @@ MenuItem {
 
     implicitHeight: segmented ? 44 : 48
     height: visible ? implicitHeight : 0
-    leftPadding: 14; rightPadding: 14
+    leftPadding: Theme.space12; rightPadding: Theme.space12
     palette.windowText: control.ink
     indicator: Icon {
         objectName: "menuItemLeading"

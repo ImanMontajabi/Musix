@@ -70,7 +70,7 @@ Slider {
         y: -height-12; width: s.previewLine?Math.min(280,Math.max(120,s.width)):76
         padding: 10
         contentItem: Column {
-            spacing: 4
+            spacing: Theme.space4
             SungText { width: parent.width; text: app.formatTime(s.previewValue); color: Theme.inverseSurfaceText; font.pixelSize: Theme.labelLarge; labelRole: true; horizontalAlignment: Text.AlignHCenter }
             SungText { width: parent.width; visible: !!s.previewLine; text: s.previewLine; color: Theme.inverseSurfaceText; font.pixelSize: Theme.bodySmall; wrapMode: Text.Wrap; maximumLineCount: 2; horizontalAlignment: Text.AlignHCenter }
         }

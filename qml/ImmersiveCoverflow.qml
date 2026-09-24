@@ -17,7 +17,7 @@ ColumnLayout {
     readonly property int reserved: large+58
     readonly property int centeredIndex: covers.currentIndex
     signal showAllRequested()
-    spacing: 6
+    spacing: Theme.space8
     ListView {
         id: covers
         objectName: "coverflowView"
@@ -96,7 +96,7 @@ ColumnLayout {
         }
     }
     RowLayout {
-        Layout.fillWidth: true; spacing: 8
+        Layout.fillWidth: true; spacing: Theme.space8
         Item { Layout.preferredWidth: showAll.width }
         SungText {
             objectName: "coverflowLabel"

@@ -2,7 +2,7 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 Popup {
-    id:popup;objectName:"outputPicker";width:Math.min(330,parent.width-32);height:Math.min(380,parent.height-32,devices.contentHeight+96);padding:16;focus:true
+    id:popup;objectName:"outputPicker";width:Math.min(330,parent.width-32);height:Math.min(380,parent.height-32,devices.contentHeight+96);padding:Theme.space16;focus:true
     property point anchorPosition:Qt.point(0,0)
     x:Math.max(16,Math.min(parent.width-width-16,anchorPosition.x-width))
     y:Math.max(16,Math.min(parent.height-height-16,anchorPosition.y-height-10))
@@ -12,9 +12,9 @@ Popup {
     background:Rectangle {radius:Theme.shapeExtraLarge;color:Theme.high;border.width:1;border.color:Theme.outlineVariant}
     enter:Transition {NumberAnimation {property:"opacity";from:0;to:1;duration:Theme.enterDuration}}
     exit:Transition {NumberAnimation {property:"opacity";to:0;duration:Theme.exitDuration}}
-    contentItem:ColumnLayout {spacing:8
+    contentItem:ColumnLayout {spacing:Theme.space8
         SungText {heading:true;text:"Audio output";font.pixelSize:Theme.titleMedium;font.weight:Font.Medium;Layout.fillWidth:true}
-        ListView {id:devices;objectName:"outputDevices";Layout.fillWidth:true;Layout.fillHeight:true;clip:true;spacing:4;model:popup.visible?app.audioDevices:[]
+        ListView {id:devices;objectName:"outputDevices";Layout.fillWidth:true;Layout.fillHeight:true;clip:true;spacing:Theme.space4;model:popup.visible?app.audioDevices:[]
             ScrollBar.vertical:MScrollBar {}
             Keys.onReturnPressed: {const device=app.audioDevices[currentIndex];if(device){app.audioDeviceId=device.id;popup.close();}}
             // Material draws a choice of one out of a set as radio buttons in
