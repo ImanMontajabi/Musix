@@ -1760,6 +1760,18 @@ void Backend::playCollection(int index) {
   int actual=0;for(int i=0;i<index;++i)if(!playable({all[i]}).isEmpty())++actual;
   invalidateUndo("queue");m_queue.reconcile(queueWithOrigin(playable(all),"collection"));playAt(actual);
 }
+static QVariantList shelfSongs(const QVariantList &sections) {
+  for(const auto &v:sections){QVariantList songs;
+    for(const auto &item:v.toMap().value("items").toList())if(!item.toMap().value("videoId").toString().isEmpty())songs.append(item);
+    if(!songs.isEmpty())return songs;}
+  return {};
+}
+bool Backend::hasShelfSongs() const {return !shelfSongs(m_sections).isEmpty();}
+void Backend::playShelfSongs(bool shuffled) {
+  const auto songs=playable(shelfSongs(m_sections));if(songs.isEmpty())return;
+  if(shuffled)setShuffle(true);invalidateUndo("queue");m_queue.reconcile(queueWithOrigin(songs,"collection"));
+  playAt(shuffled?int(QRandomGenerator::global()->bounded(songs.size())):0);
+}
 void Backend::enqueueCollection() {
   auto items=playable(m_collection.items());if(items.isEmpty())return;
   invalidateUndo("queue");m_queue.append(queueWithOrigin(items,"manual"));m_saveTimer.start();emit toast("Added to queue");

@@ -554,6 +554,10 @@ public:
   Q_INVOKABLE void playAt(int index, int direction=0);
   Q_INVOKABLE void playResults(int index = 0);
   Q_INVOKABLE void playCollection(int index = 0);
+  // An online artist or channel page holds its songs in shelves rather than a
+  // track list; this plays the first shelf that has any.
+  Q_INVOKABLE bool hasShelfSongs() const;
+  Q_INVOKABLE void playShelfSongs(bool shuffled = false);
   Q_INVOKABLE void enqueueCollection();
   Q_INVOKABLE void playCover(const QVariantMap &item);
   Q_INVOKABLE void playItem(const QVariantMap &item);

@@ -98,14 +98,14 @@ Item {
                 MButton {
                     objectName: "artistHeroPlay"
                     text: "Play"; symbol: "play"; filled: true
-                    enabled: app.collection.count>0
-                    onClicked: app.playCollection(0)
+                    enabled: app.collection.count>0 || (app.sections, app.hasShelfSongs())
+                    onClicked: app.collection.count>0 ? app.playCollection(0) : app.playShelfSongs(false)
                 }
                 MButton {
                     objectName: "artistHeroShuffle"
                     text: "Shuffle"; symbol: "shuffle"; elevated: true
-                    enabled: app.collection.count>1
-                    onClicked: {app.shuffle=true;app.playCollection(Math.floor(Math.random()*app.collection.count));}
+                    enabled: app.collection.count>1 || (app.sections, app.hasShelfSongs())
+                    onClicked: {if(app.collection.count>0){app.shuffle=true;app.playCollection(Math.floor(Math.random()*app.collection.count));}else app.playShelfSongs(true);}
                 }
                 MButton {
                     objectName: "artistHeroFollow"

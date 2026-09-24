@@ -76,6 +76,19 @@ private slots:
       QCOMPARE(reloadedArtist.value("known").toStringList(),QStringList({"r2"}));
       reloaded.m_following.clear();reloaded.m_releases.clear();reloaded.save();}
   }
+  void artistShelvesArePlayable() {
+    const auto oldHelper=qgetenv("SUNG_HELPER"),oldPython=qgetenv("SUNG_PYTHON");
+    qputenv("SUNG_HELPER",qgetenv("SUNG_FIXTURE_HELPER"));qputenv("SUNG_PYTHON","/usr/bin/python3");qputenv("SUNG_BUFFER_FIXTURE","1");
+    const auto restore=qScopeGuard([&]{qputenv("SUNG_HELPER",oldHelper);qputenv("SUNG_PYTHON",oldPython);qunsetenv("SUNG_BUFFER_FIXTURE");});
+    Backend b;b.clearQueue();b.setShuffle(false);b.setAutoplay(false);b.setVolume(0);
+    b.m_sections={QVariantMap{{"title","Albums"},{"items",QVariantList{QVariantMap{{"id","MPREb_x"},{"browseId","MPREb_x"},{"kind","album"}}}}},
+                  QVariantMap{{"title","Songs"},{"items",QVariantList{track("shelf000001"),track("shelf000002"),track("shelf000003")}}}};
+    QVERIFY(b.hasShelfSongs());
+    b.playShelfSongs(false);QCOMPARE(b.queue()->count(),3);QCOMPARE(b.currentIndex(),0);QVERIFY(!b.shuffle());
+    b.playShelfSongs(true);QCOMPARE(b.queue()->count(),3);QVERIFY(b.shuffle());
+    b.stop();b.m_sections={QVariantMap{{"title","Albums"},{"items",QVariantList{QVariantMap{{"id","MPREb_x"},{"kind","album"}}}}}};
+    QVERIFY(!b.hasShelfSongs());b.setShuffle(false);b.clearQueue();
+  }
   void accentChoicesAreStoredAsGiven() {
     Backend b;b.setAccentColor("");
     b.setAccentColor("#6750A4");QCOMPARE(b.accentColor(),QString("#6750a4"));
