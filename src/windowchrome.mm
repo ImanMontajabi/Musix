@@ -1,13 +1,16 @@
 #include "windowchrome.h"
+#include <QGuiApplication>
 #include <QPointer>
 #include <QWindow>
 #import <AppKit/AppKit.h>
 
 namespace {
 NSWindow *nativeWindow(QQuickWindow *window) {
-  if (!window)
+  // On the cocoa platform a QWindow's winId is its NSView. On any other --
+  // offscreen, which every UI test runs on -- it is not an object at all, and
+  // messaging it crashed at startup.
+  if (!window || QGuiApplication::platformName() != QLatin1String("cocoa"))
     return nil;
-  // On the cocoa platform a QWindow's winId is its NSView.
   auto view = reinterpret_cast<NSView *>(window->winId());
   return view ? view.window : nil;
 }
