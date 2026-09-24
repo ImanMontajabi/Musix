@@ -356,6 +356,23 @@ helper "{\"op\":\"online-artwork\",\"artworkCache\":\"$probe/art\",\"scratch\":\
 "$resources/runtime/bin/python3" -c "from yt_dlp import YoutubeDL
 from ytmusicapi import YTMusic" >/dev/null
 
+say "Smoke test"
+# The app itself, launched from the bundle and used: a window, a local import
+# through the bundled helper, playback and a seek, the mini player opened
+# three times while playing, the themes and Settings. Any QML error fails it.
+# It puts a window on screen for a few seconds. It runs on a throwaway profile
+# and refuses to run on any other, and it clears the overrides a checkout
+# sets, so only what the bundle carries is used.
+smoke="$(mktemp -d "${TMPDIR:-/tmp}/musix-smoke.XXXXXX")"
+if ! env -u SUNG_HELPER -u SUNG_PYTHON -u SUNG_FFMPEG_DIR MUSIX_PROFILE="$smoke" \
+     "$app/Contents/MacOS/musix" --isolated --smoke-test 2>"$smoke.log"; then
+  grep -v 'qt.qml.propertyCache\|qt.qpa.fonts' "$smoke.log" | tail -20 >&2
+  rm -rf "$smoke" "$smoke.log"
+  echo "The app failed its smoke test; no DMG is made from it." >&2
+  exit 1
+fi
+rm -rf "$smoke" "$smoke.log"
+
 written="$(find "$app" -newer "$marker")"
 if [ -n "$written" ]; then
   echo "Using the app wrote into the signed bundle:" >&2
@@ -365,7 +382,7 @@ fi
 codesign --verify --deep --strict "$app" ||
   { echo "The signature stopped verifying after ordinary use." >&2; exit 1; }
 rm -rf "$probe" "$marker"
-echo "helper, artwork and resolver all ran; nothing written, seal intact"
+echo "helper, artwork, resolver and the app itself all ran; nothing written, seal intact"
 
 say "DMG"
 ln -sf /Applications "$stage/Applications"

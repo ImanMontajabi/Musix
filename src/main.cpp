@@ -16,6 +16,7 @@
 #include <QGuiApplication>
 #include <QLocalServer>
 #include "profile.h"
+#include "smoketest.h"
 #include <QLocalSocket>
 #include <QNetworkAccessManager>
 #include <QNetworkDiskCache>
@@ -188,6 +189,13 @@ int main(int argc, char **argv) {
     QObject::connect(socket, &QLocalSocket::disconnected, socket,
                      &QObject::deleteLater);
   });
+  // In every build, not only diagnostics ones: it is the shipped binary that
+  // has to pass it.
+  if (args.contains("--smoke-test")) {
+    QTimer::singleShot(0, &app, [&] { runSmokeTest(&backend, window); });
+    QTimer::singleShot(120000, &app, [] { fprintf(stderr, "smoke test FAILED: timed out\n"); QCoreApplication::exit(3); });
+    return app.exec();
+  }
 #ifdef SUNG_DIAGNOSTICS
   if (qEnvironmentVariableIsSet("SUNG_STARTUP_PROBE")) {
     fprintf(stdout,"STARTUP_READY_MS %.3f\n",startupTimer.nsecsElapsed()/1e6);fflush(stdout);
