@@ -1743,6 +1743,17 @@ ApplicationWindow {
         if(folderPickForOnboarding){folderPickForOnboarding=false;return;}
         musicFolderEntry.open();
     }
+    UpdateDialog { id: updateDialog; anchors.centerIn: parent }
+    Connections {
+        target: updates
+        function onAvailable(version, current, manual) { if(miniPlayer && miniPlayer.visible) restorePlayer(); updateDialog.offer(version, current) }
+        function onUpToDate() { updateDialog.upToDate() }
+        function onFailed(message) { updateDialog.failed(message) }
+    }
+    Connections {
+        target: windowChrome
+        function onCheckForUpdatesRequested() { updates.check(true) }
+    }
     Onboarding {
         id: onboarding; objectName: "onboarding"
         onBrowseRequested: {window.folderPickForOnboarding=true;window.openFileDialog("folder");}
@@ -1893,7 +1904,7 @@ ApplicationWindow {
         property bool contentReady: false
         property string searchQuery: ""
         property int category: 0
-        readonly property var categories: ["Appearance","Playback","Library","Connections","Privacy & data"]
+        readonly property var categories: ["Appearance","Playback","Library","Connections","Privacy & data","Updates"]
         function matches(terms) {return searchQuery.trim().toLowerCase().split(/\s+/).every(word=>terms.toLowerCase().indexOf(word)>=0);}
         onAboutToShow: {contentReady=true;searchQuery="";}
         onOpened: if(contentItem.item)contentItem.item.focusSearch()
@@ -2096,10 +2107,25 @@ ApplicationWindow {
                 MSettingRow {objectName:"clearHistoryButton";text:"Clear history";visible:settingsDialog.matches("Clear history");onClicked:app.clearHistory()}
                 MSettingRow {opens:true;objectName:"exportLibraryButton";text:"Export library";visible:settingsDialog.matches("Export library backup");onClicked:window.openFileDialog("export")}
                 MSettingRow {opens:true;objectName:"importLibraryButton";text:"Import library";visible:settingsDialog.matches("Import library restore");onClicked:window.openFileDialog("import")}
-                SungText { objectName:"settingsVersion"; visible: settingsDialog.matches("Musix version"); text: "Musix " + Qt.application.version; color: Theme.muted; font.pixelSize: Theme.labelMedium; Layout.topMargin: 12 }
                     }
                 }
-                SungText { objectName: "settingsNoResults"; text: "No settings found"; color: Theme.muted; visible: {settingsDialog.searchQuery;return !!settingsDialog.searchQuery.trim() && !settingsGroup0.hasMatches && !settingsGroup1.hasMatches && !settingsGroup2.hasMatches && !settingsGroup3.hasMatches && !settingsGroup4.hasMatches;} }
+                ColumnLayout {
+                    id: settingsGroup5; objectName:"settingsGroup5"
+                    Layout.fillWidth:true;Layout.minimumWidth:0; spacing:12
+                    property bool hasMatches: settingsDialog.matches("Updates Musix version") || settingsDialog.matches("Check for updates new version") || settingsDialog.matches("Check for updates automatically")
+                    visible: settingsDialog.searchQuery.trim() ? hasMatches : settingsDialog.category===5
+                    SungText {heading: true;text:"Updates";font.pixelSize:Theme.titleLarge;font.weight:Font.Medium;Layout.bottomMargin:8}
+                    ColumnLayout {id:options5;objectName:"settingsRows5";Layout.fillWidth:true;Layout.minimumWidth:0;spacing:12
+                SungText { objectName:"settingsVersion"; visible: settingsDialog.matches("Updates Musix version"); text: "Musix " + updates.currentVersion; font.pixelSize: Theme.bodyLarge; Layout.fillWidth: true }
+                RowLayout {
+                    visible: settingsDialog.matches("Check for updates new version"); Layout.fillWidth: true; spacing: 12
+                    MButton { objectName: "checkUpdatesButton"; text: "Check for Updates"; symbol: "refresh"; tonal: true; busy: updates.checking; enabled: !updates.checking; onClicked: updates.check(true) }
+                    SungText { objectName: "updateStatus"; text: updates.checking ? "Checking…" : updates.status; color: Theme.muted; font.pixelSize: Theme.bodyMedium; wrapMode: Text.Wrap; Layout.fillWidth: true }
+                }
+                MSwitch { Layout.fillWidth:true;Layout.minimumWidth:0; visible: settingsDialog.matches("Check for updates automatically"); objectName: "autoUpdateSwitch"; text: "Check for updates automatically"; hint: "Once a day, Musix asks GitHub whether a newer release is out. It only tells you; it never downloads or installs anything."; checked: updates.automatic; onToggled: updates.automatic=checked }
+                    }
+                }
+                SungText { objectName: "settingsNoResults"; text: "No settings found"; color: Theme.muted; visible: {settingsDialog.searchQuery;return !!settingsDialog.searchQuery.trim() && !settingsGroup0.hasMatches && !settingsGroup1.hasMatches && !settingsGroup2.hasMatches && !settingsGroup3.hasMatches && !settingsGroup4.hasMatches && !settingsGroup5.hasMatches;} }
             }
         }
         }

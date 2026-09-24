@@ -17,6 +17,7 @@
 #include <QLocalServer>
 #include "profile.h"
 #include "smoketest.h"
+#include "updatechecker.h"
 #include <QLocalSocket>
 #include <QNetworkAccessManager>
 #include <QNetworkDiskCache>
@@ -161,6 +162,13 @@ int main(int argc, char **argv) {
   engine.rootContext()->setContextProperty("windowChrome", &windowChrome);
   engine.addImageProvider("symbols", new Symbols);
   engine.rootContext()->setContextProperty("app", &backend);
+  UpdateChecker updates(MUSIX_VERSION);
+  // A local mock can stand in for GitHub; setEndpoint takes nothing else.
+  if (const auto endpoint = qEnvironmentVariable("MUSIX_UPDATE_API"); !endpoint.isEmpty() && !updates.setEndpoint(QUrl(endpoint)))
+    fprintf(stderr, "MUSIX_UPDATE_API ignored: only a loopback http address is accepted\n");
+  if (!args.contains("--smoke-test"))
+    updates.start();
+  engine.rootContext()->setContextProperty("updates", &updates);
   engine.rootContext()->setContextProperty("motionArtwork", &motionArtwork);
   engine.rootContext()->setContextProperty("desktopTheme", &desktopTheme);
   QObject::connect(

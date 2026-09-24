@@ -29,9 +29,12 @@ public:
   qreal inset() const { return m_inset; }
 signals:
   void insetChanged();
+  // "Check for Updates…" was chosen from the app menu.
+  void checkForUpdatesRequested();
 
 private:
   void refresh();
+  void installAppMenuItems();
   QQuickWindow *m_window = nullptr;
   qreal m_inset = 0;
 };

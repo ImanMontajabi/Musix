@@ -1,8 +1,25 @@
 #include "windowchrome.h"
 #include <QGuiApplication>
 #include <QPointer>
+#include <QTimer>
 #include <QWindow>
 #import <AppKit/AppKit.h>
+
+// The target of the app menu's own item. AppKit keeps menu targets weakly, so
+// this lives as long as the app does.
+@interface MusixMenuTarget : NSObject {
+@public
+  QPointer<WindowChrome> chrome;
+}
+- (void)checkForUpdates:(id)sender;
+@end
+@implementation MusixMenuTarget
+- (void)checkForUpdates:(id)sender {
+  Q_UNUSED(sender);
+  if (chrome)
+    emit chrome->checkForUpdatesRequested();
+}
+@end
 
 namespace {
 NSWindow *nativeWindow(QQuickWindow *window) {
@@ -35,6 +52,37 @@ void WindowChrome::blend(QQuickWindow *window) {
   // Theme.background, which is the one answer everything else here uses too.
   connect(window, &QQuickWindow::colorChanged, this, [this] { refresh(); });
   refresh();
+  installAppMenuItems();
+}
+
+void WindowChrome::installAppMenuItems() {
+  if (QGuiApplication::platformName() != QLatin1String("cocoa"))
+    return;
+  // The app menu Qt builds has About, Services, Hide and Quit, and no way to
+  // add to it without a QMenuBar -- which would bring Qt Widgets and its own
+  // copy of every standard item, each shortcut then answered twice. So the
+  // one item goes straight into the menu AppKit already shows, at the top
+  // where Mac apps keep it. It carries no key equivalent to collide with.
+  // The menu exists only once the app has finished launching.
+  NSMenu *appMenu = NSApp.mainMenu.numberOfItems ? [NSApp.mainMenu itemAtIndex:0].submenu : nil;
+  if (!appMenu) {
+    QTimer::singleShot(200, this, [this] { installAppMenuItems(); });
+    return;
+  }
+  static MusixMenuTarget *target = [[MusixMenuTarget alloc] init];
+  target->chrome = this;
+  if ([appMenu indexOfItemWithTarget:target andAction:@selector(checkForUpdates:)] >= 0)
+    return;
+  NSMenuItem *item = [[NSMenuItem alloc] initWithTitle:@"Check for Updates…"
+                                                action:@selector(checkForUpdates:)
+                                         keyEquivalent:@""];
+  item.target = target;
+  // First: Qt gives this app no About item. Below About should one appear.
+  NSInteger at = 0;
+  if (appMenu.numberOfItems && [appMenu itemAtIndex:0].action == @selector(orderFrontStandardAboutPanel:))
+    at = 1;
+  [appMenu insertItem:item atIndex:at];
+  [appMenu insertItem:[NSMenuItem separatorItem] atIndex:at + 1];
 }
 
 void WindowChrome::refresh() {
