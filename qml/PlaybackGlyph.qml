@@ -8,8 +8,10 @@ Item {
     property bool ready:false
     readonly property bool animate:ready && app.motion && visible && Window.window && Window.window.visible && Window.window.visibility!==Window.Minimized
     onPausedChanged:progress=paused?1:0
-    onAnimateChanged:if(!animate){morph.stop();settle.restart();}
-    Timer {id:settle;interval:0;onTriggered:if(!glyph.animate){morph.stop();glyph.progress=glyph.paused?1:0;}}
+    // The animation belongs to the Behavior, which refuses a stop() from here;
+    // a value written while the Behavior is disabled ends it instead.
+    onAnimateChanged:if(!animate)settle.restart()
+    Timer {id:settle;interval:0;onTriggered:if(!glyph.animate)glyph.progress=glyph.paused?1:0}
     Component.onCompleted:{progress=paused?1:0;ready=true;}
     Behavior on progress {enabled:glyph.animate;NumberAnimation {id:morph;duration:200;easing.type:Easing.BezierSpline;easing.bezierCurve:Theme.effectsCurve}}
     // Stable endpoints use the bundled Material Symbols. Only the short transition
