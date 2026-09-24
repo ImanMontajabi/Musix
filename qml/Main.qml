@@ -1034,6 +1034,7 @@ ApplicationWindow {
                             LibraryTabs {
                                 objectName: "localFacetTabs"
                                 secondary: true
+                                Accessible.name: "Local files view"
                                 Layout.preferredWidth: 320
                                 entries: [{label:"Songs", key:"files", name:"localView_files"},
                                           {label:"Albums", key:"local-albums", name:"localView_local-albums"},
