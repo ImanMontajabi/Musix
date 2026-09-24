@@ -207,6 +207,7 @@ cp "$root/licenses/LGPL-3.0.txt" "$licenses/Qt-LGPL-3.0.txt"
 cp "$root/licenses/GPL-3.0.txt" "$licenses/Qt-LGPL-3.0-incorporates-GPL-3.0.txt"
 python3 "$root/scripts/qt-licenses.py" "$cache/qt-src" "$licenses/Qt-third-party.txt" 2>/dev/null
 cp "$root/licenses/MaterialSymbols-LICENSE.txt" "$licenses/"
+cp "$root/licenses/Catppuccin-palette-MIT.txt" "$root/licenses/RosePine-palette-MIT.txt" "$licenses/"
 cp "$cache/ffmpeg-$ffmpeg_version/COPYING.LGPLv2.1" "$licenses/FFmpeg-LGPL-2.1.txt"
 cp "$runtime/lib/python3.11/LICENSE.txt" "$licenses/CPython-PSF.txt"
 cp "$runtime"/lib/python3.11/site-packages/yt_dlp-*.dist-info/licenses/LICENSE \

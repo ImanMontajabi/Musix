@@ -15,6 +15,17 @@ Visual references: Google Material Design 3 and Spun.
 Architecture reference: https://github.com/amiralibg/unstream.
 No Unstream source code is incorporated.
 
+Accent colours: the Catppuccin, Gruvbox and Rosé Pine choices in Settings use
+those palettes' published colour values, copied into qml/AccentPalettes.qml
+with the commit each came from.
+  Catppuccin     https://github.com/catppuccin/palette  MIT, (c) 2021 Catppuccin
+                 licenses/Catppuccin-palette-MIT.txt
+  Gruvbox        https://github.com/morhetz/gruvbox     MIT/X11, by morhetz, as
+                 stated in its README; the repository carries no separate
+                 license text
+  Rosé Pine      https://github.com/rose-pine/palette   MIT, (c) mvllow
+                 licenses/RosePine-palette-MIT.txt
+
 On Linux, where Musix is built against an installed Qt, those runtime
 dependencies carry their own licenses and are not redistributed with it.
 Qt licensing: https://www.qt.io/licensing/open-source-lgpl-obligations
@@ -38,6 +49,9 @@ Payload Musix adds deliberately
   yt-dlp                    Unlicense          yt-dlp-Unlicense.txt
   ytmusicapi                MIT                ytmusicapi-MIT.txt
   Material Symbols          Apache-2.0         MaterialSymbols-LICENSE.txt
+  Catppuccin palette        MIT                Catppuccin-palette-MIT.txt
+  Rosé Pine palette         MIT                RosePine-palette-MIT.txt
+  Gruvbox palette           MIT/X11            (no text published; see above)
 
 Qt
 --
