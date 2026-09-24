@@ -1182,7 +1182,11 @@ QVariantMap Backend::colorScheme(const QColor &source,bool dark) const {
 }
 void Backend::setAccentColor(const QString &value) {
   const QColor color(value.trimmed());
-  const auto stored=value.trimmed().isEmpty()?QString():color.isValid()?color.name(QColor::HexRgb):accentColor();
+  // A palette accent is kept by name, so the theme can pick the palette's
+  // light or dark variant; which names exist is AccentPalettes.qml's business.
+  static const QRegularExpression palette("^(?:catppuccin|gruvbox|rosepine)/[a-z]{2,16}$");
+  const auto stored=value.trimmed().isEmpty()?QString():palette.match(value.trimmed()).hasMatch()?value.trimmed()
+                    :color.isValid()?color.name(QColor::HexRgb):accentColor();
   if(stored==accentColor())return;
   m_settings.setValue("accentColor",stored);
   emit settingsChanged();

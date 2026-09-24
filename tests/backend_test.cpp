@@ -42,6 +42,17 @@ private slots:
     }
 #endif
   }
+  void accentChoicesAreStoredAsGiven() {
+    Backend b;b.setAccentColor("");
+    b.setAccentColor("#6750A4");QCOMPARE(b.accentColor(),QString("#6750a4"));
+    // A palette accent is kept by name, so the theme can pick its variant.
+    b.setAccentColor("catppuccin/mauve");QCOMPARE(b.accentColor(),QString("catppuccin/mauve"));
+    b.setAccentColor("rosepine/pine");QCOMPARE(b.accentColor(),QString("rosepine/pine"));
+    for(const auto *bad:{"catppuccin/","nord/frost","catppuccin/mauve/extra","../../etc","not a colour"}){
+      b.setAccentColor(bad);QCOMPARE(b.accentColor(),QString("rosepine/pine"));
+    }
+    b.setAccentColor("");QVERIFY(b.accentColor().isEmpty());
+  }
   void sleepFadeRestoresUserVolume() {
     Backend b;b.setSleepFade(true);b.setVolume(.6);b.setSleep(15);
     QVERIFY(b.m_sleepFadeStart.isActive());QVERIFY(!b.m_sleepFadeTick.isActive());

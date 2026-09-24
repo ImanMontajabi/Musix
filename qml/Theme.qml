@@ -5,10 +5,19 @@ QtObject {
     Behavior on artworkSeed {enabled:app.motion && app.artworkAccent;ColorAnimation {duration:240;easing.type:Easing.InOutCubic}}
     readonly property bool useArtwork: app.artworkAccent && artworkSeed.a > 0
     // A hand-picked Material source color, used when no cover is driving the theme.
-    property color accentSeed: app.accentColor ? app.accentColor : "transparent"
+    property color accentSeed: app.accentColor.startsWith("#") ? app.accentColor : "transparent"
     Behavior on accentSeed {enabled:app.motion;ColorAnimation {duration:240;easing.type:Easing.InOutCubic}}
     readonly property bool useAccent: !useArtwork && accentSeed.a > 0
     readonly property bool useSource: useArtwork || useAccent
+    // A palette accent (Catppuccin, Gruvbox, Rosé Pine) is not a seed: it sets
+    // the accent roles directly and leaves the surfaces as they are, so it is
+    // the colour its palette says rather than a tone derived from it.
+    readonly property string paletteHex: useArtwork ? "" : AccentPalettes.hex(app.accentColor, dark)
+    readonly property bool usePalette: paletteHex !== ""
+    // A colour, not the string: blend() and readable() read its channels.
+    readonly property color paletteColor: usePalette ? paletteHex : "transparent"
+    readonly property var paletteSurfaces: [surface, container, high, highest]
+    readonly property color palettePrimary: usePalette ? readable(paletteColor, paletteSurfaces) : "transparent"
     readonly property color sourceColor: useArtwork ? artworkSeed : accentSeed
     // Material spreads five tonal palettes around one source color and reads
     // every role off them at fixed tones. Surfaces included: that trace of the
@@ -331,27 +340,29 @@ QtObject {
     // stay readable on every surface a field sits on; the outline alone
     // measured 2.3:1 in the light scheme.
     readonly property color placeholder: readable(outline, [surface, container, high, highest])
-    readonly property color primary: useSource ? role("primary",sourceColor) : followDesktop ? desktopTheme.colors.primary : (dark ? "#ffb596" : "#964829")
-    readonly property color primaryText: useSource ? role("onPrimary",luminance(primary)>0.179?"#000000":"#ffffff") : followDesktop ? desktopTheme.colors.primaryText : (dark ? "#572008" : "#ffffff")
-    readonly property color primaryContainer: useSource ? role("primaryContainer",blend(container,primary,0.16)) : followDesktop ? desktopTheme.colors.primaryContainer : (dark ? "#75351b" : "#ffdbcb")
-    readonly property color containerText: useSource ? role("onPrimaryContainer",readable(primary,[primaryContainer])) : followDesktop ? desktopTheme.colors.containerText : (dark ? "#ffdbcb" : "#743419")
-    readonly property color secondaryContainer: role("secondaryContainer", dark ? "#54432a" : "#f5e0bb")
+    readonly property color primary: usePalette ? palettePrimary : useSource ? role("primary",sourceColor) : followDesktop ? desktopTheme.colors.primary : (dark ? "#ffb596" : "#964829")
+    readonly property color primaryText: usePalette ? (contrast(primary,"#000000")>=contrast(primary,"#ffffff")?"#000000":"#ffffff") : useSource ? role("onPrimary",luminance(primary)>0.179?"#000000":"#ffffff") : followDesktop ? desktopTheme.colors.primaryText : (dark ? "#572008" : "#ffffff")
+    readonly property color primaryContainer: usePalette ? blend(container,paletteColor,dark?0.34:0.24) : useSource ? role("primaryContainer",blend(container,primary,0.16)) : followDesktop ? desktopTheme.colors.primaryContainer : (dark ? "#75351b" : "#ffdbcb")
+    readonly property color containerText: usePalette ? readable(text,[primaryContainer]) : useSource ? role("onPrimaryContainer",readable(primary,[primaryContainer])) : followDesktop ? desktopTheme.colors.containerText : (dark ? "#ffdbcb" : "#743419")
+    // The selected navigation item and other quiet selections carry the
+    // accent too, faintly, or the default's tan would sit beside it.
+    readonly property color secondaryContainer: usePalette ? blend(high,paletteColor,dark?0.22:0.18) : role("secondaryContainer", dark ? "#54432a" : "#f5e0bb")
     // Material's third accent. A vibrant surface takes it where the usual
     // container would disappear into what it is sitting over.
     readonly property color tertiary: role("tertiary", dark ? "#b8ceb0" : "#3b5236")
     readonly property color tertiaryText: role("onTertiary", dark ? "#243420" : "#ffffff")
     readonly property color tertiaryContainer: role("tertiaryContainer", dark ? "#3b5236" : "#d4eacb")
     readonly property color tertiaryContainerText: role("onTertiaryContainer", dark ? "#d4eacb" : "#233a1f")
-    readonly property color secondaryContainerText: role("onSecondaryContainer", dark ? "#f5e0bb" : "#221a04")
-    readonly property color secondary: followDesktop ? desktopTheme.colors.secondary : role("secondary", dark ? "#d8c4a0" : "#6c5b3b")
+    readonly property color secondaryContainerText: usePalette ? readable(text,[secondaryContainer]) : role("onSecondaryContainer", dark ? "#f5e0bb" : "#221a04")
+    readonly property color secondary: usePalette ? readable(blend(muted,paletteColor,0.5),paletteSurfaces) : followDesktop ? desktopTheme.colors.secondary : role("secondary", dark ? "#d8c4a0" : "#6c5b3b")
     // The ink that goes on the secondary role itself, which is what a tonal
     // toggle takes once it is on.
-    readonly property color secondaryText: role("onSecondary", dark ? "#3b2f15" : "#ffffff")
+    readonly property color secondaryText: usePalette ? (contrast(secondary,"#000000")>=contrast(secondary,"#ffffff")?"#000000":"#ffffff") : role("onSecondary", dark ? "#3b2f15" : "#ffffff")
     // The inverse roles. A snackbar sits against the theme rather than in it,
     // so it takes the surface and the accent the other theme would have used.
     readonly property color inverseSurface: role("inverseSurface", dark ? "#f5ded5" : "#3c2c25")
     readonly property color inverseSurfaceText: role("inverseOnSurface", dark ? "#392e2a" : "#ffede6")
-    readonly property color inversePrimary: role("inversePrimary", dark ? "#964829" : "#ffb596")
+    readonly property color inversePrimary: usePalette ? readable(Qt.color(AccentPalettes.hex(app.accentColor, !dark)),[inverseSurface]) : role("inversePrimary", dark ? "#964829" : "#ffb596")
     // Error comes off the scheme's own error palette, so it answers the
     // contrast setting with everything else instead of sitting at one value.
     readonly property color error: role("error", dark ? "#ffb4ab" : "#ba1a1a")
