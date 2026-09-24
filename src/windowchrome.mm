@@ -109,4 +109,19 @@ void WindowChrome::roundCorners(QQuickWindow *window) {
   // one call is ever queued.
   connect(window, &QQuickWindow::frameSwapped, this, apply, Qt::SingleShotConnection);
   apply();
+  // Hidden and shown again, this window came back about 20 points higher each
+  // time, until the menu bar stopped it. Where it was when it was hidden is
+  // where it goes back to.
+  connect(window, &QWindow::visibleChanged, this,
+          [window = QPointer<QQuickWindow>(window), origin = NSPoint(), known = false](bool visible) mutable {
+            auto native = nativeWindow(window);
+            if (!native)
+              return;
+            if (!visible) {
+              origin = native.frame.origin;
+              known = true;
+            } else if (known) {
+              [native setFrameOrigin:origin];
+            }
+          });
 }
