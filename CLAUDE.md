@@ -6,6 +6,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Musix is a native Material 3 music player built with C++20/Qt 6 (Quick/QML) that plays YouTube Music, local files, and Subsonic/Navidrome or Jellyfin servers. It is a macOS app (Apple Silicon, macOS 14 and later); the source, binary and several paths still say `sung`, which is deliberate.
 
+**Musix is its own project, not a fork that tracks Sung.** Upstream Sung (the `upstream` remote, yappologistic/Sung, fetch-only) is read for ideas and nothing more: do not plan or propose merges from it, and do not keep code shaped for future merges. When an upstream idea is worth having, build it the Musix way.
+
 **Musix is macOS-only from 0.14.0 on.** New features do not need Linux support and are not tested there. The Linux code already in the tree (MPRIS, D-Bus notifications, `windowchrome.cpp`, the XDG paths) stays until it gets in the way, but nothing new has to keep it working.
 
 ## Build, run, test
