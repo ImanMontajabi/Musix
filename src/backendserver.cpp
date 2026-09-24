@@ -1,4 +1,5 @@
 #include "backend.h"
+#include "profile.h"
 #include <QDateTime>
 #include <QDir>
 #include <QStandardPaths>
@@ -36,7 +37,7 @@ void Backend::setupServer() {
     if (!m_server.owns(current()))
       return;
     const auto root =
-        QStandardPaths::writableLocation(QStandardPaths::CacheLocation);
+        Profile::location(QStandardPaths::CacheLocation);
     QDir().mkpath(root);
     auto dir = std::make_shared<QTemporaryDir>(root + "/desktop-art-XXXXXX");
     if (!dir->isValid())

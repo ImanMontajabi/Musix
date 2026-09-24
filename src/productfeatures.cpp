@@ -1,4 +1,5 @@
 #include "backend.h"
+#include "profile.h"
 #include "artworkurl.h"
 #include <QDir>
 #include <QFileInfo>
@@ -106,7 +107,7 @@ QString Backend::displayArt(const QVariantMap &track) const {
 }
 void Backend::chooseArtwork(const QUrl &url,const QString &songId){
   if(songId.isEmpty() || songId!=current().value("id").toString() || !url.isLocalFile())return;
-  request("choose-artwork",{{"op","choose-artwork"},{"path",url.toLocalFile()},{"artDirectory",QStandardPaths::writableLocation(QStandardPaths::AppDataLocation)+"/local-art"}},[this,songId](const QVariantMap &data){
+  request("choose-artwork",{{"op","choose-artwork"},{"path",url.toLocalFile()},{"artDirectory",Profile::location(QStandardPaths::AppDataLocation)+"/local-art"}},[this,songId](const QVariantMap &data){
     if(songId!=current().value("id").toString())return;
     const auto motion=data.value("motionArt").toString();
     if(!data.value("ok").toBool() || motion.isEmpty()){emit toast("Choose a readable GIF, animated WebP, MP4 or WebM cover");return;}
@@ -228,19 +229,19 @@ QString Backend::preparePlaylistCover(const QUrl &url){
   QImageReader reader(file.absoluteFilePath());reader.setAutoTransform(true);
   const auto size=reader.size();if(!size.isValid() || qint64(size.width())*size.height()>32000000)return {};
   reader.setScaledSize(size.scaled(1024,1024,Qt::KeepAspectRatio));const auto image=reader.read();if(image.isNull())return {};
-  const auto dir=QStandardPaths::writableLocation(QStandardPaths::CacheLocation)+"/cover-edit";if(!QDir().mkpath(dir))return {};
+  const auto dir=Profile::location(QStandardPaths::CacheLocation)+"/cover-edit";if(!QDir().mkpath(dir))return {};
   const auto path=dir+"/preview.jpg";QSaveFile out(path);if(!out.open(QIODevice::WriteOnly)||!image.save(&out,"JPEG",88)||!out.commit())return {};
   QUrl result=QUrl::fromLocalFile(path);result.setQuery(QUuid::createUuid().toString(QUuid::WithoutBraces));return result.toString();
 }
 bool Backend::setPlaylistCover(const QString &id,const QString &preview,double x,double y,double zoom){
   if(!std::isfinite(x)||!std::isfinite(y)||!std::isfinite(zoom))return false;
   int index=-1;for(int i=0;i<m_playlists.size();++i)if(m_playlists[i].toMap().value("id")==id){index=i;break;}if(index<0)return false;
-  const QUrl url(preview);const auto expected=QStandardPaths::writableLocation(QStandardPaths::CacheLocation)+"/cover-edit/preview.jpg";
+  const QUrl url(preview);const auto expected=Profile::location(QStandardPaths::CacheLocation)+"/cover-edit/preview.jpg";
   if(!url.isLocalFile() || url.toLocalFile()!=expected)return false;
   QImage image(expected);if(image.isNull())return false;
   const int side=qMax(1,int(qMin(image.width(),image.height())/qBound(1.0,zoom,3.0)));
   image=image.copy(qRound((image.width()-side)*qBound(0.0,x,1.0)),qRound((image.height()-side)*qBound(0.0,y,1.0)),side,side).scaled(512,512,Qt::IgnoreAspectRatio,Qt::SmoothTransformation);
-  const auto dir=QStandardPaths::writableLocation(QStandardPaths::AppDataLocation)+"/playlist-art";if(!QDir().mkpath(dir))return false;
+  const auto dir=Profile::location(QStandardPaths::AppDataLocation)+"/playlist-art";if(!QDir().mkpath(dir))return false;
   const auto path=dir+'/'+QString::fromLatin1(QCryptographicHash::hash(id.toUtf8(),QCryptographicHash::Sha256).toHex())+".jpg";
   QSaveFile out(path);if(!out.open(QIODevice::WriteOnly)||!image.save(&out,"JPEG",85)||!out.commit())return false;
   QUrl cover=QUrl::fromLocalFile(path);cover.setQuery(QUuid::createUuid().toString(QUuid::WithoutBraces));

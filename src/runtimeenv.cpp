@@ -1,4 +1,5 @@
 #include "backend.h"
+#include "profile.h"
 #include <QCoreApplication>
 #include <QDateTime>
 #include <QDir>
@@ -39,7 +40,7 @@ QString Backend::bundledRuntime() const {
 QString Backend::writableRuntime() const {
   // The same directory the library lives in, so a person has one folder to
   // find rather than two.
-  return QStandardPaths::writableLocation(QStandardPaths::AppDataLocation) +
+  return Profile::location(QStandardPaths::AppDataLocation) +
          "/runtime";
 }
 

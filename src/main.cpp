@@ -15,6 +15,7 @@
 #include <QFontDatabase>
 #include <QGuiApplication>
 #include <QLocalServer>
+#include "profile.h"
 #include <QLocalSocket>
 #include <QNetworkAccessManager>
 #include <QNetworkDiskCache>
@@ -98,6 +99,7 @@ int main(int argc, char **argv) {
   app.setApplicationDisplayName("Musix");
   app.setOrganizationName("Sung");
   app.setApplicationVersion(MUSIX_VERSION);
+  Profile::install();
   app.setDesktopFileName("musix");
 #ifdef SUNG_DIAGNOSTICS
   if(app.arguments().contains("--immersive-polish-test"))app.setDesktopFileName("musix-immersive-test");
@@ -107,16 +109,19 @@ int main(int argc, char **argv) {
     fprintf(stdout, "Musix %s\n", MUSIX_VERSION);
     return 0;
   }
+  // A run on its own profile is a separate instance: it must neither hand its
+  // arguments to the real Musix nor take the socket from it.
+  const bool alone = args.contains("--isolated") || Profile::isolated();
   QLocalSocket peer;
   peer.connectToServer("sung-" + QString::number(getuid()));
-  if (!args.contains("--isolated") && peer.waitForConnected(120)) {
+  if (!alone && peer.waitForConnected(120)) {
     peer.write(args.size() > 1 ? args.last().toUtf8() : QByteArray("raise"));
     peer.flush();
     peer.waitForBytesWritten(150);
     return 0;
   }
   QLocalServer server;
-  if (!args.contains("--isolated")) {
+  if (!alone) {
     QLocalServer::removeServer("sung-" + QString::number(getuid()));
     server.setSocketOptions(QLocalServer::UserAccessOption);
     server.listen("sung-" + QString::number(getuid()));

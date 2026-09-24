@@ -1,4 +1,5 @@
 #include "backend.h"
+#include "profile.h"
 #include "artworkurl.h"
 #include <QLocale>
 #include <QMediaMetaData>
@@ -30,10 +31,10 @@
 #include <unistd.h>
 
 static QString dataPath() {
-  return QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
+  return Profile::location(QStandardPaths::AppDataLocation);
 }
 static std::shared_ptr<QTemporaryDir> audioDirectory() {
-  const auto root=QStandardPaths::writableLocation(QStandardPaths::CacheLocation);
+  const auto root=Profile::location(QStandardPaths::CacheLocation);
   if(!QDir().mkpath(root))return {};
   // Use the application cache filesystem instead of /tmp, which is commonly
   // tmpfs on CachyOS. QTemporaryDir still removes each file on normal teardown.
@@ -1019,7 +1020,7 @@ void Backend::fetchLyrics() {
   if(isServerSource(current().value("source"))){
     m_server.lyrics(current(),[this,token](const QVariantMap &data,const QString &error){if(token!=m_trackToken)return;applyLyrics(data);if(!error.isEmpty())notifyError(error);});return;
   }
-  request("lyrics",{{"op",local.isEmpty()?"lyrics":"local-lyrics"},{"id",id},{"title",current().value("title")},{"artist",current().value("artist")},{"album",current().value("album")},{"seconds",duration()/1000},{"fallback",lyricsFallback()},{"lyricCache",QStandardPaths::writableLocation(QStandardPaths::CacheLocation)+"/lyrics"}},[this,id,token](const QVariantMap &data){
+  request("lyrics",{{"op",local.isEmpty()?"lyrics":"local-lyrics"},{"id",id},{"title",current().value("title")},{"artist",current().value("artist")},{"album",current().value("album")},{"seconds",duration()/1000},{"fallback",lyricsFallback()},{"lyricCache",Profile::location(QStandardPaths::CacheLocation)+"/lyrics"}},[this,id,token](const QVariantMap &data){
     if(id!=current().value("id").toString()||token!=m_trackToken)return;
     applyLyrics(data);if(!data.value("ok").toBool())notifyError(data.value("error").toString());
   });
@@ -1295,9 +1296,9 @@ void Backend::clearCache() {
   m_onlineArtworkTimer.stop();cancel("motion-artwork");++m_onlineArtworkGeneration;
   m_onlineArtworkAttempted=true;
   m_onlineMotionArt.clear();emit onlineArtworkChanged();
-  QDir(QStandardPaths::writableLocation(QStandardPaths::CacheLocation)+"/motion-art").removeRecursively();
+  QDir(Profile::location(QStandardPaths::CacheLocation)+"/motion-art").removeRecursively();
   const auto p =
-      QStandardPaths::writableLocation(QStandardPaths::CacheLocation) + "/art";
+      Profile::location(QStandardPaths::CacheLocation) + "/art";
   QDir(p).removeRecursively();
   m_streams.clear();
   emit artworkCacheCleared();
@@ -2421,7 +2422,7 @@ void Backend::fetchOnlineArtwork() {
   // there; the cover itself is the feedback.
   if(motionWanted){m_artworkStatus="Looking for a cover…";emit onlineArtworkChanged();}
   const auto directory=audioDirectory();if(!directory || !directory->isValid())return;
-  const auto root=QStandardPaths::writableLocation(QStandardPaths::CacheLocation)+"/motion-art";
+  const auto root=Profile::location(QStandardPaths::CacheLocation)+"/motion-art";
   auto args=current();args["op"]="online-artwork";args["artworkCache"]=root;args["scratch"]=directory->path();args["refresh"]=m_artworkForce;args["motion"]=motionWanted;args["covers"]=coverLookupWanted();m_artworkForce=false;
   const auto generation=++m_onlineArtworkGeneration;
   const auto videoId=current().value("videoId").toString();

@@ -1,4 +1,5 @@
 #include "roundedart.h"
+#include "profile.h"
 #include "artworkurl.h"
 #include "m3shape.h"
 #include <QBuffer>
@@ -26,7 +27,7 @@ static QNetworkAccessManager *manager() {
     n = new QNetworkAccessManager(QCoreApplication::instance());
     auto c = new QNetworkDiskCache(n);
     c->setCacheDirectory(
-        QStandardPaths::writableLocation(QStandardPaths::CacheLocation) +
+        Profile::location(QStandardPaths::CacheLocation) +
         "/art");
     c->setMaximumCacheSize(48 * 1024 * 1024);
     n->setCache(c);
