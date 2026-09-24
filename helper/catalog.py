@@ -366,6 +366,103 @@ def audio_format(quality, fallback=False, playable=None):
     return '/'.join(choices)
 
 
+CHANNEL_ID = re.compile(r'UC[A-Za-z0-9_-]{22}')
+
+
+def channel_uploads(channel, limit=30):
+    """A YouTube channel's latest uploads, newest first, as playable videos.
+
+    YouTube Music has no page for a channel that is not an artist, so its
+    uploads come from YouTube itself. The flat listing carries no dates; the
+    order is what says which is newest."""
+    if not CHANNEL_ID.fullmatch(channel or ''):
+        raise ValueError('Invalid YouTube channel ID')
+    import yt_dlp
+    opts = {'quiet': True, 'no_warnings': True, 'skip_download': True, 'cachedir': False,
+            'extract_flat': 'in_playlist', 'playlistend': max(1, min(int(limit), 60)), 'socket_timeout': 18}
+    with yt_dlp.YoutubeDL(opts) as dl:
+        info = dl.extract_info('https://www.youtube.com/channel/%s/videos' % channel, download=False) or {}
+    name = info.get('channel') or info.get('uploader') or re.sub(r' - Videos$', '', info.get('title') or '')
+    items = []
+    for entry in info.get('entries') or []:
+        video = entry.get('id') or ''
+        if not re.fullmatch(r'[A-Za-z0-9_-]{11}', video):
+            continue
+        seconds = int(entry.get('duration') or 0)
+        thumbs = sorted(entry.get('thumbnails') or [], key=lambda t: (t.get('width') or 0) * (t.get('height') or 0))
+        items.append({'id': video, 'videoId': video, 'browseId': '', 'kind': 'video',
+                      'title': entry.get('title') or 'Untitled', 'artist': name, 'artistId': channel,
+                      'album': '', 'albumId': '', 'art': thumbs[-1]['url'] if thumbs else '',
+                      'duration': f'{seconds//60}:{seconds%60:02d}' if seconds else '', 'seconds': seconds,
+                      'discNumber': 1, 'explicit': False, 'available': True})
+    avatar = sorted(info.get('thumbnails') or [], key=lambda t: (t.get('width') or 0) * (t.get('height') or 0))
+    return name, (avatar[-1]['url'] if avatar else ''), items
+
+
+def channel_page(channel):
+    name, art, items = channel_uploads(channel)
+    return {'kind': 'channel', 'title': name, 'art': art,
+            'sections': [{'title': 'Videos', 'items': items}] if items else []}
+
+
+def release_candidates(api, target, kind):
+    """What a followed artist or channel has out now, newest first.
+
+    For an artist that is its albums and singles, which YouTube Music lists by
+    release with a year: its songs and videos are ordered by popularity, so a
+    track climbing that list would look new when it is not. A channel has only
+    its uploads."""
+    if kind == 'artist':
+        try:
+            data = api.get_artist(target)
+        except Exception:
+            if not CHANNEL_ID.fullmatch(target or ''):
+                raise
+            kind = 'channel'
+        else:
+            found = []
+            for key in ('singles', 'albums'):
+                section = data.get(key) or {}
+                for item in (section.get('results', []) if isinstance(section, dict) else section):
+                    if not isinstance(item, dict):
+                        continue
+                    release = normalize(item, 'album')
+                    if release['id']:
+                        release.update(year=str(item.get('year') or '')[:4], releaseType=item.get('type') or ('Album' if key == 'albums' else 'Single'),
+                                       artist=release['artist'] or data.get('name', ''), artistId=target)
+                        found.append(release)
+            # Singles and albums interleaved newest first; the year is the only
+            # date there is, so within a year the listing's own order stands.
+            found.sort(key=lambda r: -(int(r['year']) if r['year'].isdigit() else 0))
+            return 'artist', data.get('name', ''), artwork(data), found
+    name, art, items = channel_uploads(target, 15)
+    return 'channel', name, art, items
+
+
+def detect_releases(candidates, known, baseline, this_year):
+    """Which of what is out now is new since the last look.
+
+    The first look after following only records what is already there, so
+    following someone never floods the list with their whole catalogue. After
+    that, anything not seen before is new -- except a dated release more than
+    a year old, which is a reissue or a catalogue reshuffle rather than news.
+    Returns the new ones, newest first, and everything now seen."""
+    seen = list(dict.fromkeys(str(k) for k in known if k))
+    fresh = []
+    for item in candidates:
+        rid = item.get('id')
+        if not rid or rid in seen:
+            continue
+        seen.append(rid)
+        year = str(item.get('year') or '')
+        if baseline or (year.isdigit() and int(year) < this_year - 1):
+            continue
+        fresh.append(item)
+    # Bounded so a long-followed channel does not grow without end; the newest
+    # ids are the ones a check will meet again.
+    return fresh, seen[-600:]
+
+
 def run(req):
     op = req.get('op', '')
     if op == 'choose-artwork':
@@ -439,14 +536,24 @@ def run(req):
         data = api.get_playlist(req['id'], limit=min(int(req.get('limit', 100)), 5000))
         return {'title': data.get('title', ''), 'art': artwork(data), 'items': clean(data.get('tracks', []), 'song', data), 'total': data.get('trackCount', 0)}
     if op == 'artist':
-        data = api.get_artist(req['id'])
+        try:
+            data = api.get_artist(req['id'])
+        except Exception:
+            # A plain YouTube channel has no artist page; show its uploads.
+            if CHANNEL_ID.fullmatch(req.get('id') or ''):
+                return channel_page(req['id'])
+            raise
         sections = []
         for key, title, kind in [('songs','Songs','song'),('albums','Albums','album'),('singles','Singles','album'),('videos','Videos','video'),('related','Related artists','artist')]:
             section = data.get(key) or {}
             items = section.get('results', []) if isinstance(section, dict) else section
             if items:
                 sections.append({'title':title,'items':clean(items,kind)})
-        return {'title':data.get('name',''), 'art':artwork(data), 'sections':sections}
+        return {'kind':'artist', 'title':data.get('name',''), 'art':artwork(data), 'sections':sections}
+    if op == 'releases':
+        kind, name, art, candidates = release_candidates(api, req['id'], req.get('kind', 'artist'))
+        fresh, seen = detect_releases(candidates, req.get('known') or [], bool(req.get('baseline')), int(req.get('year') or 0))
+        return {'kind': kind, 'title': name, 'art': art, 'items': fresh, 'known': seen}
     if op == 'radio':
         data = api.get_watch_playlist(videoId=req['id'], radio=True, limit=30)
         return {'items': clean(data.get('tracks', []), 'song')}
