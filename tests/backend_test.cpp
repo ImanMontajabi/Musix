@@ -42,6 +42,40 @@ private slots:
     }
 #endif
   }
+  void followingKeepsStateAndSurvivesExportAndImport() {
+    const QString artist="UC"+QString(22,'a'),channel="UC"+QString(22,'b');
+    {Backend b;b.m_following.clear();b.m_releases.clear();b.m_releaseQueue.clear();
+      // Only a channel id can be followed; each at most once.
+      b.follow({{"id","not-a-channel"},{"title","Nobody"}});QVERIFY(b.following().isEmpty());
+      b.m_releaseQueue={"blocked"}; // keep the follow from reaching the helper here
+      b.follow({{"id",artist},{"kind","artist"},{"title","Artist"}});b.follow({{"id",artist},{"title","Again"}});
+      b.follow({{"id",channel},{"kind","channel"},{"title","Channel"}});
+      QCOMPARE(b.following().size(),2);QVERIFY(b.isFollowing(artist));QCOMPARE(b.following().first().toMap().value("kind").toString(),QString("channel"));
+      QVERIFY(!b.following().first().toMap().value("baselined").toBool());
+      // What the helper found, newest first, goes in ahead of what was there.
+      b.applyReleaseCheck(artist,{{"kind","artist"},{"known",QStringList{"old","r2","r1"}},{"items",QVariantList{QVariantMap{{"id","r2"},{"title","Second"},{"kind","album"}},QVariantMap{{"id","r1"},{"title","First"},{"kind","album"}}}}});
+      b.applyReleaseCheck(channel,{{"kind","channel"},{"known",QStringList{"v1"}},{"items",QVariantList{QVariantMap{{"id","v1"},{"title","Upload"},{"kind","video"},{"videoId","v1"}}}}});
+      QCOMPARE(b.releases().size(),3);QCOMPARE(b.releases().first().toMap().value("id").toString(),QString("v1"));
+      QCOMPARE(b.unreadReleases(),3);QCOMPARE(b.releases().last().toMap().value("followId").toString(),artist);
+      // A release already listed is not listed twice.
+      b.applyReleaseCheck(artist,{{"known",QStringList{"r2"}},{"items",QVariantList{QVariantMap{{"id","r2"},{"title","Second"}}}}});QCOMPARE(b.releases().size(),3);
+      b.markReleaseRead("r2");QCOMPARE(b.unreadReleases(),2);
+      QCOMPARE(b.withFollowSection({QVariantMap{{"title","Home shelf"}}}).first().toMap().value("id").toString(),QString("following"));
+      b.save();
+      QTemporaryDir dir;const auto exported=dir.filePath("library.json");b.exportLibrary(QUrl::fromLocalFile(exported));
+      // Unfollowing takes the follow's releases with it.
+      b.unfollow(channel);QCOMPARE(b.following().size(),1);QCOMPARE(b.releases().size(),2);
+      b.importLibrary(QUrl::fromLocalFile(exported));QCOMPARE(b.following().size(),2);QCOMPARE(b.releases().size(),3);
+      // An export from before following existed imports as it always did.
+      QFile old(dir.filePath("old.json"));QVERIFY(old.open(QIODevice::WriteOnly));old.write(R"({"sung":1,"favorites":[],"playlists":[]})");old.close();
+      b.importLibrary(QUrl::fromLocalFile(old.fileName()));QCOMPARE(b.following().size(),2);
+      b.markAllReleasesRead();QCOMPARE(b.unreadReleases(),0);b.save();}
+    {Backend reloaded;QCOMPARE(reloaded.following().size(),2);QCOMPARE(reloaded.releases().size(),3);QCOMPARE(reloaded.unreadReleases(),0);
+      QVariantMap reloadedArtist;for(const auto &v:reloaded.following())if(v.toMap().value("id")==artist)reloadedArtist=v.toMap();
+      QVERIFY(reloadedArtist.value("baselined").toBool());
+      QCOMPARE(reloadedArtist.value("known").toStringList(),QStringList({"r2"}));
+      reloaded.m_following.clear();reloaded.m_releases.clear();reloaded.save();}
+  }
   void accentChoicesAreStoredAsGiven() {
     Backend b;b.setAccentColor("");
     b.setAccentColor("#6750A4");QCOMPARE(b.accentColor(),QString("#6750a4"));

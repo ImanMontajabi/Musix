@@ -71,7 +71,7 @@ Flickable {
                 required property var modelData
                 required property int index
                 readonly property bool libraryNavigation: true
-                readonly property bool selected: tabs.currentKey === modelData.key || (!tabs.secondary && modelData.key === "files" && tabs.currentKey.startsWith("local-")) || (modelData.key === "mixes" && tabs.currentKey.startsWith("mix-"))
+                readonly property bool selected: tabs.currentKey === modelData.key || (!tabs.secondary && modelData.key === "files" && tabs.currentKey.startsWith("local-")) || (modelData.key === "mixes" && tabs.currentKey.startsWith("mix-")) || (!tabs.secondary && modelData.key === "releases" && tabs.currentKey === "following")
                 objectName: modelData.name
                 text: modelData.label
                 implicitWidth: label.implicitWidth + 32 + (tabBadge.visible ? tabBadge.width+8 : 0)

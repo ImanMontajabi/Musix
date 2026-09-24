@@ -365,7 +365,7 @@ ApplicationWindow {
     // travel through them.
     NavigationTransition { id: destinationTransition; objectName: "destinationTransition"; target: contentColumn }
     NavigationTransition { id: tabTransition; objectName: "tabTransition"; target: contentBody }
-    readonly property var libraryOrder: ["favorites","playlists","files","local-albums","local-artists","mixes","history","server"]
+    readonly property var libraryOrder: ["favorites","playlists","releases","following","files","local-albums","local-artists","mixes","history","server"]
     // Material's compact window class. Below it a rail would be taking room the
     // content needs, so navigation moves to a bar along the bottom.
     readonly property bool compactWindow: !atLeastMedium
@@ -638,6 +638,8 @@ ApplicationWindow {
                     // Importing is pending work inside the library, so the
                     // destination says so while it runs.
                     badged: modelData.key==="library" && app.importingLocal
+                    // New releases from who you follow wait in the library.
+                    badgeCount: modelData.key==="library" && app.unreadReleases>0 ? app.unreadReleases : -1
                     onClicked: {
                         if(window.destination===modelData.key)return
                         destinationTransition.fadeThrough(() => {
@@ -1029,7 +1031,31 @@ ApplicationWindow {
                             visible: window.destination==="library"; Layout.fillWidth: true
                             currentKey: window.libraryTab
                             dotKey: app.importingLocal ? "files" : ""
+                            entries: [{label:"Liked songs", key:"favorites", name:"likedTab"},
+                                      {label:"Playlists", key:"playlists", name:"playlistsTab"},
+                                      {label:"Following", key:"releases", name:"followingTab", badge: app.unreadReleases>0 ? app.unreadReleases : undefined},
+                                      {label:"Local files", key:"files", name:"localFilesTab"},
+                                      {label:"Mixes", key:"mixes", name:"mixesTab"},
+                                      {label:"History", key:"history", name:"historyTab"},
+                                      {label:"Music server", key:"server", name:"serverTab"}]
                             onChosen: key => window.chooseLibrary(key)
+                        }
+                        RowLayout {
+                            visible: window.destination==="library" && ["releases","following"].indexOf(window.libraryTab)>=0
+                            Layout.fillWidth: true; spacing: 8
+                            LibraryTabs {
+                                objectName: "followFacetTabs"
+                                secondary: true
+                                Accessible.name: "Following view"
+                                Layout.preferredWidth: 380
+                                entries: [{label:"New releases", key:"releases", name:"followView_releases"},
+                                          {label:"Artists & channels", key:"following", name:"followView_following"}]
+                                currentKey: window.libraryTab
+                                onChosen: key => window.chooseLibrary(key)
+                            }
+                            Item { Layout.fillWidth: true }
+                            MButton { objectName: "markReleasesRead"; visible: window.libraryTab==="releases" && app.unreadReleases>0; text: "Mark all as read"; onClicked: app.markAllReleasesRead() }
+                            MButton { objectName: "checkReleasesButton"; visible: app.following.length>0; symbol: "refresh"; busy: app.checkingReleases; enabled: !app.checkingReleases; tip: "Check for new releases"; onClicked: app.checkReleases(true) }
                         }
                         RowLayout {
                             visible: window.destination==="library" && ["files","local-albums","local-artists"].indexOf(window.libraryTab)>=0
@@ -1237,15 +1263,22 @@ ApplicationWindow {
                             GridView {
                                 id: localGroups; objectName: "localGroups"; anchors.fill: parent; clip: true; reuseItems: true; cacheBuffer: 0
                                 bottomMargin: libraryFab.visible ? libraryFab.height+24 : 0
-                                visible: app.page==="library" && app.viewMode==="grid" && (app.libraryId==="local-albums" || app.libraryId==="local-artists")
+                                readonly property bool following: app.libraryId==="following" || app.libraryId==="releases"
+                                visible: app.page==="library" && app.viewMode==="grid" && (app.libraryId==="local-albums" || app.libraryId==="local-artists" || following)
                                 model: visible ? app.collection : null
                                 cellWidth: width/Math.max(2,Math.floor(width/Theme.gridCell));
                                 Behavior on cellWidth {enabled:app.motion && localGroups.visible;NumberAnimation {duration:260;easing.type:Easing.InOutCubic}}
                                 cellHeight: coverExtent+64
                                 readonly property real coverExtent:Math.min(cellWidth-16,Math.max(96,height-64))
                                 ScrollBar.vertical: ScrollBar {}
-                                delegate: ArtCard {required property var entry; width: localGroups.coverExtent; track: entry;openHandler:window.openCollection}
-                                SungText {anchors.centerIn: parent; visible: localGroups.count===0; text:app.collection.query?"No matches":"Import music to browse here"; color:Theme.muted}
+                                // A release or a followed artist opens as itself, not into the
+                                // local-album pane.
+                                delegate: ArtCard {required property var entry; width: localGroups.coverExtent; track: entry;openHandler:localGroups.following?null:window.openCollection}
+                                SungText {anchors.centerIn: parent; width: Math.min(parent.width-48,420); horizontalAlignment: Text.AlignHCenter; wrapMode: Text.Wrap; visible: localGroups.count===0; color:Theme.muted
+                                    text: app.collection.query ? "No matches"
+                                        : app.libraryId==="releases" ? (app.following.length ? "Nothing new yet. New albums, singles and uploads from who you follow will show up here." : "Follow an artist or channel from their page, and their new releases will show up here.")
+                                        : app.libraryId==="following" ? "Not following anyone yet. Follow an artist or channel from their page."
+                                        : "Import music to browse here"}
                             }
                             TrackList {
                                 id: tracks; groupDiscs: !!app.albumInfo.multipleDiscs && app.collection.sortKey==="original"; objectName: "tracksView"; anchors.fill: parent; clip: true
@@ -1268,7 +1301,7 @@ ApplicationWindow {
                                     objectName: "collectionEmptyState"; anchors.centerIn: parent; width: Math.min(parent.width,320); spacing: 14
                                     visible: app.collection.count===0 && !app.busy && !window.serverDisconnected
                                     Icon { anchors.horizontalCenter: parent.horizontalCenter; name: app.error?"refresh":app.collection.query || app.page==="search"?"search":"library"; size: 36; ink: Theme.muted }
-                                    SungText { width: parent.width; horizontalAlignment: Text.AlignHCenter; wrapMode: Text.Wrap; text: app.collection.query ? "No matching songs" : app.error ? "Couldn’t load music" : app.page==="library" ? (window.libraryTab==="files"?"No local music yet":window.libraryTab==="history"?"Nothing played yet":window.libraryTab.startsWith("mix-")?"No matching songs yet":"No liked songs yet") : app.page==="local" ? "No songs yet" : app.page==="search" && !app.query ? "Search music" : "No results"; color: Theme.muted; font.pixelSize: Theme.bodyLarge }
+                                    SungText { width: parent.width; horizontalAlignment: Text.AlignHCenter; wrapMode: Text.Wrap; text: app.collection.query ? "No matching songs" : app.error ? "Couldn’t load music" : app.page==="library" ? (window.libraryTab==="releases"?(app.following.length?"Nothing new yet. New albums, singles and uploads from who you follow will show up here.":"Follow an artist or channel from their page, and their new releases will show up here."):window.libraryTab==="following"?"Not following anyone yet. Follow an artist or channel from their page.":window.libraryTab==="files"?"No local music yet":window.libraryTab==="history"?"Nothing played yet":window.libraryTab.startsWith("mix-")?"No matching songs yet":"No liked songs yet") : app.page==="local" ? "No songs yet" : app.page==="search" && !app.query ? "Search music" : "No results"; color: Theme.muted; font.pixelSize: Theme.bodyLarge }
                                     MButton {
                                         objectName: "emptyStateAction"; anchors.horizontalCenter: parent.horizontalCenter; tonal: true
                                         text: app.collection.query?"Clear filters":app.error && app.canRetry?"Retry":window.libraryTab==="files" && app.page==="library"?"Add music":"Search music"
@@ -1454,7 +1487,7 @@ ApplicationWindow {
                 // A window with little height to spare takes Material's short
                 // bar, which sets each label beside its icon instead of under.
                 short: window.height < 700
-                destinations: [{key:"home",icon:"home",label:"Home"},{key:"search",icon:"search",label:"Search"},{key:"library",icon:"library",label:"Library",badged:app.importingLocal}]
+                destinations: [{key:"home",icon:"home",label:"Home"},{key:"search",icon:"search",label:"Search"},{key:"library",icon:"library",label:"Library",badged:app.importingLocal,badge:app.unreadReleases>0?app.unreadReleases:undefined}]
                 current: window.destination
                 onChosen: key => {
                     if(window.destination===key)return
@@ -1628,6 +1661,7 @@ ApplicationWindow {
                     symbol: modelData.icon; text: modelData.label
                     selected: window.destination===modelData.key
                     badged: modelData.key==="library" && app.importingLocal
+                    badgeCount: modelData.key==="library" && app.unreadReleases>0 ? app.unreadReleases : -1
                     onClicked: {
                         navigationDrawer.close()
                         if(window.destination===modelData.key)return
@@ -2056,11 +2090,17 @@ ApplicationWindow {
                 ColumnLayout {
                     id: settingsGroup2; objectName:"settingsGroup2"
                     Layout.fillWidth:true;Layout.minimumWidth:0; spacing:12
-                    property bool hasMatches: settingsDialog.matches("Music folders import manage") || settingsDialog.matches("Keyboard shortcuts keys help") || settingsDialog.matches("Quick actions commands playlists") || settingsDialog.matches("Update music folders automatically watch") || settingsDialog.matches("Type to jump in lists keyboard") || settingsDialog.matches("Start page Home local music server liked") || settingsDialog.matches("Customize Home sections order") || settingsDialog.matches("Listening sessions saved queues") || settingsDialog.matches("Listening statistics top artists albums time")
+                    property bool hasMatches: settingsDialog.matches("Following new releases notifications notify artists channels") || settingsDialog.matches("Music folders import manage") || settingsDialog.matches("Keyboard shortcuts keys help") || settingsDialog.matches("Quick actions commands playlists") || settingsDialog.matches("Update music folders automatically watch") || settingsDialog.matches("Type to jump in lists keyboard") || settingsDialog.matches("Start page Home local music server liked") || settingsDialog.matches("Customize Home sections order") || settingsDialog.matches("Listening sessions saved queues") || settingsDialog.matches("Listening statistics top artists albums time")
                     visible: settingsDialog.searchQuery.trim() ? hasMatches : settingsDialog.category===2
                     SungText {heading: true;text:"Library";font.pixelSize:Theme.titleLarge;font.weight:Font.Medium;Layout.bottomMargin:8}
                     ColumnLayout {id:options2;objectName:"settingsRows2";Layout.fillWidth:true;Layout.minimumWidth:0;spacing:12
                 MSettingRow {opens:true;text:"Music folders";visible:settingsDialog.matches("Music folders import manage");onClicked:{settingsDialog.close();musicFoldersDialog.open();}}
+                MSwitch { Layout.fillWidth:true;Layout.minimumWidth:0; objectName: "releaseNotificationSwitch"
+                    visible: !!releaseNotifier && settingsDialog.matches("Following new releases notifications notify artists channels")
+                    text: "Notify me about new releases"
+                    hint: "A macOS notification when the daily check finds something new from who you follow. macOS asks for permission the first time."
+                    checked: app.releaseNotifications
+                    onToggled: { app.releaseNotifications=checked; if(checked && releaseNotifier) releaseNotifier.requestPermission() } }
                 MSettingRow {opens:true;objectName:"shortcutHelpButton";text:"Keyboard shortcuts";visible:settingsDialog.matches("Keyboard shortcuts keys help");onClicked:{settingsDialog.close();shortcutHelp.open()}}
                 MSettingRow {opens:true;text:"Quick actions · "+Keymap.label("Ctrl+Shift+P");visible:settingsDialog.matches("Quick actions commands playlists");onClicked:{settingsDialog.close();commandPalette.open();}}
                 MSwitch { Layout.fillWidth:true;Layout.minimumWidth:0; text: "Update music folders automatically"; visible: settingsDialog.matches("Update music folders automatically watch"); checked: app.watchMusicFolders; onToggled: app.watchMusicFolders=checked }
@@ -2221,6 +2261,15 @@ ApplicationWindow {
         SungText { id: toastLabel; anchors.bottom: parent.bottom; anchors.bottomMargin: (toastBar.restingHeight-height)/2; anchors.left: parent.left; anchors.leftMargin: 16; anchors.right: parent.right; anchors.rightMargin: window.toastHasUndo?148:16; wrapMode: Text.Wrap; maximumLineCount: 2; text: window.toastText; font.pixelSize: Theme.bodyMedium; color: Theme.inverseSurfaceText }
     }
     Timer { id: toastTimer; interval: 5000; running: window.toastPending && !window.toastHasUndo && !app.error && !window.modalOpen && !toastHover.hovered && !toastUndo.activeFocus && !toastDismiss.activeFocus; onTriggered: window.toastPending=false }
+    Connections {
+        target: releaseNotifier
+        ignoreUnknownSignals: true
+        function onPermissionAnswered(granted, error) {
+            if(granted) return
+            app.releaseNotifications=false
+            window.toastPending=false;window.toastText="Notifications are off for Musix. Allow them in System Settings → Notifications.";window.toastPending=true
+        }
+    }
     Connections { target: app; function onToast(message){window.toastPending=false;window.toastText=message;window.toastPending=true;} function onTrackChanged(){if(window.coverFlying)window.cancelCoverFlight();if(window.side==="lyrics" || window.compactMode || window.immersive)app.fetchLyrics();}
         function onViewAboutToChange(){window.rememberView();if(!window.albumOpening)window.cancelAlbumFlight();}
         function onCatalogChanged(){

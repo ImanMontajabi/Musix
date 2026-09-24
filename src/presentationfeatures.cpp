@@ -41,7 +41,7 @@ void Backend::setViewDensity(int value){
   auto layouts=m_settings.value("viewLayouts").toMap(),options=layouts.value(m_viewKey).toMap();options["density"]=value;layouts[m_viewKey]=options;
   while(layouts.size()>64){auto it=layouts.begin();if(it.key()==m_viewKey)++it;layouts.erase(it);}m_settings.setValue("viewLayouts",layouts);emit presentationChanged();
 }
-bool Backend::viewSupportsGrid() const {return m_page=="library" && (m_libraryId=="local-albums" || m_libraryId=="local-artists" || m_libraryId=="playlists");}
+bool Backend::viewSupportsGrid() const {return m_page=="library" && (m_libraryId=="local-albums" || m_libraryId=="local-artists" || m_libraryId=="playlists" || m_libraryId=="following" || m_libraryId=="releases");}
 QString Backend::viewMode() const {
   if(!viewSupportsGrid())return "list";
   const auto value=m_settings.value("viewLayouts").toMap().value(m_viewKey).toMap().value("mode").toString();

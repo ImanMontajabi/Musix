@@ -107,6 +107,16 @@ Item {
                     enabled: app.collection.count>1
                     onClicked: {app.shuffle=true;app.playCollection(Math.floor(Math.random()*app.collection.count));}
                 }
+                MButton {
+                    objectName: "artistHeroFollow"
+                    readonly property string followId: app.artistInfo.followId || ""
+                    readonly property bool followed: {app.following;return !!followId && app.isFollowing(followId);}
+                    visible: !!followId
+                    text: followed ? "Following" : "Follow"; symbol: followed ? "check" : "plus"
+                    tonal: !followed; selected: followed
+                    onClicked: followed ? app.unfollow(followId)
+                                        : app.follow({id: followId, kind: app.artistInfo.followKind, title: app.title, art: app.artistInfo.art})
+                }
             }
         }
 

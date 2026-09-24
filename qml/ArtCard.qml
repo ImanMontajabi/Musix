@@ -19,7 +19,7 @@ Item {
     Item {
         id: art; width: parent.width; height: width
         transform: Translate { x: card.parallax*7 }
-        property real radius: (card.track.kind === "artist" || card.track.kind === "local-artist") ? Theme.shapeFull(width) : card.corner
+        property real radius: (card.track.kind === "artist" || card.track.kind === "channel" || card.track.kind === "local-artist") ? Theme.shapeFull(width) : card.corner
         // Artwork can be masked with a shape from Material's library; covers
         // keep their circle and their rounded square because a lobed edge only
         // reads as a portrait over photography, not over flat generated art.
@@ -28,11 +28,22 @@ Item {
         Artwork { anchors.fill: parent; url: card.track.art || ""; radius: art.radius; shape: art.shape; pixels: 400; visible: !art.mosaic }
         Loader { anchors.fill: parent; active: art.mosaic; sourceComponent: PlaylistCover { artworks: card.track.artworks; radius: art.radius } }
     }
+    // A release from someone followed that has not been opened yet. A label
+    // rather than a badge's dot, which disappeared into busy artwork.
+    Rectangle {
+        objectName: "unreadBadge"
+        visible: !!card.track.unread
+        anchors.left: art.left; anchors.top: art.top; anchors.margins: 10
+        width: newLabel.implicitWidth + 16; height: 24; radius: height/2
+        color: Theme.primary
+        Accessible.ignored: true
+        SungText { id: newLabel; anchors.centerIn: parent; text: "New"; color: Theme.primaryText; font.pixelSize: Theme.labelMedium; labelRole: true; emphasized: true }
+    }
     HoverHandler { id: hover }
     AbstractButton {
         id: openCard; objectName:"openCollectionCard";hoverEnabled: true; focusPolicy: Qt.StrongFocus
         anchors.fill: art
-        Accessible.name: card.track.title || "Open collection"
+        Accessible.name: (card.track.title || "Open collection") + (card.track.unread ? ", new" : "")
         onClicked: {if(card.openHandler)card.openHandler(card.track,art);else app.open(card.track);}
         background: Rectangle { radius: art.radius; border.width: openCard.activeFocus?3:0; border.color: Theme.focusRing; color: "transparent"; opacity: 1; Behavior on opacity { NumberAnimation { duration: Theme.fast; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.fastEffectsCurve } } }
     }
@@ -45,5 +56,5 @@ Item {
         onClicked: app.togglePin(card.track)
     }
     MatchText { anchors.top: art.bottom; anchors.topMargin: 12; width: parent.width; revealFocused: openCard.activeFocus; sourceText: card.track.title || ""; font.pixelSize: Theme.bodyLarge; font.weight: Font.Medium }
-    MatchText { anchors.top: art.bottom; anchors.topMargin: 36; width: parent.width; sourceText: card.track.count!==undefined ? ((card.track.artist?card.track.artist+" · ":"")+card.track.count+(card.track.count===1?" track":" tracks")) : card.track.artist || (card.track.kind === "album" ? "Album" : (card.track.kind === "artist" || card.track.kind === "local-artist") ? "Artist" : "Playlist"); font.pixelSize: Theme.bodySmall; color: Theme.muted }
+    MatchText { anchors.top: art.bottom; anchors.topMargin: 36; width: parent.width; sourceText: card.track.followId ? [card.track.artist, card.track.releaseType || (card.track.kind==="video" ? "Video" : ""), card.track.year].filter(x => !!x).join(" · ") : card.track.count!==undefined ? ((card.track.artist?card.track.artist+" · ":"")+card.track.count+(card.track.count===1?" track":" tracks")) : card.track.artist || (card.track.kind === "album" ? "Album" : (card.track.kind === "artist" || card.track.kind === "local-artist") ? "Artist" : "Playlist"); font.pixelSize: Theme.bodySmall; color: Theme.muted }
 }

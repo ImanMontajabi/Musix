@@ -172,6 +172,12 @@ class Backend : public QObject {
   Q_PROPERTY(bool onboarded READ onboarded WRITE setOnboarded NOTIFY settingsChanged)
   Q_PROPERTY(QVariantMap albumInfo READ albumInfo NOTIFY catalogChanged)
   Q_PROPERTY(QVariantMap artistInfo READ artistInfo NOTIFY catalogChanged)
+  // Followed artists and channels, and what they have put out since.
+  Q_PROPERTY(QVariantList following READ following NOTIFY followingChanged)
+  Q_PROPERTY(QVariantList releases READ releases NOTIFY followingChanged)
+  Q_PROPERTY(int unreadReleases READ unreadReleases NOTIFY followingChanged)
+  Q_PROPERTY(bool checkingReleases READ checkingReleases NOTIFY followingChanged)
+  Q_PROPERTY(bool releaseNotifications READ releaseNotifications WRITE setReleaseNotifications NOTIFY settingsChanged)
   Q_PROPERTY(QString currentMotionArt READ currentMotionArt NOTIFY onlineArtworkChanged)
   Q_PROPERTY(QString artworkStatus READ artworkStatus NOTIFY onlineArtworkChanged)
   Q_PROPERTY(QString artworkPage READ artworkPage NOTIFY onlineArtworkChanged)
@@ -515,6 +521,19 @@ public:
   Q_INVOKABLE void search(const QString &query,
                           const QString &filter = "songs");
   Q_INVOKABLE void open(const QVariantMap &item);
+  QVariantList following() const { return m_following; }
+  QVariantList releases() const { return m_releases; }
+  int unreadReleases() const;
+  bool checkingReleases() const { return !m_releaseQueue.isEmpty(); }
+  bool releaseNotifications() const;
+  void setReleaseNotifications(bool on);
+  Q_INVOKABLE bool isFollowing(const QString &id) const;
+  Q_INVOKABLE void follow(const QVariantMap &target);
+  Q_INVOKABLE void unfollow(const QString &id);
+  Q_INVOKABLE void checkReleases(bool manual = true);
+  Q_INVOKABLE void markReleaseRead(const QString &id);
+  Q_INVOKABLE void markAllReleasesRead();
+  void startReleaseChecks();
   Q_INVOKABLE QVariantMap relatedCollection(const QVariantMap &item, const QString &kind) const;
   Q_INVOKABLE void back();
   Q_INVOKABLE void saveQueue(const QString &name);
@@ -592,6 +611,9 @@ signals:
   void lyricIndexChanged();
   void settingsChanged();
   void libraryChanged();
+  void followingChanged();
+  // An automatic check found this many; a manual one says so in a toast.
+  void newReleases(int count);
   void lyricsChanged();
   void audioDevicesChanged();
   void queueInfoChanged();
@@ -718,6 +740,18 @@ private:
   // Keyed by the source colour and by everything else that decides the scheme.
   mutable QHash<QPair<QRgb,QString>,QVariantMap> m_schemes;
   QVariantList m_sections, m_favorites, m_history, m_playlists, m_back, m_pins;
+  QVariantList m_following, m_releases;
+  QStringList m_releaseQueue;
+  bool m_releaseManual = false;
+  int m_releaseFound = 0;
+  QTimer m_releaseTimer;
+  void maybeCheckReleases();
+  void queueReleaseCheck(const QString &id);
+  void nextReleaseCheck();
+  void applyReleaseCheck(const QString &id, const QVariantMap &data);
+  QVariantList followRows() const;
+  QVariantList withFollowSection(QVariantList sections) const;
+  void refreshFollowViews();
   Entries m_recent;
   void refreshRecentlyPlayed();
   // One row per play, oldest first. A private session records nothing.

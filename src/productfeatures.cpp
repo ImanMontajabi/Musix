@@ -44,7 +44,11 @@ QVariantMap Backend::artistInfo() const {
   if(!albums.isEmpty())details<<QString("%1 %2").arg(albums.size()).arg(albums.size()==1?"album":"albums");
   if(tracks>0)details<<QString("%1 %2").arg(tracks).arg(tracks==1?"song":"songs");
   if(complete && seconds>0)details<<(seconds>=3600?QString("%1 hr %2 min").arg(seconds/3600).arg(seconds%3600/60):QString("%1 min").arg(qMax(qint64(1),seconds/60)));
-  return {{"name",m_title},{"summary",details.join(" · ")},{"albums",albums.size()},{"tracks",tracks},{"seconds",seconds}};
+  // An online artist or channel page can be followed; a local or server one
+  // has nothing to check.
+  const auto followId=m_page=="artist"?m_request.value("id").toString():QString();
+  return {{"name",m_title},{"summary",details.join(" · ")},{"albums",albums.size()},{"tracks",tracks},{"seconds",seconds},
+          {"followId",followId},{"followKind",m_request.value("kind","artist")},{"art",m_cover}};
 }
 
 QString Backend::artworkChoice() const {return m_settings.value("artworkChoices").toMap().value(current().value("id").toString()).toString();}

@@ -6,8 +6,8 @@ cmake_minimum_required(VERSION 3.24)
 # floor at 27 and shut out everyone else.
 set(CMAKE_OSX_DEPLOYMENT_TARGET "14.0" CACHE STRING "Oldest macOS the app runs on")
 project(Musix VERSION 0.13.1 LANGUAGES CXX)
-# The title-bar blending in src/windowchrome.mm is the only Objective-C++
-# in the tree, and only macOS compiles it.
+# The native chrome in src/windowchrome.mm and the notifications in
+# src/releasenotifier.mm are the Objective-C++ in the tree; only macOS compiles them.
 if(APPLE)
  enable_language(OBJCXX)
 endif()
@@ -45,7 +45,7 @@ find_package(Qt6 6.8 REQUIRED COMPONENTS ${SUNG_QT_COMPONENTS})
 qt_policy(SET QTP0004 NEW)
 # The backend every executable shares. mpris.cpp is deliberately absent: only
 # the app exposes MPRIS, and only where there is a bus to expose it on.
-set(SUNG_BACKEND_SOURCES src/scrobbler.cpp src/scrobbler.h src/m3color.cpp src/m3color.h src/m3shape.cpp src/m3shape.h src/musicserver.cpp src/musicserver.h src/jellyfin.cpp src/jellyfin.h src/backendserver.cpp src/subsonic.cpp src/subsonic.h src/backend.cpp src/productfeatures.cpp src/presentationfeatures.cpp src/runtimeenv.cpp src/backend.h src/collectionview.h src/rowselection.h src/playbacknotifier.cpp src/playbacknotifier.h)
+set(SUNG_BACKEND_SOURCES src/scrobbler.cpp src/scrobbler.h src/m3color.cpp src/m3color.h src/m3shape.cpp src/m3shape.h src/musicserver.cpp src/musicserver.h src/jellyfin.cpp src/jellyfin.h src/backendserver.cpp src/subsonic.cpp src/subsonic.h src/backend.cpp src/productfeatures.cpp src/presentationfeatures.cpp src/followfeatures.cpp src/runtimeenv.cpp src/backend.h src/collectionview.h src/rowselection.h src/playbacknotifier.cpp src/playbacknotifier.h)
 set(SUNG_BACKEND_LIBS Qt6::Core Qt6::Gui Qt6::Multimedia Qt6::Network)
 if(SUNG_DBUS)
  list(APPEND SUNG_BACKEND_LIBS Qt6::DBus)
@@ -59,8 +59,8 @@ target_link_libraries(musix PRIVATE Qt6::Core Qt6::Gui Qt6::Quick Qt6::Qml Qt6::
 # Same shape as the MPRIS split above: one of the two implementations is
 # compiled, never both, so neither platform carries a stub of the other.
 if(APPLE)
- target_sources(musix PRIVATE src/windowchrome.mm)
- target_link_libraries(musix PRIVATE "-framework AppKit")
+ target_sources(musix PRIVATE src/windowchrome.mm src/releasenotifier.mm src/releasenotifier.h)
+ target_link_libraries(musix PRIVATE "-framework AppKit" "-framework UserNotifications")
 else()
  target_sources(musix PRIVATE src/windowchrome.cpp)
 endif()

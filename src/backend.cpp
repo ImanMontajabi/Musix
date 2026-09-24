@@ -440,7 +440,8 @@ void Backend::browseRequest(QVariantMap req, bool push) {
     bool prefix=extend && incoming.size()>=m_results.count();
     for(int i=0;prefix && i<m_results.count();++i) prefix=itemId(incoming[i])==itemId(m_results.rows[i]);
     if(prefix)m_results.append(incoming.mid(m_results.count())); else m_results.assign(incoming);
-    m_sections = data.value("sections").toList();
+    m_sections = op=="home" ? withFollowSection(data.value("sections").toList()) : data.value("sections").toList();
+    if(op=="artist")m_request["kind"]=data.value("kind","artist");
     if (data.contains("title"))
       m_title = data.value("title").toString();
     m_cover = data.value("art").toString();
@@ -499,13 +500,14 @@ void Backend::open(const QVariantMap &item) {
     serverBrowseRequest({{"mode",item.value("kind")},{"remoteId",item.value("remoteId")},{"genre",item.value("title")},{"title",item.value("title")},{"art",item.value("art")},{"editable",item.value("editable")}});return;
   }
   auto kind = item.value("kind").toString();
+  if(item.contains("followId"))markReleaseRead(item.value("id").toString());
   if(kind=="smart"){library(item.value("id").toString());return;}
   if(kind=="local"){openPlaylist(item.value("id").toString());return;}
   if (kind == "song" || kind == "video") {
     playItem(item);
     return;
   }
-  auto op = kind == "artist"  ? "artist"
+  auto op = kind == "artist" || kind == "channel" ? "artist"
             : kind == "album" ? "album"
                               : "playlist";
   auto id = item.value("browseId", item.value("id")).toString();
@@ -1344,6 +1346,9 @@ void Backend::load() {
   m_playlists = d.value("playlists").toList();
   m_sessions=d.value("sessions").toList().mid(0,20);
   m_pins = d.value("pins").toList().mid(0,24);
+  // Absent from a library written before following existed, which is fine.
+  m_following=d.value("following").toList().mid(0,500);
+  m_releases=d.value("releases").toList().mid(0,200);
   m_lyricOffsets=d.value("lyricOffsets").toMap();
   m_queue.assign(playable(d.value("queue").toList()));
   m_index = qBound(-1, d.value("index", -1).toInt(), m_queue.count() - 1);
@@ -1360,7 +1365,7 @@ void Backend::save() {
   f.setPermissions(QFileDevice::ReadOwner | QFileDevice::WriteOwner);
   f.write(QJsonDocument::fromVariant(QVariantMap{{"musicFolders",m_musicFolders},{"localTracks",m_localTracks},{"favorites", m_favorites},
                                                  {"history", m_history},{"lastPlayed",m_lastPlayed},{"plays",m_plays},{"playlistVersions",m_playlistVersions},
-                                                 {"sessions",m_sessions},{"playlists", m_playlists},{"pins",m_pins},{"lyricOffsets",m_lyricOffsets},
+                                                 {"sessions",m_sessions},{"playlists", m_playlists},{"pins",m_pins},{"lyricOffsets",m_lyricOffsets},{"following",m_following},{"releases",m_releases},
                                                  {"queue", m_queue.rows},
                                                  {"index", m_index},{"position",position()}})
               .toJson(QJsonDocument::Compact));
@@ -1470,7 +1475,7 @@ void Backend::library(const QString &kind) {
   }
   if(kind=="server"){browseServer();return;}
   navigate("library",
-           kind == "files" ? "Local files" : kind == "mixes" ? "Mixes" : kind=="mix-recent" ? "Recently liked" : kind=="mix-rediscover" ? "Rediscover" : kind=="mix-unplayed" ? "Unplayed" :
+           kind == "files" ? "Local files" : kind == "following" ? "Following" : kind == "releases" ? "New releases" : kind == "mixes" ? "Mixes" : kind=="mix-recent" ? "Recently liked" : kind=="mix-rediscover" ? "Rediscover" : kind=="mix-unplayed" ? "Unplayed" :
            kind == "history"     ? "Recently played"
            : kind == "playlists" ? "Playlists"
                                  : "Liked songs",
@@ -1634,7 +1639,7 @@ void Backend::exportLibrary(const QUrl &url) {
   if(!url.isLocalFile())return;
   QSaveFile file(url.toLocalFile());if(!file.open(QIODevice::WriteOnly)){notifyError("Couldn’t export the library.");return;}
   file.setPermissions(QFile::ReadOwner|QFile::WriteOwner);
-  file.write(QJsonDocument::fromVariant(QVariantMap{{"sung",1},{"musicFolders",m_musicFolders},{"localTracks",m_localTracks},{"favorites",m_favorites},{"playlists",m_playlists},{"pins",pins()},{"lyricOffsets",m_lyricOffsets}}).toJson());
+  file.write(QJsonDocument::fromVariant(QVariantMap{{"sung",1},{"musicFolders",m_musicFolders},{"localTracks",m_localTracks},{"favorites",m_favorites},{"playlists",m_playlists},{"pins",pins()},{"lyricOffsets",m_lyricOffsets},{"following",m_following},{"releases",m_releases}}).toJson());
   if(!file.commit())notifyError("Couldn’t export the library.");else emit toast("Library exported");
 }
 void Backend::importLibrary(const QUrl &url) {
@@ -1656,6 +1661,15 @@ void Backend::importLibrary(const QUrl &url) {
     p["tracks"]=existing;m_playlists[found]=p;
   }
   invalidateUndo("playlists");
+  // Follows merge by id, each with what it has already seen, so importing does
+  // not report its whole catalogue as new; one without that is recorded afresh.
+  static const QRegularExpression followable("^UC[A-Za-z0-9_-]{22}$");
+  for(const auto &v:map.value("following").toList()){auto f=v.toMap();const auto id=f.value("id").toString();
+    if(!followable.match(id).hasMatch()||isFollowing(id)||m_following.size()>=500)continue;
+    f["kind"]=f.value("kind")=="channel"?"channel":"artist";if(f.value("known").toStringList().isEmpty())f["baselined"]=false;m_following.append(f);}
+  for(const auto &v:map.value("releases").toList()){const auto r=v.toMap();if(!isFollowing(r.value("followId").toString()))continue;
+    bool have=false;for(const auto &old:m_releases)if(itemId(old)==itemId(r)){have=true;break;}if(!have&&m_releases.size()<200)m_releases.append(r);}
+  emit followingChanged();
   const auto offsets=map.value("lyricOffsets").toMap();
   for(auto it=offsets.cbegin();it!=offsets.cend();++it){bool ok=false;const auto value=it.value().toInt(&ok);if(ok&&!it.key().isEmpty()&&it.key().size()<=128&&value>=-10000&&value<=10000)m_lyricOffsets[it.key()]=value;}
   emit lyricsChanged();emit positionChanged();
@@ -1982,6 +1996,8 @@ QVariantList Backend::libraryRows(const QString &kind) const {
   if(kind=="local-albums" || kind=="local-artists")return localGroups(kind);
   if(kind=="files")return m_localTracks;
   if(kind=="favorites")return m_favorites;
+  if(kind=="following")return followRows();
+  if(kind=="releases")return m_releases;
   if(kind=="history")return m_history;
   if(kind=="mixes")return {QVariantMap{{"id","mix-recent"},{"kind","smart"},{"title","Recently liked"}},QVariantMap{{"id","mix-rediscover"},{"kind","smart"},{"title","Rediscover"}},QVariantMap{{"id","mix-unplayed"},{"kind","smart"},{"title","Unplayed"}}};
   if(kind=="mix-recent")return m_favorites.mid(0,50);

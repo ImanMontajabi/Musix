@@ -18,6 +18,9 @@
 #include "profile.h"
 #include "smoketest.h"
 #include "updatechecker.h"
+#ifdef Q_OS_MACOS
+#include "releasenotifier.h"
+#endif
 #include <QLocalSocket>
 #include <QNetworkAccessManager>
 #include <QNetworkDiskCache>
@@ -166,8 +169,29 @@ int main(int argc, char **argv) {
   // A local mock can stand in for GitHub; setEndpoint takes nothing else.
   if (const auto endpoint = qEnvironmentVariable("MUSIX_UPDATE_API"); !endpoint.isEmpty() && !updates.setEndpoint(QUrl(endpoint)))
     fprintf(stderr, "MUSIX_UPDATE_API ignored: only a loopback http address is accepted\n");
-  if (!args.contains("--smoke-test"))
+  if (!args.contains("--smoke-test")) {
     updates.start();
+    backend.startReleaseChecks();
+  }
+#ifdef Q_OS_MACOS
+  ReleaseNotifier releaseNotifier;
+  QObject::connect(&backend, &Backend::newReleases, &releaseNotifier, [&](int count) {
+    if (!backend.releaseNotifications())
+      return;
+    QStringList titles, who;
+    for (const auto &v : backend.releases().mid(0, count)) {
+      const auto release = v.toMap();
+      if (titles.size() < 2) titles << release.value("title").toString();
+      if (!who.contains(release.value("followTitle").toString())) who << release.value("followTitle").toString();
+    }
+    const auto more = count > titles.size() ? QString(" and %1 more").arg(count - titles.size()) : QString();
+    releaseNotifier.notify(QString("%1 new %2").arg(count).arg(count == 1 ? "release" : "releases"),
+                           titles.join(", ") + more + " — from " + who.mid(0, 3).join(", "));
+  });
+  engine.rootContext()->setContextProperty("releaseNotifier", &releaseNotifier);
+#else
+  engine.rootContext()->setContextProperty("releaseNotifier", nullptr);
+#endif
   engine.rootContext()->setContextProperty("updates", &updates);
   engine.rootContext()->setContextProperty("motionArtwork", &motionArtwork);
   engine.rootContext()->setContextProperty("desktopTheme", &desktopTheme);
