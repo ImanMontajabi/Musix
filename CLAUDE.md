@@ -94,7 +94,10 @@ already cost something.
   `~/Library/Application Support/Sung` and
   `~/Library/Preferences/com.sung.sung.plist` first, restore both afterwards,
   `killall cfprefsd` so the restored plist is re-read, and confirm with
-  `shasum -a 256` that they match the backup.
+  `shasum -a 256` that they match the backup. The backup goes in a dated
+  folder under `~/MusixBackups/`, never in the session's scratchpad: the
+  scratchpad is cleared when a session ends, and a backup lost that way once
+  left the user's profile with nothing to fall back on.
 - **Never install anything into `build-packaging/` or the bundled runtime** by
   hand; only the build scripts write there (`build-packaging/tools/` holds the
   build's own tools, such as the Qt downloader, and is never bundled). Those
