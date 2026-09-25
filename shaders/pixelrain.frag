@@ -2,8 +2,9 @@
 // Pixel rain: columns of square pixels falling. Each column belongs to a band
 // of the spectrum, bass on the left and treble on the right, and how many of
 // that band's columns fall, how bright and how long their trails are follows
-// the band. A beat sends a wave down through every column. Everything is a
-// function of the uniforms, so a still frame costs nothing to hold.
+// the band. A beat shows only in the drops: for a moment the bass columns
+// carry more of them, brighter. Everything is a function of the uniforms, so
+// a still frame costs nothing to hold.
 layout(location = 0) in vec2 qt_TexCoord0;
 layout(location = 0) out vec4 fragColor;
 layout(std140, binding = 0) uniform buf {
@@ -11,8 +12,7 @@ layout(std140, binding = 0) uniform buf {
     float qt_Opacity;
     float flow;         // rows fallen so far; integrated outside, so a change of speed never jumps
     float cell;         // size of one pixel, in item units
-    float wave;         // seconds since the last beat
-    float waveStrength; // that beat's strength, 0..1
+    float burst;        // a beat, 0..1, fading over a quarter of a second
     vec2 size;          // item size, in item units
     vec4 s0; vec4 s1; vec4 s2; vec4 s3; // the sixteen bands, 0..1
     vec4 g0; vec4 g1; vec4 g2; vec4 g3; vec4 g4; vec4 g5; // guarded areas: x, y, w, h as fractions
@@ -53,19 +53,19 @@ void main() {
     float travelled = flow * speed + h * period;
     float cycle = floor(travelled / period);
     float d = mod(travelled, period) - id.y;
-    float lit = step(hash(id.x * 1.37 + cycle * 3.1), 0.05 + 0.9 * v);
+    // The bass columns answer a beat with more drops and brighter heads,
+    // strongest at the far left and gone by a quarter of the way across.
+    float bassSide = 1.0 - smoothstep(0.0, 0.25, (id.x * cell + 0.5 * cell) / size.x);
+    float kick = burst * bassSide;
+    float lit = step(hash(id.x * 1.37 + cycle * 3.1), 0.05 + 0.9 * v + 0.5 * kick);
     float trail = 3.0 + 18.0 * v;
     float inTrail = step(0.0, d) * (1.0 - clamp(d / trail, 0.0, 1.0));
     float leading = step(0.0, d) * (1.0 - clamp(d / 1.5, 0.0, 1.0));
     // A pixel is a square with a gap around it, so the grid reads as pixels.
     float square = step(0.14, f.x) * step(f.x, 0.86) * step(0.14, f.y) * step(f.y, 0.86);
-    // The beat's wave: a band of pixels sweeping from top to bottom in half a
-    // second, fading as it goes.
-    float front = wave / 0.5;
-    float waveBand = waveStrength * (1.0 - smoothstep(0.0, 0.05, abs(uv.y - front))) * (1.0 - clamp(wave / 0.6, 0.0, 1.0));
     vec3 c = mix(body.rgb, cover.rgb, hash(id.x + 3.0));
-    c = mix(c, head.rgb, clamp(leading * (0.3 + 0.6 * v) + waveBand, 0.0, 1.0));
-    float alpha = square * (lit * (inTrail * (0.25 + 0.55 * v) + leading * (0.35 + 0.5 * v)) + 0.55 * waveBand);
+    c = mix(c, head.rgb, clamp(leading * (0.3 + 0.6 * v + 0.4 * kick), 0.0, 1.0));
+    float alpha = square * lit * (inTrail * (0.25 + 0.55 * v + 0.2 * kick) + leading * (0.35 + 0.5 * v + 0.4 * kick));
     // Behind text and controls the rain all but disappears, so they keep
     // their contrast; everywhere else it can be bright.
     float guarded = max(max(max(guardOf(g0, uv), guardOf(g1, uv)), max(guardOf(g2, uv), guardOf(g3, uv))),

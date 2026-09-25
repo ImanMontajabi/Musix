@@ -28,9 +28,9 @@ Item {
     // changes how fast the rain falls, not where it is.
     property real flow: 0
     property real clock: 0
-    // A beat sends a wave down through the rain. Nothing may flash more than
-    // three times a second: the analysis already spaces beats that far apart,
-    // and a wave that would come sooner is dropped here as well.
+    // A beat briefly fills and brightens the bass columns. Nothing may flash
+    // more than three times a second: the analysis already spaces beats that
+    // far apart, and one that would come sooner is dropped here as well.
     readonly property real beatSpacing: 0.34
     property real lastWave: -10
     property real waveAge: 10
@@ -64,9 +64,7 @@ Item {
         }
         bands = next
         level = sum / 16
-        // A short surge right after a beat.
-        const surge = waveAge < 0.3 ? 1 + 1.5 * waveStrength * (1 - waveAge / 0.3) : 1
-        flow += dt * (2 + 7 * level) * surge
+        flow += dt * (2 + 7 * level)
         if (snakeLoader.item)
             snakeLoader.item.advance(dt)
     }
@@ -127,8 +125,7 @@ Item {
             property vector4d s1: Qt.vector4d(vis.shownBands[4], vis.shownBands[5], vis.shownBands[6], vis.shownBands[7])
             property vector4d s2: Qt.vector4d(vis.shownBands[8], vis.shownBands[9], vis.shownBands[10], vis.shownBands[11])
             property vector4d s3: Qt.vector4d(vis.shownBands[12], vis.shownBands[13], vis.shownBands[14], vis.shownBands[15])
-            property real wave: vis.running ? vis.waveAge : 10
-            property real waveStrength: vis.waveStrength
+            property real burst: vis.running ? vis.waveStrength * Math.max(0, 1 - vis.waveAge / 0.25) : 0
             property vector4d g0: vis.guardRects[0] || Qt.vector4d(0, 0, 0, 0)
             property vector4d g1: vis.guardRects[1] || Qt.vector4d(0, 0, 0, 0)
             property vector4d g2: vis.guardRects[2] || Qt.vector4d(0, 0, 0, 0)
