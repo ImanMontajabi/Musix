@@ -511,21 +511,31 @@ private slots:
   }
 
   // A song analysed on an earlier run is read from the cache the moment it
-  // plays again: nothing announces it, so it must not wait for a signal.
+  // plays again after a restart. A restart restores the queue and the song
+  // directly, without announcing a track change, and pressing play then
+  // loads the file; nothing announces the cached envelope either, which is
+  // how the meters and the visualizer once stayed empty.
   void aCachedAnalysisIsUsedAfterARestart() {
     {
       auto first = playingAlone("Tone one");
       QVERIFY(first);
       QTRY_VERIFY_WITH_TIMEOUT(first->playing(), 10000);
       QTRY_VERIFY_WITH_TIMEOUT(first->m_envelope.isValid(), 15000);
-      first->stop();
+      first->pause();
+      // Destroying it saves the session, as quitting does.
     }
-    auto again = playingAlone("Tone one");
-    QVERIFY(again);
-    QTRY_VERIFY_WITH_TIMEOUT(again->playing(), 10000);
-    QTRY_VERIFY_WITH_TIMEOUT(again->m_envelope.isValid(), 1500);
-    QTRY_VERIFY_WITH_TIMEOUT(loudest(again->audioLevels()) > 0.2, 3000);
-    again->stop();
+    Backend restored; // loads the saved session: the queue and the song, not yet playing
+    restored.setMotion(true);
+    restored.setUiActive(true);
+    QCOMPARE(restored.current().value("title").toString(), QString("Tone one"));
+    QVERIFY(!restored.m_envelope.isValid());
+    QSignalSpy tracks(&restored, &Backend::trackChanged);
+    restored.play();
+    QTRY_VERIFY_WITH_TIMEOUT(restored.playing(), 10000);
+    QTRY_VERIFY_WITH_TIMEOUT(restored.m_envelope.isValid(), 1500);
+    QVERIFY2(tracks.isEmpty(), "the restore path is the one without a track change");
+    QTRY_VERIFY_WITH_TIMEOUT(loudest(restored.audioLevels()) > 0.2, 3000);
+    restored.stop();
   }
 
   // Levelling works from the analysed loudness, on the first play, for a file
