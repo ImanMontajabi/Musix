@@ -1829,6 +1829,20 @@ void runInteractionRefinementTests(Backend *b,QQuickWindow *w){
     b->setMotion(true);QTest::qWait(20);
     check(morph->property("pulse").toReal()==0,"nor while nothing is playing");
     delete morph;}}
+  // The visualizer never flashes more than three times a second, however
+  // often the bass hits, and holds a still frame when motion is off.
+  {QQmlComponent visComponent(qmlEngine(w),QUrl("qrc:/qml/Visualizer.qml"));
+   auto vis=qobject_cast<QQuickItem*>(visComponent.create(qmlContext(w)));check(vis,"visualizer creates");
+   if(vis){vis->setProperty("kind","pixelRain");vis->setParentItem(w->contentItem());vis->setSize(QSizeF(400,300));QTest::qWait(50);
+    check(findItem(vis,"pixelRain")!=nullptr,"pixel rain is a shader item");
+    int bursts=0;double last=-1;
+    for(int frame=0;frame<180;++frame){vis->setProperty("bassSlow",0.1);vis->setProperty("bassFast",0.9);
+      QMetaObject::invokeMethod(vis,"step",Q_ARG(QVariant,QVariant(1.0/60)));
+      const double at=vis->property("lastBurst").toDouble();if(at!=last){++bursts;last=at;}}
+    fprintf(stdout,"VISUALIZER bursts in 3 s: %d\n",bursts);
+    check(bursts>=6&&bursts<=9,"bursts are limited to three a second");
+    b->setMotion(false);QTest::qWait(20);check(!vis->property("running").toBool(),"without motion the visualizer holds still");b->setMotion(true);
+    delete vis;}}
   fprintf(stdout,"RENDERER %d\n",int(w->rendererInterface()->graphicsApi()));
   b->library("local-albums");b->setViewMode("grid");QTest::qWait(350);click("openCollectionCard");check(until([&]{return !b->busy()&&!w->property("albumFlying").toBool();}),"album flight finishes");QTest::qWait(250);
   click("inspectCollectionArtwork");auto viewer=w->findChild<QObject*>("artworkViewer");check(viewer&&viewer->property("visible").toBool(),"artwork viewer opens");click("artworkZoomIn");check(viewer->property("zoom").toDouble()>1,"artwork zoom works");shot("artwork-zoom");click("artworkZoomReset");check(viewer->property("zoom").toDouble()==1,"artwork zoom resets");QTest::keyClick(w,Qt::Key_Escape);QTest::qWait(250);check(!viewer->property("visible").toBool()&&viewer->property("source").toString().isEmpty(),"closing viewer releases source");

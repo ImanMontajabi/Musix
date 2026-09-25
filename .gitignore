@@ -14,6 +14,7 @@
 !/tests/
 !/assets/
 !/licenses/
+!/shaders/
 
 /src/*
 !/src/*.cpp
@@ -22,6 +23,10 @@
 !/src/*.mm
 /qml/*
 !/qml/*.qml
+# GLSL sources only; the .qsb files are built from them.
+/shaders/*
+!/shaders/*.frag
+!/shaders/*.vert
 /helper/*
 !/helper/catalog.py
 !/helper/online_artwork.py

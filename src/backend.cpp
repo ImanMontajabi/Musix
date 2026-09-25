@@ -140,6 +140,7 @@ Backend::Backend(QObject *parent) : QObject(parent) {
   connect(&m_envelopeTick,&QTimer::timeout,this,&Backend::publishEnvelope);
   connect(this,&Backend::playbackChanged,this,&Backend::updateEnvelopeTick);
   connect(this,&Backend::settingsChanged,this,&Backend::updateEnvelopeTick);
+  connect(this,&Backend::uiActiveChanged,this,&Backend::updateEnvelopeTick);
   connect(this,&Backend::trackChanged,this,[this]{refreshEnvelopes();analyseUpcoming();});
   // A level change heard mid-song is a jump; the analysed one arrives a moment
   // after the first play starts, so it glides in instead.
@@ -1338,6 +1339,7 @@ void Backend::clearCache() {
 void Backend::setUiActive(bool active) {
   if(m_uiActive==active)return;
   m_uiActive=active;
+  emit uiActiveChanged();
   if(active){
     emit positionChanged();
     if(playing())m_positionTick.start();

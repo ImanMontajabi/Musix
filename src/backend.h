@@ -163,6 +163,11 @@ class Backend : public QObject {
   // How much of the source colour the interface takes, and how hard the text
   // and boundaries are pushed away from what they sit on.
   Q_PROPERTY(QString colorVariant READ colorVariant WRITE setColorVariant NOTIFY settingsChanged)
+  // What moves behind the full-screen player: "off", "pixelRain" or "snake".
+  Q_PROPERTY(QString visualizer READ visualizer WRITE setVisualizer NOTIFY settingsChanged)
+  // Whether a window of the app is on screen and in use; what only decorates
+  // stops while it is not.
+  Q_PROPERTY(bool uiActive READ uiActive NOTIFY uiActiveChanged)
   Q_PROPERTY(double colorContrast READ colorContrast WRITE setColorContrast NOTIFY settingsChanged)
   // Material draws components tighter when a precision pointer is present,
   // because the 48dp minimum exists to disambiguate touches.
@@ -403,6 +408,8 @@ public:
   bool precisePointer() const {return m_settings.value("precisePointer",false).toBool();}
   void setPrecisePointer(bool precise) {if(precisePointer()==precise)return;m_settings.setValue("precisePointer",precise);emit settingsChanged();}
   QString colorVariant() const {return m_settings.value("colorVariant","tonalSpot").toString();}
+  QString visualizer() const {const auto v=m_settings.value("visualizer","off").toString();return QStringList{"off","pixelRain","snake"}.contains(v)?v:QString("off");}
+  void setVisualizer(const QString &name) {if(!QStringList{"off","pixelRain","snake"}.contains(name)||visualizer()==name)return;m_settings.setValue("visualizer",name);emit settingsChanged();}
   void setColorVariant(const QString &name) {if(colorVariant()==name)return;m_settings.setValue("colorVariant",name);emit settingsChanged();}
   double colorContrast() const {return m_settings.value("colorContrast",0.0).toDouble();}
   void setColorContrast(double level) {const double held=qBound(0.0,level,1.0);if(qFuzzyCompare(colorContrast()+1,held+1))return;m_settings.setValue("colorContrast",held);emit settingsChanged();}
@@ -455,6 +462,7 @@ public:
   bool motion() const { return m_settings.value("motion", true).toBool(); }
   void setMotion(bool);
   Q_INVOKABLE void setUiActive(bool active);
+  bool uiActive() const { return m_uiActive; }
   bool historyPaused() const {return m_historyPaused;}
   void setHistoryPaused(bool paused);
   bool trackNotifications() const {return m_settings.value("trackNotifications",false).toBool();}
@@ -611,6 +619,7 @@ signals:
   void trackChanged();
   void playbackChanged();
   void audioLevelsChanged();
+  void uiActiveChanged();
   void normalizationChanged();
   void positionChanged();
   void lyricIndexChanged();

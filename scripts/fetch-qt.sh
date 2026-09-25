@@ -35,13 +35,15 @@ qt_ready() {
   [ -f "$prefix/lib/QtCore.framework/Versions/A/QtCore" ] &&
     [ -f "$prefix/lib/QtMultimedia.framework/Versions/A/QtMultimedia" ] &&
     [ -f "$prefix/plugins/imageformats/libqwebp.dylib" ] &&
+    [ -x "$prefix/bin/qsb" ] &&
     [ -x "$prefix/bin/macdeployqt" ]
 }
 if ! qt_ready; then
   rm -rf "$qt"
   # aqt checks every archive against the hash in Qt's repository metadata.
+  # qtshadertools is the build's shader compiler; nothing of it is bundled.
   "$tools/bin/aqt" install-qt mac desktop "$qt_version" clang_64 \
-    -m qtmultimedia qtimageformats -O "$qt"
+    -m qtmultimedia qtimageformats qtshadertools -O "$qt"
   qt_ready || { echo "Qt $qt_version is incomplete after installing" >&2; exit 1; }
 fi
 

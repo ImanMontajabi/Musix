@@ -77,6 +77,7 @@ Item {
     Behavior on detailsOpacity { NumberAnimation { duration: Theme.exitDuration; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.effectsCurve } }
     NumberAnimation on opacity { from: 0; to: 1; duration: Theme.normal; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.effectsCurve }
     AmbientBackdrop { anchors.fill: parent; url: app.current.art || "" }
+    Visualizer { anchors.fill: parent }
     ColumnLayout {
         anchors.fill: parent; anchors.margins: player.width<900?Theme.space24:40; spacing: Theme.space24
         RowLayout {
@@ -176,5 +177,12 @@ Item {
         MDivider {}
         MMenuItem {objectName:"immersiveCoverflowToggle";text:"Up next covers";checkable:true;checked:player.coverflow;onTriggered:player.coverflowRequested(!player.coverflow)}
         MMenuItem {objectName:"immersiveAutoHide";text:"Auto-hide controls";checkable:true;checked:player.autoHideControls;onTriggered:player.autoHideRequested(!player.autoHideControls)}
+        MDivider {}
+        // The visualizer's quick switch: choosing the one already on turns it off.
+        Repeater {
+            model:[{key:"pixelRain",label:"Pixel rain"}]
+            MMenuItem {required property var modelData;objectName:"immersiveVisualizer_"+modelData.key;text:modelData.label;checkable:true
+                checked:app.visualizer===modelData.key;onTriggered:app.visualizer=app.visualizer===modelData.key?"off":modelData.key}
+        }
     }
 }
