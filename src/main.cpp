@@ -119,8 +119,16 @@ int main(int argc, char **argv) {
   // arguments to the real Musix nor take the socket from it.
   const bool alone = args.contains("--isolated") || Profile::isolated();
   const auto instanceName = "sung-" + QString::number(getuid());
-  if (!alone && SingleInstance::handOff(instanceName, args.size() > 1 ? args.last().toUtf8() : QByteArray("raise")))
-    return 0;
+  if (!alone) {
+    const auto other = SingleInstance::handOff(instanceName, args.size() > 1 ? args.last().toUtf8() : QByteArray("raise"));
+    if (other.kind == SingleInstance::Outcome::Handed)
+      return 0;
+    // Two instances on one profile would overwrite each other's library, so
+    // a silent but living one is never simply taken over.
+    if (other.kind == SingleInstance::Outcome::Unresponsive &&
+        (!WindowChrome::offerToQuitUnresponsive(other.pid) || !SingleInstance::waitUntilGone(other.pid, 8000)))
+      return 1;
+  }
   QLocalServer server;
   if (!alone) {
     QLocalServer::removeServer(instanceName);

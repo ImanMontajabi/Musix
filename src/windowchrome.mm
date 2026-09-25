@@ -47,6 +47,28 @@ WindowChrome::~WindowChrome() {
   [observer release];
 }
 
+bool WindowChrome::offerToQuitUnresponsive(qint64 pid) {
+  NSRunningApplication *other = [NSRunningApplication runningApplicationWithProcessIdentifier:pid_t(pid)];
+  NSAlert *alert = [[NSAlert alloc] init];
+  alert.messageText = @"Musix is already running but isn’t responding.";
+  alert.informativeText = @"Only one Musix can use your library at a time. Quit the other one to open Musix here; "
+                          @"anything it hasn’t saved yet may be lost.";
+  [alert addButtonWithTitle:@"Quit It and Open Musix"];
+  [alert addButtonWithTitle:@"Cancel"];
+  [NSApp activateIgnoringOtherApps:YES];
+  const bool quit = [alert runModal] == NSAlertFirstButtonReturn;
+  [alert release];
+  if (!quit || !other)
+    return quit;
+  // A quit request first, which lets it save if it is only busy.
+  [other terminate];
+  for (int i = 0; i < 100 && !other.terminated; ++i)
+    [NSRunLoop.currentRunLoop runUntilDate:[NSDate dateWithTimeIntervalSinceNow:0.05]];
+  if (!other.terminated)
+    [other forceTerminate];
+  return true;
+}
+
 namespace {
 NSWindow *nativeWindow(QQuickWindow *window) {
   // On the cocoa platform a QWindow's winId is its NSView. On any other --

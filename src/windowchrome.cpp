@@ -1,4 +1,5 @@
 #include "windowchrome.h"
+#include <cstdio>
 
 // The macOS build compiles windowchrome.mm instead; see CMakeLists.txt. A
 // desktop that draws its own title bar beside the window has nothing to blend,
@@ -6,6 +7,10 @@
 #ifndef Q_OS_MACOS
 WindowChrome::WindowChrome(QObject *parent) : QObject(parent) {}
 WindowChrome::~WindowChrome() = default;
+bool WindowChrome::offerToQuitUnresponsive(qint64 pid) {
+  fprintf(stderr, "Musix is already running (pid %lld) but not responding; quit it and try again.\n", pid);
+  return false;
+}
 void WindowChrome::blend(QQuickWindow *) {}
 void WindowChrome::titleBarDoubleClick() {}
 void WindowChrome::roundCorners(QQuickWindow *) {}

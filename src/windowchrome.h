@@ -25,6 +25,10 @@ public:
   explicit WindowChrome(QObject *parent = nullptr);
   ~WindowChrome() override;
   bool reduceMotion() const { return m_reduceMotion; }
+  // Another Musix holds the profile but has stopped answering. Asks whether
+  // to quit it; on yes asks it to quit, forcing it only if it will not.
+  // True when the person chose to quit it.
+  static bool offerToQuitUnresponsive(qint64 pid);
   Q_INVOKABLE void blend(QQuickWindow *window);
   // Whatever Desktop & Dock says a double-click on a title bar should do.
   Q_INVOKABLE void titleBarDoubleClick();
