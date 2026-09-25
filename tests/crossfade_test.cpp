@@ -76,6 +76,15 @@ private slots:
     qputenv("SUNG_HELPER", helper.toUtf8());
     qputenv("SUNG_PYTHON", "/usr/bin/python3");
     QVERIFY(encode("tone one.flac", "Tone one", 5, 330));
+    // Three seconds of silence, then three of tone: where the meters light up
+    // says which part of the file they are reading.
+    {
+      QProcess run;
+      run.start("ffmpeg", {"-nostdin", "-v", "error", "-f", "lavfi", "-i", "anullsrc=r=44100:cl=mono:d=3", "-f", "lavfi", "-i",
+                           "sine=frequency=330:sample_rate=44100:duration=3", "-filter_complex", "[0:a][1:a]concat=n=2:v=0:a=1",
+                           "-metadata", "title=Late tone", "-metadata", "artist=Fixture artist", music.filePath("late tone.flac")});
+      QVERIFY(run.waitForFinished(20000) && run.exitCode() == 0);
+    }
     QVERIFY(encode("tone two.flac", "Tone two", 6, 220));
     QVERIFY(encode("01 first.flac", "First", 4));
     QVERIFY(encode("02 second.flac", "Second", 6));
@@ -398,9 +407,6 @@ private slots:
   // being heard may carry one: a tap left on the idle deck starves the active
   // one, and the meters die. So the tap has to move with the swap.
   void theMetersFollowTheSwap() {
-#ifdef Q_OS_MACOS
-    QSKIP("Qt's darwin backend never feeds QAudioBufferOutput, so the meters stay at zero");
-#endif
     auto b = std::make_unique<Backend>();
     b->setVolume(0.5);
     b->setLyricsFallback(false);
@@ -442,6 +448,83 @@ private slots:
     QVERIFY(b->playing());
     // The tone on the other deck has to reach the meters just the same.
     QTRY_VERIFY_WITH_TIMEOUT(loud(), 10000);
+    b->stop();
+  }
+
+  // A backend playing one fixture on its own, meters on.
+  std::unique_ptr<Backend> playingAlone(const QString &title) {
+    auto b = std::make_unique<Backend>();
+    b->setVolume(0.5);
+    b->setLyricsFallback(false);
+    b->setAutoplay(false);
+    b->setWatchMusicFolders(false);
+    b->setOnlineArtwork(false);
+    b->setPrepareNext(false);
+    b->setMotion(true);
+    b->setUiActive(true);
+    b->setCrossfadeSeconds(0);
+    b->clearQueue();
+    b->importLocalFiles({QUrl::fromLocalFile(music.filePath(title.toLower() + ".flac"))});
+    if (!QTest::qWaitFor([&b] { return !b->importingLocal(); }, 20000))
+      return {};
+    b->library("files");
+    QVariantList rows;
+    for (const auto &row : b->results()->rows)
+      if (row.toMap().value("title").toString() == title)
+        rows.append(row);
+    if (rows.size() != 1)
+      return {};
+    b->enqueueItems(rows);
+    b->playAt(0);
+    return b;
+  }
+  static double loudest(const QVariantList &levels) {
+    double m = 0;
+    for (const auto &v : levels)
+      m = std::max(m, v.toDouble());
+    return m;
+  }
+
+  // The meters read the analysed file at the playback position: silent over
+  // the silent part, lit over the tone, across seeks in both directions and
+  // quiet while paused.
+  void theMetersReadThePlaybackPosition() {
+    auto b = playingAlone("Late tone");
+    QVERIFY(b);
+    QTRY_VERIFY_WITH_TIMEOUT(b->playing() && b->duration() > 0, 10000);
+    const auto id = Backend::analysisKey(b->current());
+    QTRY_VERIFY_WITH_TIMEOUT(b->audioAnalysis()->envelope(id).isValid(), 15000);
+    QVERIFY(b->position() < 2500);
+    QTest::qWait(300);
+    QVERIFY2(loudest(b->audioLevels()) < 0.05, "silence reads as silence");
+    b->seek(4000);
+    QTRY_VERIFY_WITH_TIMEOUT(loudest(b->audioLevels()) > 0.3, 3000);
+    // 330 Hz sits between the two lowest bands, never in the top one.
+    QVERIFY(b->audioLevels()[1].toDouble() > b->audioLevels()[4].toDouble() + 0.2);
+    b->seek(500);
+    QTRY_VERIFY_WITH_TIMEOUT(loudest(b->audioLevels()) < 0.05, 3000);
+    b->seek(3500);
+    QTRY_VERIFY_WITH_TIMEOUT(loudest(b->audioLevels()) > 0.3, 3000);
+    b->pause();
+    QTRY_VERIFY_WITH_TIMEOUT(loudest(b->audioLevels()) < 0.01, 3000);
+    b->stop();
+  }
+
+  // Levelling works from the analysed loudness, on the first play, for a file
+  // with no tags.
+  void levellingUsesTheAnalysis() {
+    auto b = playingAlone("Tone two");
+    QVERIFY(b);
+    b->setVolumeNormalization(true);
+    QTRY_VERIFY_WITH_TIMEOUT(b->playing() && b->duration() > 0, 10000);
+    const auto id = Backend::analysisKey(b->current());
+    QTRY_COMPARE_WITH_TIMEOUT(b->normalizationSource(), QString("Analysed"), 15000);
+    const double lufs = b->analysedLoudness(id);
+    QVERIFY2(lufs > -30 && lufs < -10, qPrintable(QString::number(lufs)));
+    QVERIFY(std::abs(b->normalizationGainDb() - qBound(-15.0, -18.0 - lufs, 6.0)) < 0.01);
+    // The glide finishes at the level the gain asks for.
+    QTRY_VERIFY_WITH_TIMEOUT(std::abs(b->activeAudio().volume() - b->effectiveVolume()) < 0.01, 3000);
+    b->setVolumeNormalization(false);
     b->stop();
   }
 

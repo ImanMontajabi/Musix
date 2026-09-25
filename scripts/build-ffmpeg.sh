@@ -9,6 +9,12 @@ ver="${FFMPEG_VERSION:-7.1}"
 # machine's own macOS and ffmpeg alone would keep the bundle off anything older.
 target="${MACOSX_DEPLOYMENT_TARGET:-14.0}"
 export MACOSX_DEPLOYMENT_TARGET="$target"
+# Raised whenever the configure line below changes, so a tree or a cache built
+# with the old one is rebuilt rather than reused. 3: raw float audio output,
+# which the app reads to analyse songs ahead of playback.
+features=3
+stamp="$target features-$features"
+if [ "${1:-}" = "--stamp" ]; then echo "$stamp"; exit 0; fi
 src="$here/ffmpeg-$ver"
 out="$here/ffmpeg-out"
 tarball="$here/ffmpeg-$ver.tar.xz"
@@ -23,7 +29,7 @@ fi
 [ -d "$src" ] || tar -xf "$tarball" -C "$here"
 cd "$src"
 # A tree configured for another deployment target is rebuilt from scratch.
-if [ -f config.h ] && [ "$(cat .musix-target 2>/dev/null)" != "$target" ]; then
+if [ -f config.h ] && [ "$(cat .musix-target 2>/dev/null)" != "$stamp" ]; then
   make distclean >/dev/null 2>&1 || true
 fi
 [ -f config.h ] || ./configure \
@@ -35,13 +41,19 @@ fi
   --disable-shared --enable-static \
   --disable-ffplay --disable-avdevice --disable-postproc \
   --disable-devices --disable-hwaccels --disable-bsfs \
-  --disable-encoders --enable-encoder=mjpeg,png \
-  --disable-muxers --enable-muxer=image2,mjpeg \
+  --disable-encoders --enable-encoder=mjpeg,png,pcm_f32le \
+  --disable-muxers --enable-muxer=image2,mjpeg,pcm_f32le \
   --disable-filters --enable-filter=scale,null,anull,aformat,aresample,format \
   --disable-protocols --enable-protocol=file,pipe \
   --enable-ffmpeg --enable-ffprobe
-echo "$target" > .musix-target
+echo "$stamp" > .musix-target
 make -j"$(sysctl -n hw.ncpu)"
 make install
-echo "$target" > "$out/.musix-target"
+# configure accepts a component name it does not know without complaint, so
+# what the app relies on is checked in the result rather than in the flags.
+"$out/bin/ffmpeg" -hide_banner -encoders 2>/dev/null | grep -q " pcm_f32le " ||
+  { echo "ffmpeg was built without the pcm_f32le encoder" >&2; exit 1; }
+"$out/bin/ffmpeg" -hide_banner -muxers 2>/dev/null | grep -q " f32le " ||
+  { echo "ffmpeg was built without the f32le muxer" >&2; exit 1; }
+echo "$stamp" > "$out/.musix-target"
 ls -lh "$out/bin/"

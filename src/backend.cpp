@@ -117,7 +117,7 @@ Backend::Backend(QObject *parent) : QObject(parent) {
     if(buffer.isValid() && (m_decodeRate!=buffer.format().sampleRate() || m_decodeChannels!=buffer.format().channelCount())){m_decodeRate=buffer.format().sampleRate();m_decodeChannels=buffer.format().channelCount();emit qualityChanged();}
     // Levelling measures every recording, including while the meters are idle.
     if(buffer.isValid() && playing())m_loudness.process(buffer);
-    if(!m_uiActive || !motion() || !playing())return;
+    if(!m_uiActive || !motion() || !playing() || m_envelope.isValid())return;
     if(!buffer.isValid()){resetAudioLevels();return;}
     m_levelAnalyzer.process(buffer);
     m_levelIdle.start(qBound(180,int(buffer.duration()/1000/std::max(0.25,playbackRate()))+100,600));
@@ -126,6 +126,26 @@ Backend::Backend(QObject *parent) : QObject(parent) {
     if(levels!=m_audioLevels){m_audioLevels=levels;emit audioLevelsChanged();}
   });
   eachDeck([this](QMediaPlayer *deck){connect(deck,&QMediaPlayer::sourceChanged,this,[this,deck]{if(isActive(*deck))resetAudioLevels();});});
+  // A packaged app decodes with its own ffmpeg; a checkout uses whatever the
+  // developer has, and without one simply goes without levels.
+  if(const auto dir=ffmpegDirectory();!dir.isEmpty() && QFileInfo(dir+"/ffmpeg").isExecutable())m_analysis.setFfmpeg(dir+"/ffmpeg");
+  else m_analysis.setFfmpeg(QStandardPaths::findExecutable("ffmpeg"));
+  m_analysis.setCacheDirectory(Profile::location(QStandardPaths::CacheLocation)+"/envelopes");
+  connect(&m_analysis,&AudioAnalysis::ready,this,[this](const QString &id){
+    refreshEnvelopes();
+    if(id==analysisKey(current()))updateNormalization();
+  });
+  m_envelopeTick.setInterval(1000/Envelope::FramesPerSecond);
+  m_envelopeTick.setTimerType(Qt::PreciseTimer);
+  connect(&m_envelopeTick,&QTimer::timeout,this,&Backend::publishEnvelope);
+  connect(this,&Backend::playbackChanged,this,&Backend::updateEnvelopeTick);
+  connect(this,&Backend::settingsChanged,this,&Backend::updateEnvelopeTick);
+  connect(this,&Backend::trackChanged,this,[this]{refreshEnvelopes();analyseUpcoming();});
+  // A level change heard mid-song is a jump; the analysed one arrives a moment
+  // after the first play starts, so it glides in instead.
+  m_gainRamp.setDuration(400);
+  m_gainRamp.setEasingCurve(QEasingCurve::InOutSine);
+  connect(&m_gainRamp,&QVariantAnimation::valueChanged,this,[this](const QVariant &v){m_normalizationGain=v.toDouble();applyOutputVolume();});
   connect(this,&Backend::trackChanged,this,&Backend::refreshRecentlyPlayed);
   connect(this,&Backend::trackChanged,this,&Backend::updateNormalization);
   connect(this,&Backend::seeked,this,&Backend::resetAudioLevels);
@@ -672,6 +692,7 @@ void Backend::resolveCurrent(bool retry) {
       if(token!=m_trackToken)return;
       if(!error.isEmpty()){m_resolving=false;m_wantPlay=false;notifyError(error,"play");emit playbackChanged();return;}
       m_media().setSource(QUrl::fromLocalFile(data.value("file").toString()));if(m_wantPlay)m_media().play();emit playbackChanged();
+      analyseSource(current(),data.value("file").toString(),true);
     });emit playbackChanged();return;
   }
   if(!current().value("localPath").toString().isEmpty()) {
@@ -681,6 +702,7 @@ void Backend::resolveCurrent(bool retry) {
     if(!retry&&m_savedPosition>0)m_restorePosition=m_savedPosition;
     m_media().setSource(QUrl::fromLocalFile(file.absoluteFilePath()));
     if(m_wantPlay)m_media().play();
+    analyseSource(current(),file.absoluteFilePath(),true);
     emit playbackChanged();return;
   }
   auto id = current().value("videoId").toString();
@@ -724,6 +746,8 @@ void Backend::resolveCurrent(bool retry) {
     m_media().setSource(url);
     if (m_wantPlay)
       m_media().play();
+    // A track too large to buffer streams instead, and goes without.
+    if(url.isLocalFile())analyseSource(current(),url.toLocalFile(),true);
   };
   if(!retry && m_preparedId==id && !m_preparedData.isEmpty()) {
     m_audioCache=std::move(m_preparedDirectory);const auto data=m_preparedData;
@@ -1144,10 +1168,8 @@ void Backend::updateNormalization() {
   if(id!=m_loudnessTrack){storeMeasuredLoudness();m_loudness.reset();m_loudnessTrack=id;}
   double gain=0;QString source;
   if(volumeNormalization()&&!id.isEmpty()) {
-    const double tag=trackGainDb(current());
-    const double measured=measuredLoudness(id);
-    if(!qIsNaN(tag)){gain=tag;source="Track tag";}
-    else if(!qIsNaN(measured)){gain=-18.0-measured;source="Measured";}
+    const auto chosen=levellingGain(trackGainDb(current()),analysedLoudness(id),measuredLoudness(id));
+    gain=chosen.db;source=chosen.source;
   }
   // Boosting is limited because the mixer cannot amplify past full scale.
   gain=qBound(-15.0,gain,6.0);
@@ -1157,8 +1179,10 @@ void Backend::updateNormalization() {
   const double total=qBound(-15.0,gain+trim,6.0);
   const double factor=idle?1.0:std::pow(10.0,total/20.0);
   if(qFuzzyCompare(factor+1,m_normalizationGain+1)&&source==m_normalizationSource&&qFuzzyCompare(trim+1,m_trim+1))return;
-  m_normalizationGain=factor;m_normalizationDb=idle?0.0:total;m_normalizationSource=source;m_trim=trim;
-  applyOutputVolume();
+  m_normalizationDb=idle?0.0:total;m_normalizationSource=source;m_trim=trim;
+  m_gainRamp.stop();
+  if(playing()&&m_media().position()>500){m_gainRamp.setStartValue(m_normalizationGain);m_gainRamp.setEndValue(factor);m_gainRamp.start();}
+  else {m_normalizationGain=factor;applyOutputVolume();}
   emit normalizationChanged();
 }
 void Backend::setVolumeNormalization(bool enabled) {
@@ -1307,6 +1331,7 @@ void Backend::clearCache() {
       Profile::location(QStandardPaths::CacheLocation) + "/art";
   QDir(p).removeRecursively();
   m_streams.clear();
+  m_analysis.clearCache();
   emit artworkCacheCleared();
   emit toast("Cache cleared");
 }
@@ -2047,6 +2072,7 @@ void Backend::updatePreparation(){
     // Preload failures and oversized/direct streams leave normal playback in charge.
     if(data.value("ok").toBool()&&file.isFile()&&file.size()<=32*1024*1024&&file.canonicalPath()==QFileInfo(directory->path()).canonicalFilePath()){
       m_preparedData=data;
+      for(int i=0;i<m_queue.count();++i)if(m_queue.get(i).value("videoId").toString()==nextId){analyseSource(m_queue.get(i),file.absoluteFilePath(),false);break;}
 #ifdef Q_OS_LINUX
       // Hand the buffered track back to the page cache. The hint is advisory,
       // and macOS has no retroactive equivalent, so there it simply goes unsaid.
@@ -2413,6 +2439,57 @@ void Backend::resetAudioLevels() {
   if(m_audioLevels!=silence){m_audioLevels=silence;emit audioLevelsChanged();}
 }
 
+void Backend::analyseSource(const QVariantMap &track,const QString &file,bool urgent) {
+  const auto id=analysisKey(track);
+  if(id.isEmpty()||file.isEmpty())return;
+  m_analysis.request(id,file,urgent);
+}
+
+// The next song in the queue, when it is already a file, is analysed while
+// this one plays. YouTube's next song is analysed once it has been buffered.
+void Backend::analyseUpcoming() {
+  if(m_index<0||m_index+1>=m_queue.count())return;
+  const auto next=m_queue.get(m_index+1);
+  const auto path=next.value("localPath").toString();
+  if(!path.isEmpty())analyseSource(next,path,false);
+}
+
+void Backend::refreshEnvelopes() {
+  m_envelope=m_analysis.envelope(analysisKey(current()));
+  m_spareEnvelope=m_handoffIndex>=0&&m_handoffIndex<m_queue.count()?m_analysis.envelope(analysisKey(m_queue.get(m_handoffIndex))):Envelope();
+  m_envelopeAnchor=-1;
+  updateEnvelopeTick();
+}
+
+void Backend::updateEnvelopeTick() {
+  const bool wanted=m_envelope.isValid()&&playing()&&m_uiActive&&motion();
+  if(wanted&&!m_envelopeTick.isActive()){m_envelopeAnchor=-1;m_envelopeTick.start();}
+  else if(!wanted&&m_envelopeTick.isActive()){m_envelopeTick.stop();resetAudioLevels();}
+}
+
+qint64 Backend::envelopePosition() {
+  // QMediaPlayer reports its position every so often rather than every frame;
+  // between reports the song has carried on at its playback rate.
+  const qint64 reported=m_media().position();
+  if(reported!=m_envelopeAnchor||!m_envelopeClock.isValid()){m_envelopeAnchor=reported;m_envelopeClock.restart();return reported;}
+  return reported+qint64(m_envelopeClock.elapsed()*m_media().playbackRate());
+}
+
+void Backend::publishEnvelope() {
+  if(!m_envelope.isValid()||!playing()||!m_uiActive||!motion()){updateEnvelopeTick();return;}
+  const auto heard=m_envelope.at(envelopePosition());
+  const auto levels=m_crossfading
+    ? Envelope::mix(heard,activeAudio().volume(),m_spareEnvelope.at(spareDeck().position()),spareAudio().volume())
+    : Envelope::toList(heard);
+  if(levels!=m_audioLevels){m_audioLevels=levels;emit audioLevelsChanged();}
+}
+
+double Backend::analysedLoudness(const QString &id) {
+  if(id.isEmpty())return qQNaN();
+  if(id==analysisKey(current())&&m_envelope.isValid())return m_envelope.loudness;
+  return m_analysis.envelope(id).loudness;
+}
+
 
 // Two reasons to look a song up on Apple: its animated cover, and, for a song
 // whose only cover is a video frame, its still one. Either alone is enough.
@@ -2587,6 +2664,7 @@ bool Backend::armHandoff(bool playImmediately) {
   m_handoffIndex=target;
   m_handoffPrepared=track.value("localPath").toString().isEmpty();
   if(playImmediately)deck.play();
+  refreshEnvelopes();
   return true;
 }
 
@@ -2597,6 +2675,7 @@ void Backend::clearSpare() {
   spareAudio().setVolume(0);
   m_handoffIndex=-1;
   m_handoffPrepared=false;
+  m_spareEnvelope={};
 }
 
 void Backend::considerCrossfade() {

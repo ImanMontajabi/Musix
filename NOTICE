@@ -108,8 +108,12 @@ FFmpeg (https://ffmpeg.org), used unmodified as the ffmpeg and ffprobe
 executables, under the GNU Lesser General Public License version 2.1 or later.
 The bundled build is configured with --disable-gpl --disable-nonfree
 --disable-autodetect, so it contains no GPL-licensed or non-free components and
-links no external libraries. scripts/build-ffmpeg.sh reproduces it exactly from
-the upstream release it pins. LGPL-2.1 section 6 offers no equivalent of GPLv3
+links no external libraries. Its only encoders are mjpeg, png and pcm_f32le and
+its only muxers image2, mjpeg and f32le (--enable-encoder=mjpeg,png,pcm_f32le
+--enable-muxer=image2,mjpeg,pcm_f32le): it extracts cover art, and decodes songs to
+raw audio that Musix analyses for its level meters and volume levelling.
+scripts/build-ffmpeg.sh reproduces it exactly from the upstream release it
+pins. LGPL-2.1 section 6 offers no equivalent of GPLv3
 section 6(d), which is what permits a third-party server, so the corresponding
 source is published alongside each release as
 Musix-<version>-ffmpeg-<ffmpeg version>-source.tar.xz, which is the unmodified

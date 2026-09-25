@@ -2,7 +2,8 @@
 #include <QAbstractListModel>
 #include <QAudioOutput>
 #include <QAudioBufferOutput>
-#include "audiolevels.h"
+#include <QVariantAnimation>
+#include "audioanalysis.h"
 #include <QMediaPlayer>
 #include <QProcess>
 #include <QSettings>
@@ -809,6 +810,22 @@ private:
   QVariantList m_audioLevels{0.0,0.0,0.0,0.0,0.0};
   QElapsedTimer m_levelPublish;
   QTimer m_levelIdle;
+  // Levels and loudness worked out from the file, because Qt's macOS backend
+  // never hands decoded audio over; see audioanalysis.h. One envelope per
+  // deck, so an overlap draws on both.
+  AudioAnalysis m_analysis;
+  Envelope m_envelope, m_spareEnvelope;
+  QTimer m_envelopeTick;
+  // Media positions arrive in steps; between them the clock carries on.
+  qint64 m_envelopeAnchor = -1;
+  QElapsedTimer m_envelopeClock;
+  QVariantAnimation m_gainRamp;
+  void analyseSource(const QVariantMap &track,const QString &file,bool urgent);
+  void analyseUpcoming();
+  void refreshEnvelopes();
+  void updateEnvelopeTick();
+  void publishEnvelope();
+  qint64 envelopePosition();
   // Playback runs on two interchangeable decks. One carries the song being
   // heard; the other holds the next one, already decoded and waiting. During a
   // crossfade both sound at once while their volumes trade places, and at the
@@ -827,6 +844,10 @@ private:
   bool isActive(const QMediaPlayer &deck) const { return &deck == &m_media(); }
 public:
   bool crossfading() const { return m_crossfading; }
+  // What analysis keys a track by: its id, which is stable across sources.
+  static QString analysisKey(const QVariantMap &track) { return track.value("id").toString(); }
+  AudioAnalysis *audioAnalysis() { return &m_analysis; }
+  double analysedLoudness(const QString &id);
 private:
   QAudioOutput &activeAudio() { return m_usingB ? m_audioB : m_audioA; }
   const QAudioOutput &activeAudio() const { return m_usingB ? m_audioB : m_audioA; }

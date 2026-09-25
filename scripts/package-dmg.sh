@@ -125,7 +125,7 @@ say "ffmpeg"
 # one of them missing has to send the build back, because skipping it only
 # defers the failure to a cp further down.
 ffmpeg_ready() {
-  [ "$(cat "$cache/ffmpeg-out/.musix-target" 2>/dev/null)" = "$deployment_target" ] &&
+  [ "$(cat "$cache/ffmpeg-out/.musix-target" 2>/dev/null)" = "$(MACOSX_DEPLOYMENT_TARGET="$deployment_target" "$root/scripts/build-ffmpeg.sh" --stamp)" ] &&
   [ -x "$cache/ffmpeg-out/bin/ffmpeg" ] && [ -x "$cache/ffmpeg-out/bin/ffprobe" ] &&
     [ -f "$cache/ffmpeg-$ffmpeg_version/COPYING.LGPLv2.1" ] &&
     [ -f "$cache/ffmpeg-$ffmpeg_version.tar.xz" ]
