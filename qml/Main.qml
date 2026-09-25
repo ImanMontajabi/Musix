@@ -2022,15 +2022,15 @@ ApplicationWindow {
                 // Material spreads the same five palettes differently for each of
                 // its scheme variants, which is what decides how much of the
                 // cover the interface takes on.
-                SungText {text:"Visualizer";visible:settingsDialog.matches("Visualizer pixel rain full-screen player animation");font.pixelSize:Theme.bodyLarge;font.weight:Font.Medium;Layout.topMargin:Theme.space4}
+                SungText {text:"Visualizer";visible:settingsDialog.matches("Visualizer pixel rain snake full-screen player animation");font.pixelSize:Theme.bodyLarge;font.weight:Font.Medium;Layout.topMargin:Theme.space4}
                 MSegmentedControl {Layout.fillWidth:true;Layout.minimumWidth:0;
                     objectName:"visualizerControl"
-                    visible:settingsDialog.matches("Visualizer pixel rain full-screen player animation")
+                    visible:settingsDialog.matches("Visualizer pixel rain snake full-screen player animation")
                     accessibleName:"Visualizer"
-                    options:[{key:"off",label:"Off",name:"visualizerOff"},{key:"pixelRain",label:"Pixel rain",name:"visualizerPixelRain"}]
+                    options:[{key:"off",label:"Off",name:"visualizerOff"},{key:"pixelRain",label:"Pixel rain",name:"visualizerPixelRain"},{key:"snake",label:"Snake",name:"visualizerSnake"}]
                     value:app.visualizer; onChosen:value=>app.visualizer=value
                 }
-                SungText {text:"Behind the full-screen player, moving with the music.";visible:settingsDialog.matches("Visualizer pixel rain full-screen player animation");Layout.fillWidth:true;wrapMode:Text.Wrap;color:Theme.muted;font.pixelSize:Theme.bodySmall}
+                SungText {text:"Behind the full-screen player, moving with the music.";visible:settingsDialog.matches("Visualizer pixel rain snake full-screen player animation");Layout.fillWidth:true;wrapMode:Text.Wrap;color:Theme.muted;font.pixelSize:Theme.bodySmall}
                 SungText {text:"Color scheme";visible:settingsDialog.matches("Color scheme variant neutral tonal spot vibrant expressive content");font.pixelSize:Theme.bodyLarge;font.weight:Font.Medium;Layout.topMargin:Theme.space4}
                 MSegmentedControl {Layout.fillWidth:true;Layout.minimumWidth:0;
                     objectName:"colorVariantControl"

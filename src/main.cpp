@@ -23,6 +23,7 @@
 #endif
 #include <QLocalSocket>
 #include "singleinstance.h"
+#include "snakefield.h"
 #include <QNetworkAccessManager>
 #include <QNetworkDiskCache>
 #include <QPainter>
@@ -145,6 +146,7 @@ int main(int argc, char **argv) {
   app.setFont(font);
   qmlRegisterType<RowSelection>("Sung.Native", 1, 0, "RowSelection");
   qmlRegisterType<RoundedArt>("Sung.Native", 1, 0, "RoundedArt");
+  qmlRegisterType<SnakeField>("Sung.Native", 1, 0, "SnakeField");
   MotionArtwork motionArtwork;
   qmlRegisterUncreatableType<MotionArtwork>("Sung.Native",1,0,"MotionArtwork","Shared current artwork");
   Backend backend;

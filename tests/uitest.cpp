@@ -1840,6 +1840,11 @@ void runInteractionRefinementTests(Backend *b,QQuickWindow *w){
       QMetaObject::invokeMethod(vis,"step",Q_ARG(QVariant,QVariant(1.0/60)));}
     fprintf(stdout,"VISUALIZER waves in 3 s with a beat every frame: %d\n",waves);
     check(waves>=6&&waves<=9,"beat waves are limited to three a second");
+    vis->setProperty("kind","snake");QTest::qWait(50);
+    auto snake=findItem(vis,"snake");check(snake!=nullptr,"snake is a scene-graph item");
+    if(snake){const int before=snake->property("length").toInt();QVariant head0=snake->property("length");
+      for(int frame=0;frame<120;++frame){QMetaObject::invokeMethod(vis,"step",Q_ARG(QVariant,QVariant(1.0/60)));}
+      check(snake->property("length").toInt()>=before,"the snake keeps its length or grows as it moves");}
     b->setMotion(false);QTest::qWait(20);check(!vis->property("running").toBool(),"without motion the visualizer holds still");b->setMotion(true);
     delete vis;}}
   fprintf(stdout,"RENDERER %d\n",int(w->rendererInterface()->graphicsApi()));

@@ -186,7 +186,7 @@ Item {
         MDivider {}
         // The visualizer's quick switch: choosing the one already on turns it off.
         Repeater {
-            model:[{key:"pixelRain",label:"Pixel rain"}]
+            model:[{key:"pixelRain",label:"Pixel rain"},{key:"snake",label:"Snake"}]
             MMenuItem {required property var modelData;objectName:"immersiveVisualizer_"+modelData.key;text:modelData.label;checkable:true
                 checked:app.visualizer===modelData.key;onTriggered:app.visualizer=app.visualizer===modelData.key?"off":modelData.key}
         }

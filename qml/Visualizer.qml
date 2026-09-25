@@ -41,6 +41,13 @@ Item {
         lastWave = clock
         waveAge = 0
         waveStrength = Math.min(1, Math.max(0.3, strength))
+        // Snake's food goes where the loudest band is drawn.
+        let loudest = 0
+        for (let i = 1; i < 16; ++i)
+            if ((bands[i] || 0) > (bands[loudest] || 0))
+                loudest = i
+        if (snakeLoader.item)
+            snakeLoader.item.beat(waveStrength, (loudest + 0.5) / 16)
         return true
     }
     function step(dt) {
@@ -60,6 +67,8 @@ Item {
         // A short surge right after a beat.
         const surge = waveAge < 0.3 ? 1 + 1.5 * waveStrength * (1 - waveAge / 0.3) : 1
         flow += dt * (2 + 7 * level) * surge
+        if (snakeLoader.item)
+            snakeLoader.item.advance(dt)
     }
     Connections {
         target: app
@@ -130,6 +139,20 @@ Item {
             property color cover: vis.coverColor
             property color head: vis.headColor
             fragmentShader: "qrc:/shaders/pixelrain.frag.qsb"
+        }
+    }
+
+    Loader {
+        id: snakeLoader
+        anchors.fill: parent
+        active: vis.kind === "snake"
+        sourceComponent: SnakeField {
+            objectName: "snake"
+            level: vis.running || vis.level > 0.02 ? vis.level : 0.4
+            head: vis.headColor
+            body: vis.trailColor
+            food: vis.coverColor
+            guards: vis.guardRects
         }
     }
 
