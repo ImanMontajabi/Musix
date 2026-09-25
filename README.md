@@ -109,6 +109,8 @@ Your data lives in `~/Library/Application Support/Sung/sung/`, settings in `~/Li
 
 **"Musix is damaged and can't be opened."** The download is corrupt, or the quarantine flag was cleared oddly. Verify the DMG against `SHA256SUMS.txt` on the release and download it again.
 
+**The Dock icon keeps bouncing and Musix never opens.** Something is holding the launch before any of Musix's own code runs, so no window, error or Gatekeeper dialog appears. Third-party security software can do this — CleanMyMac's real-time protection, for example — and it can also remove Musix without asking. Check that app's history for Musix, add an exception for `Musix.app`, and restore or reinstall Musix if it was removed. Then force quit Musix and open it again. Your library and settings are not affected.
+
 **macOS says the app needs a newer version of macOS.** Musix needs macOS 14 or later. Musix 0.12.0 needed macOS 27 by accident; that was fixed in 0.13.0.
 
 **A song will not play.** Playback depends on YouTube's availability, your region and the network. Musix buffers a song before playing it, so starting can take a moment. When YouTube changes how audio is served, the app refreshes its own resolver in the background — at most once a day, and immediately after a failure — keeping the last working version if an update is broken. There is nothing to run by hand.
