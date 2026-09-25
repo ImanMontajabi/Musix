@@ -54,7 +54,7 @@ endif()
 # directory default stays off so the test executables keep the plain paths the
 # harness and the README both name.
 set(CMAKE_MACOSX_BUNDLE FALSE)
-qt_add_executable(musix src/updatechecker.cpp src/updatechecker.h src/smoketest.cpp src/smoketest.h src/profile.h src/windowresources.h src/artworkurl.h src/desktoptheme.cpp src/desktoptheme.h src/main.cpp src/roundedart.cpp src/roundedart.h src/motionartwork.cpp src/motionartwork.h src/windowchrome.h ${SUNG_BACKEND_SOURCES})
+qt_add_executable(musix src/singleinstance.h src/updatechecker.cpp src/updatechecker.h src/smoketest.cpp src/smoketest.h src/profile.h src/windowresources.h src/artworkurl.h src/desktoptheme.cpp src/desktoptheme.h src/main.cpp src/roundedart.cpp src/roundedart.h src/motionartwork.cpp src/motionartwork.h src/windowchrome.h ${SUNG_BACKEND_SOURCES})
 target_link_libraries(musix PRIVATE Qt6::Core Qt6::Gui Qt6::Quick Qt6::Qml Qt6::QuickControls2 Qt6::Multimedia Qt6::Network Qt6::Svg)
 # Same shape as the MPRIS split above: one of the two implementations is
 # compiled, never both, so neither platform carries a stub of the other.
@@ -154,6 +154,10 @@ if(BUILD_TESTING)
  target_link_libraries(musix-crossfade-tests PRIVATE ${SUNG_BACKEND_LIBS} Qt6::Test)
  add_test(NAME crossfade COMMAND musix-crossfade-tests)
  set_tests_properties(crossfade PROPERTIES TIMEOUT 400 ENVIRONMENT "QT_QPA_PLATFORM=${SUNG_MEDIA_TEST_QPA};SUNG_FIXTURE_HELPER=${CMAKE_CURRENT_SOURCE_DIR}/tests/catalog_fixture.py;QT_FFMPEG_DECODING_HW_DEVICE_TYPES=,;QT_FFMPEG_ENCODING_HW_DEVICE_TYPES=,")
+ qt_add_executable(musix-singleinstance-tests tests/singleinstance_test.cpp src/singleinstance.h)
+ target_include_directories(musix-singleinstance-tests PRIVATE src)
+ target_link_libraries(musix-singleinstance-tests PRIVATE Qt6::Core Qt6::Network Qt6::Test)
+ add_test(NAME single-instance COMMAND musix-singleinstance-tests)
  qt_add_executable(musix-analysis-tests tests/audioanalysis_test.cpp src/audioanalysis.cpp src/audioanalysis.h src/audiolevels.h)
  target_include_directories(musix-analysis-tests PRIVATE src)
  target_compile_definitions(musix-analysis-tests PRIVATE MUSIX_SOURCE_DIR="${CMAKE_SOURCE_DIR}")

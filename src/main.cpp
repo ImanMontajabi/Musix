@@ -22,6 +22,7 @@
 #include "releasenotifier.h"
 #endif
 #include <QLocalSocket>
+#include "singleinstance.h"
 #include <QNetworkAccessManager>
 #include <QNetworkDiskCache>
 #include <QPainter>
@@ -117,19 +118,14 @@ int main(int argc, char **argv) {
   // A run on its own profile is a separate instance: it must neither hand its
   // arguments to the real Musix nor take the socket from it.
   const bool alone = args.contains("--isolated") || Profile::isolated();
-  QLocalSocket peer;
-  peer.connectToServer("sung-" + QString::number(getuid()));
-  if (!alone && peer.waitForConnected(120)) {
-    peer.write(args.size() > 1 ? args.last().toUtf8() : QByteArray("raise"));
-    peer.flush();
-    peer.waitForBytesWritten(150);
+  const auto instanceName = "sung-" + QString::number(getuid());
+  if (!alone && SingleInstance::handOff(instanceName, args.size() > 1 ? args.last().toUtf8() : QByteArray("raise")))
     return 0;
-  }
   QLocalServer server;
   if (!alone) {
-    QLocalServer::removeServer("sung-" + QString::number(getuid()));
+    QLocalServer::removeServer(instanceName);
     server.setSocketOptions(QLocalServer::UserAccessOption);
-    server.listen("sung-" + QString::number(getuid()));
+    server.listen(instanceName);
   }
   QQuickStyle::setStyle("Basic");
   QFont font(QFontDatabase::families().contains("Google Sans Flex")
@@ -215,6 +211,7 @@ int main(int argc, char **argv) {
   QObject::connect(&server, &QLocalServer::newConnection, &app, [&] {
     auto socket = server.nextPendingConnection();
     QObject::connect(socket, &QLocalSocket::readyRead, &backend, [&, socket] {
+      SingleInstance::acknowledge(socket);
       auto v = QString::fromUtf8(socket->readAll());
       if (v.startsWith("https://"))
         backend.openLink(v);
