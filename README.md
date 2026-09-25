@@ -109,7 +109,9 @@ Your data lives in `~/Library/Application Support/Sung/sung/`, settings in `~/Li
 
 **"Musix is damaged and can't be opened."** The download is corrupt, or the quarantine flag was cleared oddly. Verify the DMG against `SHA256SUMS.txt` on the release and download it again.
 
-**The Dock icon keeps bouncing and Musix never opens.** Something is holding the launch before any of Musix's own code runs, so no window, error or Gatekeeper dialog appears. Third-party security software can do this — CleanMyMac's real-time protection, for example — and it can also remove Musix without asking. Check that app's history for Musix, add an exception for `Musix.app`, and restore or reinstall Musix if it was removed. Then force quit Musix and open it again. Your library and settings are not affected.
+**The Dock icon keeps bouncing and Musix never opens.** macOS is holding the launch before any of Musix's own code runs, so no window, error or Gatekeeper dialog appears. It has been seen once, on macOS 27, where it cleared by itself within about half an hour; the cause is still being looked into. Force quit Musix, wait a few minutes and open it again. Your library and settings are not affected.
+
+**Musix has disappeared from Applications.** Security or cleaning software may have removed it. Check that app's history for Musix, add an exception for `Musix.app`, and install it again.
 
 **macOS says the app needs a newer version of macOS.** Musix needs macOS 14 or later. Musix 0.12.0 needed macOS 27 by accident; that was fixed in 0.13.0.
 
