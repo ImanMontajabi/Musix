@@ -77,10 +77,13 @@ Item {
     Behavior on detailsOpacity { NumberAnimation { duration: Theme.exitDuration; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.effectsCurve } }
     NumberAnimation on opacity { from: 0; to: 1; duration: Theme.normal; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.effectsCurve }
     AmbientBackdrop { anchors.fill: parent; url: app.current.art || "" }
-    Visualizer { anchors.fill: parent }
+    // The rain keeps out from behind the cover, the text and the controls, so
+    // it can be bright everywhere else without costing them contrast.
+    Visualizer { anchors.fill: parent; guards: [topControls, details, immersiveLyrics, immersiveSingAlong, transport, seekRow] }
     ColumnLayout {
         anchors.fill: parent; anchors.margins: player.width<900?Theme.space24:40; spacing: Theme.space24
         RowLayout {
+            id: topControls
             objectName: "immersiveTopControls"
             Layout.fillWidth: true; opacity: player.controlsShown?1:0
             Behavior on opacity {NumberAnimation {duration:Theme.normal;easing.type:Easing.BezierSpline;easing.bezierCurve:Theme.effectsCurve}}
@@ -97,6 +100,7 @@ Item {
             Layout.fillWidth: true; Layout.fillHeight: true; Layout.minimumHeight: 0; spacing: Math.max(24,player.width*0.055)
             Item {Layout.fillWidth:true;visible:player.displayedLayout==="artwork"}
             ColumnLayout {
+                id: details
                 visible:player.displayedLayout!=="lyrics" && player.displayedLayout!=="singalong"
                 Layout.preferredWidth: player.coverSize; Layout.minimumWidth: player.coverSize; Layout.maximumWidth: player.coverSize; Layout.fillHeight: true; Layout.minimumHeight: 0; spacing: Theme.space12
                 Item { Layout.fillHeight: true }
@@ -141,6 +145,7 @@ Item {
         // the standard colour style: a vibrant bar over an arbitrary cover
         // would fight whatever colour the artwork happens to be.
         MFloatingToolbar {
+            id: transport
             objectName: "immersiveToolbar"
             Layout.alignment: Qt.AlignHCenter
             implicitHeight: 80
@@ -155,6 +160,7 @@ Item {
             ]
         }
         RowLayout {
+            id: seekRow
             Layout.alignment: Qt.AlignHCenter; Layout.preferredWidth: Math.min(800,player.width-80); spacing: Theme.space12; opacity:player.controlsShown?1:0
             Behavior on opacity {NumberAnimation {duration:Theme.normal;easing.type:Easing.BezierSpline;easing.bezierCurve:Theme.effectsCurve}}
             SungText { font.features: {"tnum": 1}; text: app.formatTime(app.position); color: Theme.muted; font.pixelSize: Theme.labelMedium; labelRole: true; Layout.preferredWidth: 40 }

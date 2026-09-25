@@ -95,6 +95,89 @@ private slots:
     QVERIFY2(high[3] > high[0] + 10 && high[3] > high[1] + 10, "3.5 kHz belongs to the fourth band");
   }
 
+  void kicksPeakOnTheirFrame() {
+    // A kick every half second: 52 Hz with a fast decay, the shape of a real
+    // one. Each must peak in the bass band in the frame it starts in.
+    std::vector<float> out(size_t(4 * Rate) * 2);
+    for (size_t i = 0; i < out.size() / 2; ++i) {
+      const double t = double(i) / Rate, since = std::fmod(t, 0.5);
+      out[i * 2] = out[i * 2 + 1] = float(0.9 * std::sin(2 * Pi * 52 * t) * std::exp(-9 * since));
+    }
+    const auto e = build(out);
+    QString trace;
+    for (int f = 0; f < 32; ++f)
+      trace += QString::number(quint8(e.levels[f * 5])) + (f % 15 == 14 ? " | " : " ");
+    qInfo().noquote() << "bass by frame:" << trace;
+    for (int kick = 0; kick < 7; ++kick) {
+      const int start = kick * 15;
+      int best = start;
+      for (int f = start; f < start + 15; ++f)
+        if (quint8(e.levels[f * 5]) > quint8(e.levels[best * 5]))
+          best = f;
+      QVERIFY2(best == start, qPrintable(QString("kick %1 peaks at frame %2, not %3").arg(kick).arg(best).arg(start)));
+    }
+  }
+
+  static std::vector<float> kicks(double seconds, double every) {
+    std::vector<float> out(size_t(seconds * Rate) * 2);
+    for (size_t i = 0; i < out.size() / 2; ++i) {
+      const double t = double(i) / Rate, since = std::fmod(t, every);
+      out[i * 2] = out[i * 2 + 1] = float(0.9 * std::sin(2 * Pi * 52 * t) * std::exp(-9 * since) + 0.05 * std::sin(2 * Pi * 880 * t));
+    }
+    return out;
+  }
+
+  void everyKickIsABeatOnItsFrame() {
+    const auto e = build(kicks(4, 0.5));
+    QCOMPARE(e.beats.size(), qsizetype(e.frames()));
+    QList<int> found;
+    for (int f = 0; f < e.frames(); ++f)
+      if (quint8(e.beats[f]))
+        found << f;
+    QCOMPARE(found, (QList<int>{0, 15, 30, 45, 60, 75, 90, 105}));
+  }
+
+  void aSteadyToneHasOnlyItsStart() {
+    const auto e = build(tone(60, -12, 4));
+    int count = 0;
+    for (char b : e.beats)
+      count += quint8(b) > 0;
+    QVERIFY2(count <= 1, qPrintable(QString::number(count)));
+  }
+
+  void beatsAreNeverCloserThanTheFlashLimit() {
+    // Kicks every 0.2 s would be five a second; what is drawn stays under three.
+    const auto e = build(kicks(4, 0.2));
+    int last = -100, count = 0;
+    for (int f = 0; f < e.frames(); ++f)
+      if (quint8(e.beats[f])) {
+        QVERIFY2(f - last >= 11, qPrintable(QString("beats at %1 and %2").arg(last).arg(f)));
+        last = f;
+        ++count;
+      }
+    QVERIFY(count >= 8);
+  }
+
+  void aToneLandsInItsSpectrumBand() {
+    const auto e = build(tone(1000, -12, 2));
+    const auto s = e.spectrumAt(1000);
+    int best = 0;
+    for (int b = 1; b < Envelope::SpectrumBands; ++b)
+      if (s[b] > s[best])
+        best = b;
+    const double c = SpectrumBank::center(best);
+    QVERIFY2(c > 700 && c < 1400, qPrintable(QString::number(c)));
+  }
+
+  void aBeatIsSeenOnceAsPositionsAdvance() {
+    const auto e = build(kicks(2, 0.5));
+    // The frame at 500 ms holds a beat: a window that reaches it sees it, the
+    // next window from there does not.
+    QVERIFY(e.beatBetween(460, 510) > 0.5);
+    QCOMPARE(e.beatBetween(510, 560), 0.0);
+    QCOMPARE(e.beatBetween(100, 200), 0.0);
+  }
+
   void framesFollowDuration() {
     const auto e = build(tone(440, -18, 10));
     QCOMPARE(e.frames(), 10 * Envelope::FramesPerSecond);
@@ -180,6 +263,8 @@ private slots:
     QVERIFY(AudioAnalysis::write(path, e));
     const auto back = AudioAnalysis::read(path);
     QCOMPARE(back.levels, e.levels);
+    QCOMPARE(back.spectrum, e.spectrum);
+    QCOMPARE(back.beats, e.beats);
     QCOMPARE(back.loudness, e.loudness);
     // Anything else in its place is ignored, never trusted.
     QFile junk(dir.filePath("b.env"));

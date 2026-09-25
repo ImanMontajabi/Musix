@@ -122,6 +122,16 @@ class Backend : public QObject {
   Q_PROPERTY(QVariantMap current READ current NOTIFY trackChanged)
   Q_PROPERTY(int currentIndex READ currentIndex NOTIFY trackChanged)
   Q_PROPERTY(QVariantList audioLevels READ audioLevels NOTIFY audioLevelsChanged)
+  // The visualizers' view of the song: sixteen bands, bass first, at the
+  // position being heard; beats arrive as beat(strength).
+  Q_PROPERTY(QVariantList spectrum READ spectrum NOTIFY spectrumChanged)
+  Q_PROPERTY(qint64 heardPosition READ heardPosition NOTIFY spectrumChanged)
+  // What the output device reports as its delay, and whether visuals wait
+  // for it; with earbuds the sound arrives a few hundred milliseconds late.
+  Q_PROPERTY(double outputLatencyMs READ outputLatencyMs NOTIFY outputLatencyChanged)
+  Q_PROPERTY(bool visualSync READ visualSync WRITE setVisualSync NOTIFY settingsChanged)
+  // Development builds only: the envelope drawn over the full-screen player.
+  Q_PROPERTY(bool levelOverlay READ levelOverlay CONSTANT)
   Q_PROPERTY(bool playing READ playing NOTIFY playbackChanged)
   Q_PROPERTY(bool resolving READ resolving NOTIFY playbackChanged)
   Q_PROPERTY(bool buffering READ buffering NOTIFY playbackChanged)
@@ -408,6 +418,12 @@ public:
   bool precisePointer() const {return m_settings.value("precisePointer",false).toBool();}
   void setPrecisePointer(bool precise) {if(precisePointer()==precise)return;m_settings.setValue("precisePointer",precise);emit settingsChanged();}
   QString colorVariant() const {return m_settings.value("colorVariant","tonalSpot").toString();}
+  QVariantList spectrum() const { return m_spectrum; }
+  qint64 heardPosition() const { return m_heardPosition; }
+  double outputLatencyMs() const { return m_outputLatencyMs; }
+  bool visualSync() const { return m_settings.value("visualSync", true).toBool(); }
+  void setVisualSync(bool on) { if (visualSync() == on) return; m_settings.setValue("visualSync", on); emit settingsChanged(); }
+  bool levelOverlay() const;
   QString visualizer() const {const auto v=m_settings.value("visualizer","off").toString();return QStringList{"off","pixelRain","snake"}.contains(v)?v:QString("off");}
   void setVisualizer(const QString &name) {if(!QStringList{"off","pixelRain","snake"}.contains(name)||visualizer()==name)return;m_settings.setValue("visualizer",name);emit settingsChanged();}
   void setColorVariant(const QString &name) {if(colorVariant()==name)return;m_settings.setValue("colorVariant",name);emit settingsChanged();}
@@ -619,6 +635,9 @@ signals:
   void trackChanged();
   void playbackChanged();
   void audioLevelsChanged();
+  void spectrumChanged();
+  void outputLatencyChanged();
+  void beat(double strength);
   void uiActiveChanged();
   void normalizationChanged();
   void positionChanged();
@@ -825,6 +844,11 @@ private:
   AudioAnalysis m_analysis;
   Envelope m_envelope, m_spareEnvelope;
   QTimer m_envelopeTick;
+  QVariantList m_spectrum = QVariantList(Envelope::SpectrumBands, 0.0);
+  qint64 m_heardPosition = 0, m_lastHeard = -1;
+  double m_outputLatencyMs = 0;
+  int m_latencyCheck = 0;
+  void refreshOutputLatency();
   // Media positions arrive in steps; between them the clock carries on.
   qint64 m_envelopeAnchor = -1;
   QElapsedTimer m_envelopeClock;

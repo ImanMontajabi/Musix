@@ -11,7 +11,7 @@
 
 namespace {
 constexpr quint32 Magic = 0x4d584556; // "MXEV"
-constexpr quint16 Version = 1;
+constexpr quint16 Version = 2; // 2: spectrum and beats
 // A mix longer than this is still worth levelling, but its meters would cost
 // more to keep than they are worth.
 constexpr qint64 LongestSeconds = 4 * 60 * 60;
@@ -29,6 +29,135 @@ std::array<double, Envelope::Bands> Envelope::at(qint64 positionMs) const {
   for (int band = 0; band < Bands; ++band)
     out[band] = row[band] / 100.0;
   return out;
+}
+
+std::array<double, Envelope::SpectrumBands> Envelope::spectrumAt(qint64 positionMs) const {
+  std::array<double, SpectrumBands> out{};
+  const qint64 frame = frameAt(positionMs);
+  if (frame < 0 || frame >= spectrum.size() / SpectrumBands)
+    return out;
+  const auto *row = reinterpret_cast<const quint8 *>(spectrum.constData()) + frame * SpectrumBands;
+  for (int band = 0; band < SpectrumBands; ++band)
+    out[band] = row[band] / 100.0;
+  return out;
+}
+
+double Envelope::beatBetween(qint64 fromMs, qint64 toMs) const {
+  // Frames strictly after the one already shown, up to the one now due.
+  const qint64 first = std::max<qint64>(0, frameAt(fromMs) + 1), last = std::min<qint64>(frameAt(toMs), beats.size() - 1);
+  double strongest = 0;
+  for (qint64 f = first; f <= last && last - first < 60; ++f)
+    strongest = std::max(strongest, quint8(beats[f]) / 100.0);
+  return strongest;
+}
+
+QVariantList Envelope::mixSpectrum(const std::array<double, SpectrumBands> &a, double weightA,
+                                   const std::array<double, SpectrumBands> &b, double weightB) {
+  QVariantList list;
+  const double total = weightA + weightB;
+  const double wa = total > 0 ? weightA / total : 0, wb = total > 0 ? weightB / total : 0;
+  for (int band = 0; band < SpectrumBands; ++band)
+    list.append(std::max(a[band] * std::min(1.0, 2 * wa), b[band] * std::min(1.0, 2 * wb)));
+  return list;
+}
+
+void SpectrumBank::configure(int sampleRate) {
+  filters = {};
+  energy = {};
+  samples = 0;
+  for (int band = 0; band < Envelope::SpectrumBands; ++band) {
+    const double f = std::min(center(band), sampleRate * 0.45);
+    const double w = 2 * 3.14159265358979323846 * f / sampleRate;
+    const double alpha = std::sin(w) / (2 * 2.2), denominator = 1 + alpha;
+    filters[band].b = alpha / denominator;
+    filters[band].a1 = -2 * std::cos(w) / denominator;
+    filters[band].a2 = (1 - alpha) / denominator;
+  }
+}
+
+void SpectrumBank::process(const float *interleaved, qsizetype frames, int channels) {
+  for (qsizetype frame = 0; frame < frames; ++frame) {
+    double x = 0;
+    for (int c = 0; c < channels; ++c)
+      x += interleaved[frame * channels + c];
+    x = std::isfinite(x) ? std::clamp(x / std::max(1, channels), -1.0, 1.0) : 0;
+    for (int band = 0; band < Envelope::SpectrumBands; ++band) {
+      auto &f = filters[band];
+      const double y = f.b * x + f.z1;
+      f.z1 = -f.a1 * y + f.z2;
+      f.z2 = -f.b * x - f.a2 * y;
+      energy[band] += y * y;
+    }
+  }
+  for (auto &f : filters) {
+    if (std::abs(f.z1) < 1e-15) f.z1 = 0;
+    if (std::abs(f.z2) < 1e-15) f.z2 = 0;
+  }
+  samples += frames;
+}
+
+std::array<double, Envelope::SpectrumBands> SpectrumBank::take() {
+  std::array<double, Envelope::SpectrumBands> out{};
+  for (int band = 0; band < Envelope::SpectrumBands; ++band) {
+    const double rms = samples > 0 ? std::sqrt(energy[band] / samples) : 0;
+    out[band] = std::clamp((20 * std::log10(std::max(rms, 1e-6)) + 54) / 48, 0.0, 1.0);
+  }
+  energy = {};
+  samples = 0;
+  return out;
+}
+
+QByteArray detectBeats(const QByteArray &spectrum) {
+  constexpr int Bands = Envelope::SpectrumBands, Spacing = 11, Window = 30;
+  const int frames = int(spectrum.size() / Bands);
+  QByteArray beats(frames, 0);
+  if (frames < 3)
+    return beats;
+  // The low end in dB: power summed over the bands centred below 160 Hz.
+  std::vector<double> low(frames);
+  for (int f = 0; f < frames; ++f) {
+    double power = 0;
+    for (int band = 0; band < Bands && SpectrumBank::center(band) < 160; ++band)
+      power += std::pow(10.0, ((quint8(spectrum[f * Bands + band]) / 100.0) * 48 - 54) / 10);
+    low[f] = 10 * std::log10(std::max(power, 1e-12));
+  }
+  // How far each frame rises above the two before it: a kick is a jump, not
+  // a level, which is why a sustained bassline shows none.
+  // Before the first frame is the track's own floor, not absolute silence,
+  // which would make the opening a jump so big it hid the beats after it.
+  const double floor = *std::min_element(low.begin(), low.end());
+  std::vector<double> rise(frames, 0);
+  for (int f = 0; f < frames; ++f) {
+    const double before = f == 0 ? floor : std::max(low[f - 1], f > 1 ? low[f - 2] : floor);
+    rise[f] = std::max(0.0, low[f] - before);
+  }
+  std::vector<std::pair<double, int>> candidates;
+  for (int f = 0; f < frames; ++f) {
+    const int from = std::max(0, f - Window), to = std::min(frames - 1, f + Window);
+    double mean = 0, square = 0;
+    for (int g = from; g <= to; ++g) {
+      mean += rise[g];
+      square += rise[g] * rise[g];
+    }
+    const int n = to - from + 1;
+    mean /= n;
+    const double deviation = std::sqrt(std::max(0.0, square / n - mean * mean));
+    const double threshold = std::max(3.0, mean + 1.5 * deviation);
+    const bool peak = (f == 0 || rise[f] >= rise[f - 1]) && (f == frames - 1 || rise[f] > rise[f + 1]);
+    if (peak && rise[f] > threshold)
+      candidates.push_back({rise[f], f});
+  }
+  // Strongest first, and nothing within the spacing of one already taken.
+  std::sort(candidates.begin(), candidates.end(), [](auto a, auto b) { return a.first > b.first; });
+  std::vector<bool> blocked(frames, false);
+  for (const auto &[strength, f] : candidates) {
+    if (blocked[f])
+      continue;
+    beats[f] = char(quint8(std::clamp(std::lround(strength / 12.0 * 100), 20L, 100L)));
+    for (int g = std::max(0, f - Spacing + 1); g < std::min(frames, f + Spacing); ++g)
+      blocked[g] = true;
+  }
+  return beats;
 }
 
 QVariantList Envelope::toList(const std::array<double, Bands> &levels) {
@@ -137,6 +266,7 @@ double LoudnessIntegrator::loudness() const {
 EnvelopeBuilder::EnvelopeBuilder(int sampleRate, int channels)
     : m_rate(sampleRate), m_channels(channels), m_frameSize(std::max(1, sampleRate / Envelope::FramesPerSecond)) {
   m_levels.configure(sampleRate, channels);
+  m_spectrum.configure(sampleRate);
   m_loudness.configure(sampleRate, channels);
 }
 
@@ -146,23 +276,31 @@ void EnvelopeBuilder::feed(const float *interleaved, qsizetype frames) {
   while (offset < frames) {
     const qsizetype take = std::min<qsizetype>(frames - offset, m_frameSize - m_pending);
     m_levels.process(interleaved + offset * m_channels, take, m_channels, m_rate);
+    m_spectrum.process(interleaved + offset * m_channels, take, m_channels);
     m_pending += int(take);
     offset += take;
     if (m_pending == m_frameSize) {
       for (const auto &v : m_levels.takeLevels())
         m_out.append(char(quint8(std::lround(std::clamp(v.toDouble(), 0.0, 1.0) * 100))));
+      for (double v : m_spectrum.take())
+        m_spectrumOut.append(char(quint8(std::lround(v * 100))));
       m_pending = 0;
     }
   }
 }
 
 Envelope EnvelopeBuilder::finish() {
-  if (m_pending > m_frameSize / 2)
+  if (m_pending > m_frameSize / 2) {
     for (const auto &v : m_levels.takeLevels())
       m_out.append(char(quint8(std::lround(std::clamp(v.toDouble(), 0.0, 1.0) * 100))));
+    for (double v : m_spectrum.take())
+      m_spectrumOut.append(char(quint8(std::lround(v * 100))));
+  }
   m_pending = 0;
   Envelope envelope;
   envelope.levels = m_out;
+  envelope.spectrum = m_spectrumOut;
+  envelope.beats = detectBeats(m_spectrumOut);
   envelope.loudness = m_loudness.loudness();
   return envelope;
 }
@@ -330,7 +468,7 @@ bool AudioAnalysis::write(const QString &path, const Envelope &envelope) {
     return false;
   QDataStream out(&file);
   out.setVersion(QDataStream::Qt_6_5);
-  out << Magic << Version << quint16(Envelope::FramesPerSecond) << quint8(Envelope::Bands) << envelope.loudness << envelope.levels;
+  out << Magic << Version << quint16(Envelope::FramesPerSecond) << quint8(Envelope::Bands) << envelope.loudness << envelope.levels << envelope.spectrum << envelope.beats;
   return out.status() == QDataStream::Ok && file.commit();
 }
 
@@ -344,10 +482,15 @@ Envelope AudioAnalysis::read(const QString &path) {
   quint16 version = 0, fps = 0;
   quint8 bands = 0;
   Envelope envelope;
-  in >> magic >> version >> fps >> bands >> envelope.loudness >> envelope.levels;
+  in >> magic >> version;
+  // Anything written by another layout is simply analysed again.
+  if (magic != Magic || version != Version)
+    return {};
+  in >> fps >> bands >> envelope.loudness >> envelope.levels >> envelope.spectrum >> envelope.beats;
   // Anything written by another layout is simply analysed again.
   if (in.status() != QDataStream::Ok || magic != Magic || version != Version || fps != Envelope::FramesPerSecond ||
-      bands != Envelope::Bands || envelope.levels.size() % Envelope::Bands)
+      bands != Envelope::Bands || envelope.levels.size() % Envelope::Bands ||
+      envelope.spectrum.size() != qsizetype(envelope.frames()) * Envelope::SpectrumBands || envelope.beats.size() != envelope.frames())
     return {};
   return envelope;
 }

@@ -1835,12 +1835,11 @@ void runInteractionRefinementTests(Backend *b,QQuickWindow *w){
    auto vis=qobject_cast<QQuickItem*>(visComponent.create(qmlContext(w)));check(vis,"visualizer creates");
    if(vis){vis->setProperty("kind","pixelRain");vis->setParentItem(w->contentItem());vis->setSize(QSizeF(400,300));QTest::qWait(50);
     check(findItem(vis,"pixelRain")!=nullptr,"pixel rain is a shader item");
-    int bursts=0;double last=-1;
-    for(int frame=0;frame<180;++frame){vis->setProperty("bassSlow",0.1);vis->setProperty("bassFast",0.9);
-      QMetaObject::invokeMethod(vis,"step",Q_ARG(QVariant,QVariant(1.0/60)));
-      const double at=vis->property("lastBurst").toDouble();if(at!=last){++bursts;last=at;}}
-    fprintf(stdout,"VISUALIZER bursts in 3 s: %d\n",bursts);
-    check(bursts>=6&&bursts<=9,"bursts are limited to three a second");
+    int waves=0;
+    for(int frame=0;frame<180;++frame){QVariant drawn;QMetaObject::invokeMethod(vis,"hit",Q_RETURN_ARG(QVariant,drawn),Q_ARG(QVariant,QVariant(1.0)));if(drawn.toBool())++waves;
+      QMetaObject::invokeMethod(vis,"step",Q_ARG(QVariant,QVariant(1.0/60)));}
+    fprintf(stdout,"VISUALIZER waves in 3 s with a beat every frame: %d\n",waves);
+    check(waves>=6&&waves<=9,"beat waves are limited to three a second");
     b->setMotion(false);QTest::qWait(20);check(!vis->property("running").toBool(),"without motion the visualizer holds still");b->setMotion(true);
     delete vis;}}
   fprintf(stdout,"RENDERER %d\n",int(w->rendererInterface()->graphicsApi()));

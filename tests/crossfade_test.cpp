@@ -510,6 +510,24 @@ private slots:
     b->stop();
   }
 
+  // A song analysed on an earlier run is read from the cache the moment it
+  // plays again: nothing announces it, so it must not wait for a signal.
+  void aCachedAnalysisIsUsedAfterARestart() {
+    {
+      auto first = playingAlone("Tone one");
+      QVERIFY(first);
+      QTRY_VERIFY_WITH_TIMEOUT(first->playing(), 10000);
+      QTRY_VERIFY_WITH_TIMEOUT(first->m_envelope.isValid(), 15000);
+      first->stop();
+    }
+    auto again = playingAlone("Tone one");
+    QVERIFY(again);
+    QTRY_VERIFY_WITH_TIMEOUT(again->playing(), 10000);
+    QTRY_VERIFY_WITH_TIMEOUT(again->m_envelope.isValid(), 1500);
+    QTRY_VERIFY_WITH_TIMEOUT(loudest(again->audioLevels()) > 0.2, 3000);
+    again->stop();
+  }
+
   // Levelling works from the analysed loudness, on the first play, for a file
   // with no tags.
   void levellingUsesTheAnalysis() {

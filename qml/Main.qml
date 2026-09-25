@@ -13,7 +13,7 @@ ApplicationWindow {
     width: 1180; height: 800
     minimumWidth: 480; minimumHeight: 580
     font.family: Theme.fontFamily
-    title: app.current.title ? app.current.title + " · Musix" : "Musix"
+    title: app.current.title ? app.current.title + " · " + Qt.application.displayName : Qt.application.displayName
     color: Theme.background
     // macOS draws its title bar over the window, so the app's own background
     // can run the whole height and the traffic lights sit on it instead of on

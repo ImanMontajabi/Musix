@@ -22,13 +22,23 @@
 // seek, a pause or a different speed reads the right place without any clock
 // of its own.
 struct Envelope {
-  static constexpr int FramesPerSecond = 30, Bands = 5;
+  static constexpr int FramesPerSecond = 30, Bands = 5, SpectrumBands = 16;
   QByteArray levels; // frame-major, Bands per frame, 0..100
+  // What the visualizers draw: a finer spectrum, log-spaced from 40 Hz to
+  // 10 kHz, and where the beats are.
+  QByteArray spectrum; // frame-major, SpectrumBands per frame, 0..100
+  QByteArray beats;    // one per frame: 0, or the beat's strength 1..100
   double loudness = std::nan(""); // integrated, LUFS (ITU-R BS.1770)
   bool isValid() const { return !levels.isEmpty(); }
   int frames() const { return int(levels.size() / Bands); }
+  static qint64 frameAt(qint64 positionMs) { return positionMs < 0 ? -1 : positionMs * FramesPerSecond / 1000; }
   // Band levels 0..1 at a position; silence outside the recording.
   std::array<double, Bands> at(qint64 positionMs) const;
+  std::array<double, SpectrumBands> spectrumAt(qint64 positionMs) const;
+  // The strongest beat, 0..1, in the frames after `fromMs` up to `toMs`.
+  double beatBetween(qint64 fromMs, qint64 toMs) const;
+  static QVariantList mixSpectrum(const std::array<double, SpectrumBands> &a, double weightA,
+                                  const std::array<double, SpectrumBands> &b, double weightB);
   // Two decks overlapping: each contributes in proportion to how loud it is
   // in the mix, and the louder band wins.
   static QVariantList mix(const std::array<double, Bands> &a, double weightA, const std::array<double, Bands> &b, double weightB);
@@ -52,10 +62,33 @@ public:
   double loudness() const;
 };
 
+// Sixteen band-pass filters on the mono mix, log-spaced from 40 Hz to 10 kHz;
+// the same filter as the meters, a little narrower so neighbours stay apart.
+class SpectrumBank {
+  struct Filter { double b = 0, a1 = 0, a2 = 0, z1 = 0, z2 = 0; };
+  std::array<Filter, Envelope::SpectrumBands> filters{};
+  std::array<double, Envelope::SpectrumBands> energy{};
+  qint64 samples = 0;
+public:
+  static double center(int band) { return 40.0 * std::pow(10000.0 / 40.0, band / double(Envelope::SpectrumBands - 1)); }
+  void configure(int sampleRate);
+  void process(const float *interleaved, qsizetype frames, int channels);
+  // 0..1 on the same scale as the meters.
+  std::array<double, Envelope::SpectrumBands> take();
+};
+
+// Beats, from the finished spectrum: where the low end (below 160 Hz) jumps
+// above its own recent peak by more than is usual around it. At most one per
+// 11 frames (0.37 s), the stronger kept, so what draws them can never flash
+// more than three times a second.
+QByteArray detectBeats(const QByteArray &spectrum);
+
 // Decodes a file with the bundled ffmpeg and builds its envelope. Kept apart
 // from the process so tests can feed it samples directly.
 class EnvelopeBuilder {
   AudioLevels m_levels;
+  SpectrumBank m_spectrum;
+  QByteArray m_spectrumOut;
   LoudnessIntegrator m_loudness;
   int m_rate, m_channels, m_frameSize, m_pending = 0;
   QByteArray m_out;

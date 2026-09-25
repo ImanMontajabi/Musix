@@ -102,7 +102,9 @@ int main(int argc, char **argv) {
     qputenv("QT_FFMPEG_ENCODING_HW_DEVICE_TYPES", ",");
   QGuiApplication app(argc, argv);
   app.setApplicationName("sung");
-  app.setApplicationDisplayName("Musix");
+  // A run on its own profile names itself, so it is never mistaken for the
+  // Musix that holds the real library.
+  app.setApplicationDisplayName(Profile::isolated() ? "Musix (test)" : "Musix");
   app.setOrganizationName("Sung");
   app.setApplicationVersion(MUSIX_VERSION);
   Profile::install();

@@ -1,4 +1,5 @@
 #include "backend.h"
+#include "outputlatency.h"
 #include "profile.h"
 #include "artworkurl.h"
 #include <QLocale>
@@ -2445,6 +2446,12 @@ void Backend::analyseSource(const QVariantMap &track,const QString &file,bool ur
   const auto id=analysisKey(track);
   if(id.isEmpty()||file.isEmpty())return;
   m_analysis.request(id,file,urgent);
+  // Already analysed, on an earlier run: nothing will announce it, so the
+  // song that is playing picks it up here.
+  if(urgent&&id==analysisKey(current())&&!m_envelope.isValid()&&m_analysis.envelope(id).isValid()){
+    refreshEnvelopes();
+    updateNormalization();
+  }
 }
 
 // The next song in the queue, when it is already a file, is analysed while
@@ -2459,7 +2466,7 @@ void Backend::analyseUpcoming() {
 void Backend::refreshEnvelopes() {
   m_envelope=m_analysis.envelope(analysisKey(current()));
   m_spareEnvelope=m_handoffIndex>=0&&m_handoffIndex<m_queue.count()?m_analysis.envelope(analysisKey(m_queue.get(m_handoffIndex))):Envelope();
-  m_envelopeAnchor=-1;
+  m_envelopeAnchor=-1;m_lastHeard=-1;m_latencyCheck=0;
   updateEnvelopeTick();
 }
 
@@ -2479,11 +2486,44 @@ qint64 Backend::envelopePosition() {
 
 void Backend::publishEnvelope() {
   if(!m_envelope.isValid()||!playing()||!m_uiActive||!motion()){updateEnvelopeTick();return;}
-  const auto heard=m_envelope.at(envelopePosition());
+  // Every couple of seconds: earbuds connecting or leaving change the delay.
+  if(m_latencyCheck--<=0){m_latencyCheck=60;refreshOutputLatency();}
+  // What is being heard now is what left the player one device-latency ago.
+  const qint64 delay=visualSync()?qint64(m_outputLatencyMs):0;
+  const qint64 at=envelopePosition()-delay,spareAt=spareDeck().position()-delay;
   const auto levels=m_crossfading
-    ? Envelope::mix(heard,activeAudio().volume(),m_spareEnvelope.at(spareDeck().position()),spareAudio().volume())
-    : Envelope::toList(heard);
+    ? Envelope::mix(m_envelope.at(at),activeAudio().volume(),m_spareEnvelope.at(spareAt),spareAudio().volume())
+    : Envelope::toList(m_envelope.at(at));
   if(levels!=m_audioLevels){m_audioLevels=levels;emit audioLevelsChanged();}
+  m_spectrum=m_crossfading
+    ? Envelope::mixSpectrum(m_envelope.spectrumAt(at),activeAudio().volume(),m_spareEnvelope.spectrumAt(spareAt),spareAudio().volume())
+    : Envelope::mixSpectrum(m_envelope.spectrumAt(at),1,{},0);
+  m_heardPosition=at;
+  emit spectrumChanged();
+  // Beats passed since the last tick, as long as that was a step rather than
+  // a seek; a seek lands without replaying what it jumped over.
+  if(m_lastHeard>=0&&at>m_lastHeard&&at-m_lastHeard<500)
+    if(const double strength=m_envelope.beatBetween(m_lastHeard,at);strength>0){
+      if(levelOverlay())qInfo("beat %.2f heard %lld ms (tick from %lld) played %lld ms delay %lld ms",strength,at,m_lastHeard,envelopePosition(),delay);
+      emit beat(strength);
+    }
+  m_lastHeard=at;
+}
+
+void Backend::refreshOutputLatency() {
+  const auto device=activeAudio().device();
+  const double latency=::outputLatencyMs(device.isNull()?QByteArray():device.id());
+  if(std::abs(latency-m_outputLatencyMs)<1)return;
+  m_outputLatencyMs=latency;
+  emit outputLatencyChanged();
+}
+
+bool Backend::levelOverlay() const {
+#ifdef SUNG_DIAGNOSTICS
+  return qEnvironmentVariableIntValue("MUSIX_LEVEL_OVERLAY")==1;
+#else
+  return false;
+#endif
 }
 
 double Backend::analysedLoudness(const QString &id) {
