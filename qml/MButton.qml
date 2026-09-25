@@ -45,7 +45,20 @@ AbstractButton {
     // has it morph as well as recolour: a round icon button is full cornered
     // while it is off, medium once it is on, and small under the finger.
     property bool toggle: false
+    // The play button: a rounded square while paused, a circle while playing,
+    // the shape change carried by the same spring as any other.
     property bool morphPlayback:false
+    readonly property bool paused: morphPlayback && symbol === "play"
+    // While playing it breathes with the bass: how far the lowest band stands
+    // above its own recent average, so a steady bassline holds it still and a
+    // kick lifts it. Never more than a few percent.
+    readonly property bool pulsing: morphPlayback && Theme.motion && app.playing && visible && !busy
+    readonly property real bass: pulsing ? Number(app.audioLevels[0]) || 0 : 0
+    property real bassFast: bass
+    property real bassSlow: bass
+    Behavior on bassFast { enabled: control.pulsing; NumberAnimation { duration: 80 } }
+    Behavior on bassSlow { enabled: control.pulsing; NumberAnimation { duration: 900 } }
+    readonly property real pulse: pulsing ? Math.min(0.04, Math.max(0, bassFast - bassSlow) * 0.25) : 0
     property bool busy: false
     property bool confirmed: false
     function confirm() {confirmed=true;confirmation.restart();}
@@ -128,6 +141,7 @@ AbstractButton {
         // interaction states.
         radius: control.down ? (control.toggle ? control.sizedPressed : control.sizedSquare)
                              : control.toggle && control.selected ? control.sizedSquare
+                             : control.paused ? control.sizedSquare
                              : Theme.shapeFull(Math.min(width, height))
         color: control.dimmed
                  ? (control.hasContainer ? Qt.rgba(Theme.text.r,Theme.text.g,Theme.text.b,Theme.disabledContainerOpacity) : "transparent")
@@ -142,7 +156,8 @@ AbstractButton {
         // An elevated button is the one variant Material lifts off the page.
         MElevation { anchors.fill: parent; radius: parent.radius; level: control.elevated && !control.dimmed ? 1 : 0 }
         Behavior on color { ColorAnimation { duration: Theme.fast; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.fastEffectsCurve } }
-        Behavior on radius { enabled: app.motion; SpringAnimation { spring: 5; damping: 0.8; mass: 0.8 } }
+        Behavior on radius { enabled: Theme.motion; SpringAnimation { spring: 5; damping: 0.8; mass: 0.8 } }
+        transform: Scale { origin.x: width/2; origin.y: height/2; xScale: 1+control.pulse; yScale: 1+control.pulse }
         Rectangle {
             anchors.fill: parent; radius: parent.radius
             color: control.ink
@@ -155,7 +170,7 @@ AbstractButton {
         anchors.fill: control.background; anchors.margins: -3
         // The ring sits outside the button, so optical roundness adds the gap
         // between them rather than repeating the button's own radius.
-        radius: Theme.shapeInside(Theme.shapeFull(Math.min(width, height)), -3); color: "transparent"
+        radius: Theme.shapeInside(control.background.radius, -3); color: "transparent"
         border.width: 2; border.color: Theme.focusRing
         visible: control.visualFocus
     }
@@ -192,5 +207,5 @@ AbstractButton {
         }
     }
     scale: down ? 0.96 : 1
-    Behavior on scale { enabled: app.motion; SpringAnimation { spring: 5; damping: 0.8; mass: 0.6 } }
+    Behavior on scale { enabled: Theme.motion; SpringAnimation { spring: 5; damping: 0.8; mass: 0.6 } }
 }

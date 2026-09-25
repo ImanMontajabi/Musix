@@ -6,7 +6,7 @@ Item {
     property color ink:Theme.text
     property real progress:0
     property bool ready:false
-    readonly property bool animate:ready && app.motion && visible && Window.window && Window.window.visible && Window.window.visibility!==Window.Minimized
+    readonly property bool animate:ready && Theme.motion && visible && Window.window && Window.window.visible && Window.window.visibility!==Window.Minimized
     onPausedChanged:progress=paused?1:0
     // The animation belongs to the Behavior, which refuses a stop() from here;
     // a value written while the Behavior is disabled ends it instead.

@@ -18,8 +18,13 @@ class WindowChrome : public QObject {
   // How much of the top of the window the system's chrome is drawn over.
   // Zero on Linux, and zero in fullscreen where the title bar goes away.
   Q_PROPERTY(qreal inset READ inset NOTIFY insetChanged)
+  // Accessibility's Reduce motion. Movement that only decorates stops when it
+  // is on, and changes of shape happen at once.
+  Q_PROPERTY(bool reduceMotion READ reduceMotion NOTIFY reduceMotionChanged)
 public:
-  using QObject::QObject;
+  explicit WindowChrome(QObject *parent = nullptr);
+  ~WindowChrome() override;
+  bool reduceMotion() const { return m_reduceMotion; }
   Q_INVOKABLE void blend(QQuickWindow *window);
   // Whatever Desktop & Dock says a double-click on a title bar should do.
   Q_INVOKABLE void titleBarDoubleClick();
@@ -29,6 +34,7 @@ public:
   qreal inset() const { return m_inset; }
 signals:
   void insetChanged();
+  void reduceMotionChanged();
   // "Check for Updates…" was chosen from the app menu.
   void checkForUpdatesRequested();
 
@@ -37,4 +43,6 @@ private:
   void installAppMenuItems();
   QQuickWindow *m_window = nullptr;
   qreal m_inset = 0;
+  bool m_reduceMotion = false;
+  void *m_motionObserver = nullptr;
 };

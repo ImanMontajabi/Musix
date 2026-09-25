@@ -336,6 +336,9 @@ QtObject {
     readonly property real disabledContainerOpacity: 0.10
     readonly property real disabledContentOpacity: 0.38
     readonly property bool followDesktop: app.theme === "system" && desktopTheme.available
+    // Movement that only decorates: off with the Animations setting, and off
+    // with macOS's Reduce motion, which changes of shape then honour at once.
+    readonly property bool motion: app.motion && !(typeof windowChrome !== "undefined" && windowChrome && windowChrome.reduceMotion)
     readonly property bool dark: followDesktop ? desktopTheme.dark : app.theme === "dark" || (app.theme === "system" && Application.styleHints.colorScheme === Qt.Dark)
     readonly property color background: followDesktop ? desktopTheme.colors.background : role("background", dark ? "#181211" : "#fff8f6")
     // Material's surface is the plainest one there is, the tone a page starts

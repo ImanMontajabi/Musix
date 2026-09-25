@@ -4,6 +4,8 @@
 // desktop that draws its own title bar beside the window has nothing to blend,
 // nothing covering the strip that moves it, and no inset to report.
 #ifndef Q_OS_MACOS
+WindowChrome::WindowChrome(QObject *parent) : QObject(parent) {}
+WindowChrome::~WindowChrome() = default;
 void WindowChrome::blend(QQuickWindow *) {}
 void WindowChrome::titleBarDoubleClick() {}
 void WindowChrome::roundCorners(QQuickWindow *) {}

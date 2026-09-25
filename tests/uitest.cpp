@@ -1813,6 +1813,22 @@ void runInteractionRefinementTests(Backend *b,QQuickWindow *w){
   QQmlComponent glyphComponent(qmlEngine(w),QUrl("qrc:/qml/MButton.qml"));
   auto glyphButton=qobject_cast<QQuickItem*>(glyphComponent.create(qmlContext(w)));check(glyphButton,"playback control creates");
   if(glyphButton){glyphButton->setProperty("morphPlayback",true);glyphButton->setProperty("symbol","play");glyphButton->setParentItem(w->contentItem());glyphButton->setPosition(QPointF(500,400));QTest::qWait(50);glyphButton->setProperty("symbol","pause");QTest::qWait(80);auto glyph=findItem(glyphButton,"playbackGlyph");check(glyph&&glyph->property("progress").toReal()>0&&glyph->property("progress").toReal()<1,"play/pause shape interpolates");b->setMotion(false);QTest::qWait(20);fprintf(stdout,"MORPH progress=%f paused=%d animate=%d motion=%d\n",glyph?glyph->property("progress").toReal():-1,glyph?glyph->property("paused").toBool():false,glyph?glyph->property("animate").toBool():false,b->motion());check(glyph&&glyph->property("progress").toReal()==1,"reduced motion settles ongoing morph");delete glyphButton;b->setMotion(true);}
+  // The play button's container: a rounded square while paused, a circle while
+  // playing, springing between them with motion and switching at once without.
+  {auto morph=qobject_cast<QQuickItem*>(glyphComponent.create(qmlContext(w)));check(morph,"morphing play control creates");
+   if(morph){morph->setProperty("morphPlayback",true);morph->setProperty("filled",true);morph->setProperty("size","medium");morph->setProperty("symbol","play");morph->setParentItem(w->contentItem());morph->setPosition(QPointF(500,400));QTest::qWait(700);
+    auto bg=morph->property("background").value<QQuickItem*>();const qreal square=morph->property("sizedSquare").toReal();
+    check(bg&&qAbs(bg->property("radius").toReal()-square)<0.5,"a paused play button is a rounded square");
+    morph->setProperty("symbol","pause");QTest::qWait(60);const qreal moving=bg?bg->property("radius").toReal():0;QTest::qWait(900);
+    check(bg&&moving>square+0.5&&moving<bg->height()/2-0.5,"the shape springs rather than jumps");
+    check(bg&&qAbs(bg->property("radius").toReal()-bg->height()/2)<0.5,"a playing play button is a circle");
+    b->setMotion(false);QTest::qWait(20);morph->setProperty("symbol","play");QTest::qWait(20);
+    check(bg&&qAbs(bg->property("radius").toReal()-square)<0.5,"without motion the shape changes at once");
+    morph->setProperty("bassFast",0.9);morph->setProperty("bassSlow",0.1);QTest::qWait(20);
+    check(morph->property("pulse").toReal()==0,"without motion the button never pulses");
+    b->setMotion(true);QTest::qWait(20);
+    check(morph->property("pulse").toReal()==0,"nor while nothing is playing");
+    delete morph;}}
   fprintf(stdout,"RENDERER %d\n",int(w->rendererInterface()->graphicsApi()));
   b->library("local-albums");b->setViewMode("grid");QTest::qWait(350);click("openCollectionCard");check(until([&]{return !b->busy()&&!w->property("albumFlying").toBool();}),"album flight finishes");QTest::qWait(250);
   click("inspectCollectionArtwork");auto viewer=w->findChild<QObject*>("artworkViewer");check(viewer&&viewer->property("visible").toBool(),"artwork viewer opens");click("artworkZoomIn");check(viewer->property("zoom").toDouble()>1,"artwork zoom works");shot("artwork-zoom");click("artworkZoomReset");check(viewer->property("zoom").toDouble()==1,"artwork zoom resets");QTest::keyClick(w,Qt::Key_Escape);QTest::qWait(250);check(!viewer->property("visible").toBool()&&viewer->property("source").toString().isEmpty(),"closing viewer releases source");

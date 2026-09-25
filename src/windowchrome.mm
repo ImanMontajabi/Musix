@@ -21,6 +21,32 @@
 }
 @end
 
+WindowChrome::WindowChrome(QObject *parent) : QObject(parent) {
+  auto *workspace = NSWorkspace.sharedWorkspace;
+  m_reduceMotion = workspace.accessibilityDisplayShouldReduceMotion;
+  // The setting can change while Musix is open; it follows at once.
+  id observer = [workspace.notificationCenter
+      addObserverForName:NSWorkspaceAccessibilityDisplayOptionsDidChangeNotification
+                  object:nil
+                   queue:NSOperationQueue.mainQueue
+              usingBlock:^(NSNotification *) {
+                const bool now = NSWorkspace.sharedWorkspace.accessibilityDisplayShouldReduceMotion;
+                if (now == m_reduceMotion)
+                  return;
+                m_reduceMotion = now;
+                emit reduceMotionChanged();
+              }];
+  m_motionObserver = [observer retain];
+}
+
+WindowChrome::~WindowChrome() {
+  if (!m_motionObserver)
+    return;
+  id observer = static_cast<id>(m_motionObserver);
+  [NSWorkspace.sharedWorkspace.notificationCenter removeObserver:observer];
+  [observer release];
+}
+
 namespace {
 NSWindow *nativeWindow(QQuickWindow *window) {
   // On the cocoa platform a QWindow's winId is its NSView. On any other --
