@@ -1181,9 +1181,12 @@ void Backend::updateNormalization() {
   const double total=qBound(-15.0,gain+trim,6.0);
   const double factor=idle?1.0:std::pow(10.0,total/20.0);
   if(qFuzzyCompare(factor+1,m_normalizationGain+1)&&source==m_normalizationSource&&qFuzzyCompare(trim+1,m_trim+1))return;
+  // Only a new source of loudness glides in, such as the analysis arriving
+  // mid-song; a trim, or anything else the listener sets, applies at once.
+  const bool newSource=source!=m_normalizationSource;
   m_normalizationDb=idle?0.0:total;m_normalizationSource=source;m_trim=trim;
   m_gainRamp.stop();
-  if(playing()&&m_media().position()>500){m_gainRamp.setStartValue(m_normalizationGain);m_gainRamp.setEndValue(factor);m_gainRamp.start();}
+  if(newSource&&playing()&&m_media().position()>500){m_gainRamp.setStartValue(m_normalizationGain);m_gainRamp.setEndValue(factor);m_gainRamp.start();}
   else {m_normalizationGain=factor;applyOutputVolume();}
   emit normalizationChanged();
 }

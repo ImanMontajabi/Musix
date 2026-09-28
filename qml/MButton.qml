@@ -21,7 +21,11 @@ AbstractButton {
     // glyph itself is drawn at.
     readonly property real sizedSquareWidth: sizedHeight + 2*(iconSpace - iconSpaces[1])
     readonly property real sizedHeight: Theme.buttonHeights[size] || 40
-    readonly property real sizedIcon: Theme.buttonIcon[size] || 20
+    // A button in a media control group is drawn at the group's height and
+    // stretched to whatever width the group gives it, rather than at a size.
+    property real containerHeight: sizedHeight
+    property bool stretch: false
+    property real sizedIcon: Theme.buttonIcon[size] || 20
     readonly property real sizedGap: Theme.buttonGap[size] || 8
     readonly property real sizedSquare: Theme.buttonSquare[size] || Theme.shapeMedium
     readonly property real sizedPressed: Theme.buttonPressed[size] || Theme.shapeSmall
@@ -45,9 +49,13 @@ AbstractButton {
     // has it morph as well as recolour: a round icon button is full cornered
     // while it is off, medium once it is on, and small under the finger.
     property bool toggle: false
-    // The play button: a rounded square while paused, a circle while playing,
-    // the shape change carried by the same spring as any other.
+    // The play button: fully round while paused and a rounded square while
+    // playing, as Material's media controls have it, the change carried by the
+    // same spring as any other.
     property bool morphPlayback:false
+    property real playingRadius: sizedSquare
+    // A group that squishes its buttons apart does its own pressed motion.
+    property bool squish: false
     readonly property bool paused: morphPlayback && symbol === "play"
     // While playing it breathes with the bass: how far the lowest band stands
     // above its own recent average, so a steady bassline holds it still and a
@@ -102,7 +110,7 @@ AbstractButton {
     // Material draws the container at the size's own height and keeps a 48dp
     // touch target around it, so a small button is a 40dp shape you can still
     // hit comfortably. The target is the footprint the layout sees.
-    readonly property real touchTarget: Math.max(Theme.minimumTarget, sizedHeight)
+    readonly property real touchTarget: Math.max(Theme.minimumTarget, containerHeight)
     implicitWidth: text.length ? buttonLabel.implicitWidth + (symbol.length || busy ? control.sizedIcon+control.sizedGap : 0) + control.contentInset*2
                                : Math.max(control.touchTarget, Math.round(control.sizedSquareWidth))
     implicitHeight: control.touchTarget
@@ -130,8 +138,8 @@ AbstractButton {
     }
     background: Rectangle {
         // The container sits inside the touch target rather than filling it.
-        width: control.text.length ? control.width : Math.min(control.width, Math.round(control.sizedSquareWidth))
-        height: Math.min(control.height, control.sizedHeight)
+        width: control.text.length || control.stretch ? control.width : Math.min(control.width, Math.round(control.sizedSquareWidth))
+        height: Math.min(control.height, control.containerHeight)
         x: (control.width-width)/2
         y: (control.height-height)/2
         // Material maps buttons to the full shape style, which is half of the
@@ -141,7 +149,7 @@ AbstractButton {
         // interaction states.
         radius: control.down ? (control.toggle ? control.sizedPressed : control.sizedSquare)
                              : control.toggle && control.selected ? control.sizedSquare
-                             : control.paused ? control.sizedSquare
+                             : control.morphPlayback && !control.paused ? control.playingRadius
                              : Theme.shapeFull(Math.min(width, height))
         color: control.dimmed
                  ? (control.hasContainer ? Qt.rgba(Theme.text.r,Theme.text.g,Theme.text.b,Theme.disabledContainerOpacity) : "transparent")
@@ -190,7 +198,7 @@ AbstractButton {
                     // an outlined form is drawn outlined until the control
                     // reporting it is on.
                     fill: control.selected ? 1 : 0 }
-                Loader {id:playbackGlyph;anchors.centerIn:parent;active:control.morphPlayback && !control.busy && !control.confirmed && (control.symbol==="play" || control.symbol==="pause");sourceComponent:PlaybackGlyph {paused:control.symbol==="pause";ink:control.ink}}
+                Loader {id:playbackGlyph;anchors.centerIn:parent;active:control.morphPlayback && !control.busy && !control.confirmed && (control.symbol==="play" || control.symbol==="pause");sourceComponent:PlaybackGlyph {paused:control.symbol==="pause";ink:control.ink;size:control.sizedIcon}}
                 Loader {
                     anchors.fill: parent; active: control.busy
                     sourceComponent: MLoadingIndicator { objectName: "buttonSpinner"; running: control.busy; ink: control.ink; trackColor: "transparent"; label: "Loading"; Accessible.ignored: true }
@@ -206,6 +214,6 @@ AbstractButton {
             name: control.trailingSymbol; ink: control.ink; Accessible.ignored: true
         }
     }
-    scale: down ? 0.96 : 1
+    scale: down && !squish ? 0.96 : 1
     Behavior on scale { enabled: Theme.motion; SpringAnimation { spring: 5; damping: 0.8; mass: 0.6 } }
 }

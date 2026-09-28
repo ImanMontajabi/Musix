@@ -1794,7 +1794,7 @@ void runVisualRefinementTests(Backend *b,QQuickWindow *w){
   for(const auto &section:b->homeSections(true)){b->showHomeSection(section.toMap().value("title").toString(),false);}
   QTest::qWait(200);check(b->homeSections().isEmpty(),"all Home sections can hide");click("restoreHomeSections");check(b->hiddenHomeSections().isEmpty()&&!b->homeSections().isEmpty(),"empty Home restores sections");
   b->setStartPage("files");b->openStartPage();check(b->libraryId()=="files","preferred local start page opens");
-  w->resize(800,600);QTest::qWait(350);click("playerOutputButton");check(picker&&picker->property("visible").toBool(),"output accessible in narrow window");QTest::qWait(180);check(picker&&picker->property("y").toReal()+picker->property("height").toReal()<w->height(),"output popup remains inside narrow window");shot("08-narrow-output");if(picker)QMetaObject::invokeMethod(picker,"close");
+  w->resize(800,600);QTest::qWait(350);if(auto output=findItem(w->contentItem(),"playerOutputButton");output&&output->isVisible())click("playerOutputButton");else if(QQuickItem *bar=findItem(w->contentItem(),"playerOverflow"),*more=bar?findItem(bar,"appBarOverflow"):nullptr;more){QTest::mouseClick(w,Qt::LeftButton,Qt::NoModifier,more->mapToScene(QPointF(more->width()/2,more->height()/2)).toPoint());QTest::qWait(400);click("appBarMenuAction_output");}else check(false,"narrow player offers the output");check(picker&&picker->property("visible").toBool(),"output accessible in narrow window");QTest::qWait(180);check(picker&&picker->property("y").toReal()+picker->property("height").toReal()<w->height(),"output popup remains inside narrow window");shot("08-narrow-output");if(picker)QMetaObject::invokeMethod(picker,"close");
   b->setMotion(false);b->library("local-albums");QTest::qWait(200);click("openCollectionCard");check(!w->property("albumFlying").toBool(),"reduced motion skips album flight");
   check(b->playing(),"navigation and customization preserve playback");b->togglePin(pin);b->setStartPage("home");b->setCompactDensity(false);b->setMotion(true);b->resetHomeLayout();b->stop();b->clearQueue();
   fprintf(stdout,"RESULT %d failures\n",failures);fflush(stdout);QCoreApplication::exit(failures?1:0);
@@ -1860,17 +1860,18 @@ void runInteractionRefinementTests(Backend *b,QQuickWindow *w){
   QQmlComponent glyphComponent(qmlEngine(w),QUrl("qrc:/qml/MButton.qml"));
   auto glyphButton=qobject_cast<QQuickItem*>(glyphComponent.create(qmlContext(w)));check(glyphButton,"playback control creates");
   if(glyphButton){glyphButton->setProperty("morphPlayback",true);glyphButton->setProperty("symbol","play");glyphButton->setParentItem(w->contentItem());glyphButton->setPosition(QPointF(500,400));QTest::qWait(50);glyphButton->setProperty("symbol","pause");QTest::qWait(80);auto glyph=findItem(glyphButton,"playbackGlyph");check(glyph&&glyph->property("progress").toReal()>0&&glyph->property("progress").toReal()<1,"play/pause shape interpolates");b->setMotion(false);QTest::qWait(20);fprintf(stdout,"MORPH progress=%f paused=%d animate=%d motion=%d\n",glyph?glyph->property("progress").toReal():-1,glyph?glyph->property("paused").toBool():false,glyph?glyph->property("animate").toBool():false,b->motion());check(glyph&&glyph->property("progress").toReal()==1,"reduced motion settles ongoing morph");delete glyphButton;b->setMotion(true);}
-  // The play button's container: a rounded square while paused, a circle while
-  // playing, springing between them with motion and switching at once without.
+  // The play button's container: fully round while paused and a rounded square
+  // while playing, as Material's media controls have it, springing between
+  // them with motion and switching at once without.
   {auto morph=qobject_cast<QQuickItem*>(glyphComponent.create(qmlContext(w)));check(morph,"morphing play control creates");
    if(morph){morph->setProperty("morphPlayback",true);morph->setProperty("filled",true);morph->setProperty("size","medium");morph->setProperty("symbol","play");morph->setParentItem(w->contentItem());morph->setPosition(QPointF(500,400));QTest::qWait(700);
-    auto bg=morph->property("background").value<QQuickItem*>();const qreal square=morph->property("sizedSquare").toReal();
-    check(bg&&qAbs(bg->property("radius").toReal()-square)<0.5,"a paused play button is a rounded square");
+    auto bg=morph->property("background").value<QQuickItem*>();const qreal square=morph->property("playingRadius").toReal();
+    check(bg&&qAbs(bg->property("radius").toReal()-bg->height()/2)<0.5,"a paused play button is fully round");
     morph->setProperty("symbol","pause");QTest::qWait(60);const qreal moving=bg?bg->property("radius").toReal():0;QTest::qWait(900);
     check(bg&&moving>square+0.5&&moving<bg->height()/2-0.5,"the shape springs rather than jumps");
-    check(bg&&qAbs(bg->property("radius").toReal()-bg->height()/2)<0.5,"a playing play button is a circle");
+    check(bg&&qAbs(bg->property("radius").toReal()-square)<0.5,"a playing play button is a rounded square");
     b->setMotion(false);QTest::qWait(20);morph->setProperty("symbol","play");QTest::qWait(20);
-    check(bg&&qAbs(bg->property("radius").toReal()-square)<0.5,"without motion the shape changes at once");
+    check(bg&&qAbs(bg->property("radius").toReal()-bg->height()/2)<0.5,"without motion the shape changes at once");
     morph->setProperty("bassFast",0.9);morph->setProperty("bassSlow",0.1);QTest::qWait(20);
     check(morph->property("pulse").toReal()==0,"without motion the button never pulses");
     b->setMotion(true);QTest::qWait(20);

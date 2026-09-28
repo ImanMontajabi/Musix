@@ -72,7 +72,9 @@ AbstractButton {
             anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter
             Accessible.name: "Remove " + control.text
             onClicked: control.removed()
-            contentItem: Icon { name: "close"; size: Theme.chipIcon; ink: control.selected ? Theme.containerText : Theme.text }
+            // The button's area is larger than the glyph; given to the icon
+            // directly, it scaled the glyph up to fill it.
+            contentItem: Item { Icon { anchors.centerIn: parent; name: "close"; size: Theme.chipIcon; ink: control.selected ? Theme.containerText : Theme.text } }
         }
     }
 }

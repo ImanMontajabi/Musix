@@ -2139,6 +2139,62 @@ void runMaterialComponentTests(Backend *b, QQuickWindow *w) {
   b->enqueueItems(b->results()->rows);
   b->playAt(0);
   c.check(c.until([&] { return b->playing(); }), "a song plays");
+
+  // --- Media controls: centred, and squished apart by a press ---
+  QTest::qWait(500);
+  auto playerBar = shownItem(w->contentItem(), "playbackBar");
+  auto centre = shownItem(w->contentItem(), "playerCenter");
+  if (playerBar && centre) {
+    const double barMiddle = playerBar->mapToScene(QPointF(playerBar->width() / 2, 0)).x();
+    const double centreMiddle = centre->mapToScene(QPointF(centre->width() / 2, 0)).x();
+    c.check(qAbs(barMiddle - centreMiddle) < 1,
+            QString("the transport sits on the player bar's centre line (%1 against %2)")
+                .arg(centreMiddle, 0, 'f', 1).arg(barMiddle, 0, 'f', 1));
+  } else {
+    c.check(false, "the player bar and its centre are shown");
+  }
+  auto transport = shownItem(w->contentItem(), "playerTransport");
+  auto previousPill = transport ? shownItem(transport, "playerPrevious") : nullptr;
+  auto playPill = transport ? shownItem(transport, "playButton") : nullptr;
+  auto nextPill = transport ? shownItem(transport, "playerNext") : nullptr;
+  if (previousPill && playPill && nextPill) {
+    c.check(playPill->height() == previousPill->height() && nextPill->height() == previousPill->height(),
+            "previous, play and next are one height");
+    c.check(playPill->width() > previousPill->width() && previousPill->width() > previousPill->height(),
+            "play is the widest and the other two are pills");
+    const double side = previousPill->width(), middle = playPill->width();
+    const double total = side * 2 + middle;
+    const auto press = [&](QQuickItem *item) {
+      QTest::mousePress(w, Qt::LeftButton, Qt::NoModifier, item->mapToScene(item->boundingRect().center()).toPoint());
+      QTest::qWait(600);
+    };
+    // Letting go away from the button leaves playback as it was.
+    const auto letGo = [&] {
+      QTest::mouseMove(w, QPoint(4, 4));
+      QTest::mouseRelease(w, Qt::LeftButton, Qt::NoModifier, QPoint(4, 4));
+      QTest::qWait(600);
+    };
+    press(playPill);
+    c.check(playPill->width() > middle + 4, QString("pressing play widens it (%1 from %2)").arg(playPill->width(), 0, 'f', 1).arg(middle, 0, 'f', 1));
+    c.check(previousPill->width() < side && nextPill->width() < side, "and its neighbours give way");
+    c.check(qAbs(previousPill->width() + playPill->width() + nextPill->width() - total) < 1,
+            "by as much as it grew, so the group keeps its width");
+    letGo();
+    c.check(qAbs(playPill->width() - middle) < 1, "and letting go puts them back");
+    b->setMotion(false);
+    QTest::qWait(300);
+    press(nextPill);
+    c.check(qAbs(nextPill->width() - side) < 0.5 && qAbs(playPill->width() - middle) < 0.5,
+            "with Animations off a press leaves the widths alone");
+    letGo();
+    b->setMotion(true);
+    QTest::qWait(300);
+    c.check(b->playing(), "and none of it touched playback");
+    const double round = playPill->property("background").value<QQuickItem *>()->property("radius").toDouble();
+    c.check(round < playPill->height() / 2 - 4, "while playing, play is a rounded square");
+  } else {
+    c.check(false, "the player bar shows previous, play and next");
+  }
   w->setProperty("immersive", true);
   c.check(c.until([&] { return shownItem(w->contentItem(), "immersiveToolbar") != nullptr; }, 4000),
           "the immersive transport sits on a floating toolbar");
@@ -2149,6 +2205,59 @@ void runMaterialComponentTests(Backend *b, QQuickWindow *w) {
     c.check(shownItem(toolbar, "immersivePlayButton"), "and holds the transport controls");
     c.check(!shownItem(w->contentItem(), "navigationBar"),
             "a toolbar and a navigation bar are never shown together");
+  }
+  // --- A checked menu item reads like the others ---
+  if (auto menu = w->findChild<QObject *>("immersiveLayoutMenu")) {
+    const auto visualizer = b->property("visualizer");
+    b->setProperty("visualizer", "pixelRain");
+    QMetaObject::invokeMethod(menu, "open");
+    QTest::qWait(500);
+    const auto luminance = [](const QColor &colour) {
+      const auto channel = [](double v) { return v <= 0.04045 ? v / 12.92 : std::pow((v + 0.055) / 1.055, 2.4); };
+      return 0.2126 * channel(colour.redF()) + 0.7152 * channel(colour.greenF()) + 0.0722 * channel(colour.blueF());
+    };
+    const auto contrast = [&](const QColor &a, const QColor &b) {
+      const double x = luminance(a), y = luminance(b);
+      return (std::max(x, y) + 0.05) / (std::min(x, y) + 0.05);
+    };
+    const auto theme = b->property("theme");
+    for (const QString scheme : {"dark", "light"}) {
+      b->setProperty("theme", scheme);
+      QTest::qWait(400);
+      const QColor surface = c.themeColor("tertiaryContainer");
+      QList<QColor> inks;
+      int checkedSeen = 0;
+      double worst = 99;
+      QList<QQuickItem *> items;
+      std::function<void(QQuickItem *)> collect = [&](QQuickItem *item) {
+        if (!item)
+          return;
+        items.append(item);
+        for (auto child : item->childItems())
+          collect(child);
+      };
+      collect(menu->property("contentItem").value<QQuickItem *>());
+      for (auto item : items) {
+        const auto name = item->objectName();
+        if (!item->isVisible() || !(name.startsWith("immersiveLayout_") || name.startsWith("immersiveVisualizer_") || name == "immersiveCoverflowToggle" || name == "immersiveAutoHide"))
+          continue;
+        if (!item->property("enabled").toBool())
+          continue;
+        const auto ink = item->property("ink").value<QColor>();
+        inks.append(ink);
+        checkedSeen += item->property("checked").toBool();
+        worst = std::min(worst, contrast(ink, surface));
+      }
+      c.check(checkedSeen > 0, "the full-screen menu has a checked item");
+      c.check(!inks.isEmpty() && std::all_of(inks.begin(), inks.end(), [&](const QColor &ink) { return ink == inks.first(); }),
+              "every item, checked or not, is drawn in the same ink");
+      c.check(worst >= 4.5, QString("at %1:1 or better against the menu in the %2 theme").arg(worst, 0, 'f', 2).arg(scheme));
+    }
+    b->setProperty("theme", theme);
+    c.shot("08-full-screen-menu");
+    QMetaObject::invokeMethod(menu, "close");
+    b->setProperty("visualizer", visualizer);
+    QTest::qWait(300);
   }
   c.shot("08-floating-toolbar");
   w->setProperty("immersive", false);
@@ -2861,14 +2970,18 @@ void runMaterialExpressiveTests(Backend *b, QQuickWindow *w) {
   }
   // The player bar's own overflow, for the controls a narrow bar cannot hold.
   auto playerOverflow = anyItem(w->contentItem(), "playerOverflow");
-  c.check(playerOverflow && !playerOverflow->isVisible(),
+  c.check(playerOverflow && !playerOverflow->property("overflowing").toBool(),
           "a wide player bar has nothing to hand its overflow");
   w->resize(900, 860);
   QTest::qWait(800);
-  c.check(playerOverflow && playerOverflow->isVisible(),
+  c.check(playerOverflow && playerOverflow->property("overflowing").toBool(),
           "a narrow one keeps the controls it cannot show in an overflow instead");
-  c.check(playerOverflow && playerOverflow->property("live").toList().size() == 3,
-          "holding shuffle, repeat and like");
+  QStringList folded;
+  if (playerOverflow)
+    for (const auto &action : playerOverflow->property("hidden").toList())
+      folded << action.toMap().value("key").toString();
+  c.check(folded.contains("shuffle") && folded.contains("repeat") && folded.contains("like"),
+          QString("holding shuffle, repeat and like (%1)").arg(folded.join(", ")));
   c.shot("13-player-overflow");
   w->resize(1400, 900);
   QTest::qWait(700);
@@ -3552,8 +3665,8 @@ void runMaterialSchemeTests(Backend *b, QQuickWindow *w) {
     c.check(container && qAbs(container->height() - 36) < 0.5,
             QString("at Material's 36dp small container (%1)")
                 .arg(container ? container->height() : 0, 0, 'f', 0));
-    c.check(play && play->property("background").value<QQuickItem *>()->height() == 56,
-            "while the medium button keeps its own height");
+    c.check(play && play->property("background").value<QQuickItem *>()->height() == 48,
+            "while the media controls keep their group's height");
     c.shot("04-pointer-precise");
     b->setPrecisePointer(false);
     QTest::qWait(400);

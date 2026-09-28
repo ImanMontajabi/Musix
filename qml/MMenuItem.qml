@@ -21,14 +21,19 @@ MenuItem {
     // A vibrant menu takes the tertiary container, for a menu opened over
     // something a surface would disappear into.
     property bool vibrant: false
-    // Material's menu marks a chosen item with the tertiary container, not the
-    // secondary one that marks a chosen anything else, and a vibrant menu,
-    // already tertiary, deepens to the tertiary role itself.
+    // Material's segmented menu marks a chosen item with the tertiary
+    // container, not the secondary one that marks a chosen anything else, and
+    // a vibrant menu, already tertiary, deepens to the tertiary role itself.
+    // Only a segmented item has that container behind it; anywhere else the
+    // ink of a chosen one would be set on the menu's own surface, where it
+    // reads as disabled, so a list item keeps the menu's ink and the tick says
+    // it is chosen.
+    readonly property bool chosenContainer: control.segmented && control.checked
     readonly property color ink: !control.enabled ? Theme.muted
-                               : control.vibrant ? (control.checked ? Theme.tertiaryText : Theme.tertiaryContainerText)
-                               : control.checked ? Theme.tertiaryContainerText : Theme.text
+                               : control.vibrant ? (chosenContainer ? Theme.tertiaryText : Theme.tertiaryContainerText)
+                               : chosenContainer ? Theme.tertiaryContainerText : Theme.text
     // The leading icon is the variant ink until the item is chosen, when it
-    // takes the ink of the container it has been given.
+    // takes the ink of the label beside it.
     readonly property color leadingInk: !control.enabled ? Theme.muted
                                       : control.vibrant || control.checked ? ink : Theme.muted
 
