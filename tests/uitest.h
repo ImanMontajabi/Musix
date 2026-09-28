@@ -1,6 +1,29 @@
 #pragma once
+#include <QDir>
+#include <QGuiApplication>
+#include <QList>
+#include <QQuickItem>
+#include <QRegularExpression>
+#include <QQuickWindow>
 class Backend;
 class QQuickWindow;
+
+// Headless, the render loop lays items out and moves animations on only when
+// it draws a frame, and it draws one only when asked: a click aimed from
+// positions read before that lands beside its target, and one sent to a
+// dialog still in its opening transition is ignored. Draw a frame first, as a
+// screen would have long since.
+inline void settleForInput(QQuickItem *item) {
+  if (!item)
+    return;
+  QList<QQuickItem *> chain;
+  for (auto p = item; p; p = p->parentItem())
+    chain.prepend(p);
+  for (auto p : chain)
+    p->ensurePolished();
+  if (auto window = item->window())
+    window->grabWindow();
+}
 void runUiTests(Backend *, QQuickWindow *);
 void runUiAudit(Backend*,QQuickWindow*);
 
@@ -81,3 +104,20 @@ void runMaterialScaleTests(Backend*,QQuickWindow*);
 void runMaterialControlsTests(Backend*,QQuickWindow*);
 void runMaterialAnatomyTests(Backend*,QQuickWindow*);
 void runMaterialEmphasisTests(Backend*,QQuickWindow*);
+
+// What every open window showed when a check failed, so a failure can be read
+// off a picture instead of guessed at from its label.
+inline void failShot(const QString &label) {
+  static int count = 0;
+  const auto dir = qEnvironmentVariable("SUNG_TEST_OUTPUT");
+  if (dir.isEmpty())
+    return;
+  QDir().mkpath(dir + "/failures");
+  auto name = label;
+  name.replace(QRegularExpression("[^A-Za-z0-9]+"), "-");
+  ++count;
+  int index = 0;
+  for (auto window : QGuiApplication::topLevelWindows())
+    if (auto quick = qobject_cast<QQuickWindow *>(window); quick && quick->isVisible())
+      quick->grabWindow().save(QString("%1/failures/%2-%3-%4.png").arg(dir).arg(count, 3, 10, QChar('0')).arg(name.left(60)).arg(index++));
+}

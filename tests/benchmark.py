@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Isolated, synthetic benchmarks. Software rendering is invisible; native probes use an inactive Hyprland 0.56+ workspace without requesting focus."""
-import argparse, json, os, pathlib, shlex, signal, subprocess, time
+import argparse, json, os, pathlib, shlex, signal, subprocess, sys, time
 from xml.sax.saxutils import escape
 p=argparse.ArgumentParser(description=__doc__)
 p.add_argument('binary',type=pathlib.Path)
@@ -31,7 +31,9 @@ for repeat in range(a.repeats):
   if mode not in ('idle','playback','lyrics','immersive','mini','hidden'):p.error('Unknown mode: '+mode)
   run=out/f'{repeat}-{mode}';run.mkdir();env=os.environ.copy()
   for key,folder in [('XDG_DATA_HOME','data'),('XDG_CONFIG_HOME','config'),('XDG_CACHE_HOME','cache')]:env[key]=str(run/folder)
-  library=run/'data/Sung/sung';library.mkdir(parents=True)
+  # macOS ignores XDG; the profile is what keeps the run off the real library.
+  env['MUSIX_PROFILE']=str(run)
+  library=run/'data' if sys.platform=='darwin' else run/'data/Sung/sung';library.mkdir(parents=True)
   (library/'library.json').write_text(json.dumps(dict(queue=tracks,index=0,position=60100)))
   env.pop('QT_QUICK_BACKEND',None)
   if not a.native_workspace:env['QSG_RENDER_LOOP']='basic'

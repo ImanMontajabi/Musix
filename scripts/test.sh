@@ -4,6 +4,9 @@
 # never run at all and its result was never seen.
 set -uo pipefail
 root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
+# The suites keep to profiles of their own, but a backup costs seconds and a
+# lost library cannot be rebuilt.
+python3 "$root/scripts/backup-profile.py" test-sh || exit 1
 set -e
 cmake -S "$root" -B "$root/build-tests" -G Ninja -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=ON -DSUNG_DIAGNOSTICS=OFF
 cmake --build "$root/build-tests" --parallel "${SUNG_BUILD_JOBS:-4}"

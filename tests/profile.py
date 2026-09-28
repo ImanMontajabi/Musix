@@ -2,6 +2,7 @@
 """Measure an isolated, idle UI. Does not touch the running desktop player."""
 import json,os,pathlib,subprocess,sys,time
 binary=sys.argv[1]
+if not os.environ.get('MUSIX_PROFILE'):sys.exit('profile.py: set MUSIX_PROFILE; without it the UI would open the real library')
 proc=subprocess.Popen([binary,'--isolated','--offline']+(['--mini'] if '--mini' in sys.argv else []),stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
 try:
     time.sleep(2)

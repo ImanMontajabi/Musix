@@ -538,6 +538,32 @@ private slots:
     restored.stop();
   }
 
+  // A known issue, kept visible rather than hidden. Qt's darwin backend (6.11,
+  // and still in 6.12 and dev) builds a seek from the item's current time and
+  // keeps its timescale; until the playback clock has run that timescale is a
+  // second, so a seek on a song that has not yet played lands on the whole
+  // second at or before the target. Musix does not work around it yet. If Qt
+  // fixes it this reports an unexpected pass, which fails, as a reminder to
+  // drop the note. Reported as https://qt-project.atlassian.net/browse/COIN-1332;
+  // docs/known-issues.md tracks it.
+  void aSeekBeforePlaybackLandsOnTheWholeSecond() {
+    auto b = playingAlone("Tone two");
+    QVERIFY(b);
+    QTRY_VERIFY_WITH_TIMEOUT(b->playing() && b->duration() > 5000, 10000);
+    const auto source = b->m_media().source();
+    b->m_media().stop();
+    b->m_media().setSource(QUrl());
+    b->m_media().setSource(source);
+    b->m_media().pause();
+    QTRY_VERIFY_WITH_TIMEOUT(b->m_media().isSeekable() && b->m_media().duration() > 5000, 5000);
+    b->seek(4200);
+    QTest::qWait(1000);
+    QEXPECT_FAIL("", "Qt's darwin backend rounds a seek before playback to the whole second (COIN-1332)", Continue);
+    QVERIFY2(qAbs(b->m_media().position() - 4200) <= 30, qPrintable(QString("the player is at %1").arg(b->m_media().position())));
+    QVERIFY(b->m_media().position() >= 4000 && b->m_media().position() <= 4200);
+    b->stop();
+  }
+
   // Levelling works from the analysed loudness, on the first play, for a file
   // with no tags.
   void levellingUsesTheAnalysis() {

@@ -29,12 +29,18 @@ Pass extra CMake args through `build.sh`, e.g. `./scripts/build.sh -DSUNG_DIAGNO
 ./scripts/verify.sh --offline   # full verification suite (tests/verify.py); omit --offline for live network/audio checks
 ```
 
+`verify.py` gives every stage its own `MUSIX_PROFILE` and exits before running
+a stage whose profile is, lies inside or holds the real library, cache or
+Preferences folder. On macOS it reports MPRIS and the `/proc`-based performance
+stages as skipped, and runs the fixture catalogue on the project's runtime
+Python, since the system one is too old for the helper.
+
 - `test.sh` runs both C++ (ctest, Qt Test based) and Python (`unittest discover -s tests -p 'test_*.py'`) suites. To run a single ctest target: `ctest --test-dir build-tests -R <name> --output-on-failure` (targets: `crossfade`, `m3color`, `subsonic-protocol`, `backend`, `notifications`; some, e.g. `sung-jellyfin-tests`, `sung-artwork-tests`, are built but not registered as ctest targets — run the binary in `build-tests/` directly).
 - Single Python test: `python3 -m unittest tests.test_catalog -v` (run from repo root) or `python3 tests/test_online_artwork.py`.
 - `tests/immersive_regression.py --binary /path/to/diagnostics/sung --output verification/<name>` runs the offscreen immersive/high-DPI/layout-persistence checks against a `-DSUNG_DIAGNOSTICS=ON` build; use a fresh output dir each run.
 - Server integration tests spin up a disposable Navidrome/Jellyfin instance and generated audio fixtures — see `tests/navidrome_integration.py` and `tests/jellyfin_integration.py` (`--test-binary build-tests/sung-subsonic-tests`, optional `--ui-binary`/`--native-ui` for rendered checks). Skip unless you have those server binaries available.
 - Reports/screenshots land in the git-ignored `verification/` directory.
-- A `-DSUNG_DIAGNOSTICS=ON` build also compiles the interactive UI harness in `tests/uitest.cpp` and friends into the `sung` binary itself; each `--foo-test` CLI flag in `src/main.cpp` runs one of these Qt-Test-based UI suites headlessly (offscreen QPA) instead of the normal app. On macOS, give them `MUSIX_PROFILE` (see below) and a `SUNG_TEST_OUTPUT` directory for fixtures and captures. Anything that plays audio fails under offscreen there: AVFoundation reports back on the main dispatch queue, which only the cocoa platform drains, so a load never leaves `LoadingMedia`. That is why the ctest media targets run on cocoa on macOS.
+- A `-DSUNG_DIAGNOSTICS=ON` build also compiles the interactive UI harness in `tests/uitest.cpp` and friends into the `sung` binary itself; each `--foo-test` CLI flag in `src/main.cpp` runs one of these Qt-Test-based UI suites headlessly (offscreen QPA) instead of the normal app. On macOS, give them `MUSIX_PROFILE` (see below) and a `SUNG_TEST_OUTPUT` directory for fixtures and captures. AVFoundation reports back on the main dispatch queue, which the offscreen platform's event loop never drains; a diagnostics build running offscreen on macOS therefore turns the main Core Foundation run loop from a timer (`main.cpp`), which is what lets these suites play audio headlessly. The ctest media targets, which are not diagnostics builds, still run on cocoa.
 - **Launching the app without touching the real profile:** set `MUSIX_PROFILE=<dir>` and pass `--isolated`. The library, caches, runtime copy, settings (an INI file instead of the plist) and QML cache all go under that directory, and the run neither hands off to nor takes the single-instance socket of a Musix that is already running. This is the way to launch the GUI for testing; a second macOS user account does not work, because its processes cannot put windows on this session's screen.
 - `--smoke-test` (in every build, not only diagnostics ones) exercises the running app and exits 0 only if everything worked: the window, a local import through the helper, playback and a seek, the mini player opened three times while playing, the themes and Settings; any QML error from the app's own files fails it. It refuses to run without `MUSIX_PROFILE`. `package-dmg.sh` runs it on the signed bundle and makes no DMG if it fails, so it puts a window on screen for a few seconds during every packaging build.
 
@@ -86,14 +92,29 @@ already cost something.
   happens to be in front, which has already pulled a private messaging window
   into a transcript. Get the id from a helper that reads
   `CGWindowListCopyWindowInfo` and filters by pid.
+- **Test and diagnostics runs cannot reach the real profile.** A diagnostics
+  build, and any build given a test flag (`--*-test`, the smoke tests,
+  `--audit`, `--benchmark`, `--screenshot`, `--tour`), exits with status 2
+  unless `MUSIX_PROFILE` points outside the real library, cache and
+  Preferences folders (`Profile::unsafeReason()`). Do not work around it. A
+  run of the Linux-minded `verify.py` once wrote every suite's fixtures into
+  the real library and cost the user their liked songs, queue and settings.
+- **Backups are automatic.** `scripts/backup-profile.py <reason>` copies the
+  library folder (without the runtime copy) and the settings, as the
+  preferences service holds them, into `~/MusixBackups/auto/`, checks the copy
+  and keeps the newest five. `test.sh`, `package-dmg.sh`, `verify.py` and
+  `run.sh` (when it runs on the real profile) call it first; call it yourself
+  before anything else that could touch the profile.
 - **Never launch the GUI on the real profile without a backup.** Use
   `MUSIX_PROFILE=<scratch dir> … --isolated` instead, which keeps every write
   under that directory; `--isolated` alone does not isolate data, and `$HOME`
   does not reach `NSHomeDirectory()`. When the real profile genuinely has to
   be used (checking an upgrade over the user's own library), copy
   `~/Library/Application Support/Sung` and
-  `~/Library/Preferences/com.sung.sung.plist` first, restore both afterwards,
-  `killall cfprefsd` so the restored plist is re-read, and confirm with
+  `~/Library/Preferences/com.sung.sung.plist` first, restore both afterwards
+  (settings through the preferences service: `defaults import com.sung.sung
+  <file>`, which merges, then `defaults delete` for each key the copy lacks;
+  do not restart `cfprefsd`), and confirm with
   `shasum -a 256` that they match the backup. The backup goes in a dated
   folder under `~/MusixBackups/`, never in the session's scratchpad: the
   scratchpad is cleared when a session ends, and a backup lost that way once
@@ -122,6 +143,15 @@ with a tag that did not match the build. The steps, in order:
 
 1. Bump `project(Musix VERSION …)` in `CMakeLists.txt`, commit, and make sure
    the tree is clean: `package-dmg.sh` prints the commit it built from.
+   Then run `./scripts/release-checks.sh` on that commit. It runs ctest, the
+   Python tests and every UI and live suite (headless, each on its own
+   profile), and any failing suite stops the release. 0.14.1 and 0.15.0
+   shipped with UI suites failing because nothing in the release ran them.
+   Do not loosen a check to get it through: a check that fails because the
+   app changed on purpose is updated only with the commit that changed it
+   named, and anything else is treated as a regression. Check the status of
+   every upstream report in `docs/known-issues.md`, and carry each one that is
+   still open into the release notes' known issues.
 2. Build warm, then cold (delete `build-packaging/{python-runtime,python.tar.gz,
    qt,ffmpeg-out}` and `make distclean` in `build-packaging/ffmpeg-7.1`), and
    compare a manifest of every file's SHA-256 in `build-packaging/dmg/Musix.app`

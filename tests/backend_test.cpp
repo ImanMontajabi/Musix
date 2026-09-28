@@ -1,4 +1,5 @@
 #include "backend.h"
+#include "profile.h"
 #include "artworkurl.h"
 #include "lrc.h"
 #include <QStandardPaths>
@@ -327,7 +328,7 @@ private slots:
     QCOMPARE(b.m_onlineArtworkRetries,1);QVERIFY(b.playing());QVERIFY(b.error().isEmpty());
     song["id"]="motion00008";song["videoId"]="motion00008";song["title"]="retry forever";
     b.playItem(song);QTRY_VERIFY_WITH_TIMEOUT(b.playing(),4000);QTest::qWait(4000);
-    QFile attempts(QStandardPaths::writableLocation(QStandardPaths::CacheLocation)+"/motion-art/attempt-count");QVERIFY(attempts.open(QIODevice::ReadOnly));QCOMPARE(attempts.readAll(),QByteArray("2"));QVERIFY(b.playing());QVERIFY(b.error().isEmpty());
+    QFile attempts(Profile::location(QStandardPaths::CacheLocation)+"/motion-art/attempt-count");QVERIFY(attempts.open(QIODevice::ReadOnly));QCOMPARE(attempts.readAll(),QByteArray("2"));QVERIFY(b.playing());QVERIFY(b.error().isEmpty());
     b.stop();b.clearQueue();b.setAnimatedArtwork(true);
   }
   void measuredAudioBands() {

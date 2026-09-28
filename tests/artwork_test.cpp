@@ -1,4 +1,7 @@
 #include "roundedart.h"
+// The art loader reads the cache under MUSIX_PROFILE when one is set, so the
+// fixtures go where it looks.
+#include "profile.h"
 #include "artworkurl.h"
 #include <QBuffer>
 #include <QDateTime>
@@ -19,7 +22,7 @@
 // A response the loader will take from the network cache instead of the
 // network, so what a surface fetches for a URL can be checked offline.
 static void seed(const QUrl &url,const QByteArray &bytes,const char *type="image/png") {
-  QNetworkDiskCache disk;disk.setCacheDirectory(QStandardPaths::writableLocation(QStandardPaths::CacheLocation)+"/art");
+  QNetworkDiskCache disk;disk.setCacheDirectory(Profile::location(QStandardPaths::CacheLocation)+"/art");
   QNetworkCacheMetaData meta;meta.setUrl(url);meta.setExpirationDate(QDateTime::currentDateTimeUtc().addDays(1));
   meta.setRawHeaders({{"Content-Type",type},{"Cache-Control","max-age=86400"}});
   auto device=disk.prepare(meta);QVERIFY(device);device->write(bytes);disk.insert(device);
@@ -161,7 +164,7 @@ private slots:
     QTemporaryDir profile;QVERIFY(profile.isValid());
     qputenv("XDG_CACHE_HOME",profile.path().toUtf8());
     QNetworkDiskCache disk;
-    disk.setCacheDirectory(QStandardPaths::writableLocation(QStandardPaths::CacheLocation)+"/art");
+    disk.setCacheDirectory(Profile::location(QStandardPaths::CacheLocation)+"/art");
     const QUrl url("https://sung-test.invalid/shared-cover.png");
     QImage original(400,400,QImage::Format_RGB32);
     for(int y=0;y<400;++y)for(int x=0;x<400;++x)original.setPixel(x,y,qRgb(x%256,y%256,(x+y)%256));

@@ -23,6 +23,9 @@ deployment_target="$(sed -n 's/^set(CMAKE_OSX_DEPLOYMENT_TARGET "\([0-9.]*\)".*/
 [ -n "$deployment_target" ] || { echo "CMakeLists.txt declares no CMAKE_OSX_DEPLOYMENT_TARGET" >&2; exit 1; }
 export MACOSX_DEPLOYMENT_TARGET="$deployment_target"
 mkdir -p "$cache"
+# The smoke test below runs on a profile of its own, and the app refuses a test
+# run on the real one; the backup is for anything neither of those foresaw.
+python3 "$root/scripts/backup-profile.py" package-dmg
 
 say() { printf '\n== %s ==\n' "$1"; }
 

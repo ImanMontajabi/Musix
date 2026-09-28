@@ -59,6 +59,7 @@ if args.binary and passed:
     env.update(SUNG_HELPER=helper, SUNG_PYTHON=python, SUNG_TEST_OUTPUT=str(out/'ui'), SUNG_LIVE_ARTWORK_TRACKS=str(out/'tracks.json'))
     for var, folder in [('XDG_CONFIG_HOME', 'config'), ('XDG_DATA_HOME', 'data'), ('XDG_CACHE_HOME', 'cache')]:
         env[var] = str(out/'ui-profile'/folder)
+    env['MUSIX_PROFILE'] = str(out/'ui-profile')
     with (out/'ui.log').open('w') as log:
         result = subprocess.run([str(args.binary.resolve()), '--isolated', '--online-artwork-live-test'], env=env, stdout=log, stderr=subprocess.STDOUT, timeout=900)
     passed = result.returncode == 0

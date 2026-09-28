@@ -1,4 +1,5 @@
 #include "backend.h"
+#include "profile.h"
 #include <QQuickWindow>
 #include <QQuickItem>
 #include <QSGRendererInterface>
@@ -43,7 +44,7 @@ void runBenchmark(Backend *b,QQuickWindow *w) {
   if(qEnvironmentVariableIsSet("SUNG_BENCH_ART")) {
     if(!qEnvironmentVariableIsSet("SUNG_BENCH_ART_PRESEEDED")) {
     QNetworkDiskCache disk;
-    disk.setCacheDirectory(QStandardPaths::writableLocation(QStandardPaths::CacheLocation)+"/art");
+    disk.setCacheDirectory(Profile::location(QStandardPaths::CacheLocation)+"/art");
     for(int i=0;i<80;++i) {
       QImage art(544,544,QImage::Format_RGB32);
       for(int y=0;y<544;++y)for(int x=0;x<544;++x)art.setPixel(x,y,qRgb((x+i*19)%256,(y+i*37)%256,(x+y+i*11)%256));

@@ -65,6 +65,8 @@ def main():
         e = env.copy()
         for key in ("CONFIG", "DATA", "CACHE", "STATE"):
             e[f"XDG_{key}_HOME"] = str(out / "profiles" / profile / key.lower())
+        # XDG is Linux only; on macOS the profile is what keeps the run off the real library.
+        e["MUSIX_PROFILE"] = str(out / "profiles" / profile)
         artifacts = out / name
         artifacts.mkdir()
         e.update(SUNG_TEST_OUTPUT=str(artifacts), QT_SCALE_FACTOR=scale)

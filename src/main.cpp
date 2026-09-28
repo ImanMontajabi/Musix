@@ -41,7 +41,11 @@
 #include "uitest.h"
 #include <QElapsedTimer>
 void runBenchmark(Backend *, QQuickWindow *);
+#ifdef Q_OS_MACOS
+#include <CoreFoundation/CoreFoundation.h>
 #endif
+#endif
+#include <algorithm>
 #include <cstdio>
 
 class Symbols : public QQuickImageProvider {
@@ -108,8 +112,39 @@ int main(int argc, char **argv) {
   app.setApplicationDisplayName(Profile::isolated() ? "Musix (test)" : "Musix");
   app.setOrganizationName("Sung");
   app.setApplicationVersion(MUSIX_VERSION);
+  // A test or diagnostics run never touches the real library. A run of the
+  // verification script on macOS once did, because it isolated its suites the
+  // Linux way; so this is refused here rather than left to each caller.
+  {
+    const auto given = app.arguments();
+    bool testRun = std::any_of(given.begin() + 1, given.end(), [](const QString &a) {
+      static const QStringList modes{"--smoke-test", "--smoke-local", "--smoke-stream", "--audit", "--benchmark", "--screenshot", "--tour"};
+      return a.endsWith("-test") || modes.contains(a);
+    });
+#ifdef SUNG_DIAGNOSTICS
+    // A diagnostics build is never the one a library lives with.
+    testRun = true;
+#endif
+    if (testRun) {
+      if (const auto why = Profile::unsafeReason(); !why.isEmpty()) {
+        fprintf(stderr, "musix: refusing to start a test or diagnostics run: %s\n", qPrintable(why));
+        return 2;
+      }
+    }
+  }
   Profile::install();
   app.setDesktopFileName("musix");
+#if defined(SUNG_DIAGNOSTICS) && defined(Q_OS_MACOS)
+  // AVFoundation reports on the main dispatch queue, which only a Core
+  // Foundation run loop drains, and the offscreen platform's event loop is
+  // not one. Turning it briefly from a timer lets a headless UI suite play
+  // audio, so none of them has to put a window on the screen.
+  QTimer mainQueue;
+  if (QGuiApplication::platformName() == "offscreen") {
+    QObject::connect(&mainQueue, &QTimer::timeout, [] { CFRunLoopRunInMode(kCFRunLoopDefaultMode, 0, false); });
+    mainQueue.start(5);
+  }
+#endif
 #ifdef SUNG_DIAGNOSTICS
   if(app.arguments().contains("--immersive-polish-test"))app.setDesktopFileName("musix-immersive-test");
 #endif

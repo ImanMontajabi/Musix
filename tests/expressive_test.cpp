@@ -44,8 +44,7 @@ struct Harness {
   void check(bool ok, const QString &label) {
     fprintf(stdout, "%s %s\n", ok ? "PASS" : "FAIL", qPrintable(label));
     fflush(stdout);
-    if (!ok)
-      ++failures;
+    if(!ok){++failures;failShot(label);}
   }
   bool until(const std::function<bool()> &predicate, int timeout = 8000) {
     QElapsedTimer timer;
@@ -63,6 +62,7 @@ struct Harness {
     check(item, "find " + name);
     if (!item)
       return;
+    settleForInput(item);
     const auto point = item->mapToScene(item->boundingRect().center()).toPoint();
     QTest::mouseMove(window, point);
     QTest::qWait(60);

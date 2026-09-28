@@ -22,6 +22,8 @@
 #include <QSet>
 #include <QTest>
 #include <qpa/qwindowsysteminterface.h>
+#include <algorithm>
+#include <cmath>
 #include <functional>
 
 namespace {
@@ -110,8 +112,7 @@ struct Check {
   void check(bool ok, const QString &label) {
     fprintf(stdout, "%s %s\n", ok ? "PASS" : "FAIL", qPrintable(label));
     fflush(stdout);
-    if (!ok)
-      ++failures;
+    if(!ok){++failures;failShot(label);}
   }
   bool until(const std::function<bool()> &predicate, int timeout = 8000) {
     QElapsedTimer timer;
@@ -140,6 +141,26 @@ struct Check {
     tap(name);
     QTest::qWait(320);
   }
+  // Scrolls the nearest scrolling ancestor so the item is on screen, the way a
+  // person would before clicking it; a click aimed outside the window is lost.
+  void scrollIntoView(QQuickItem *item) {
+    const auto flickable = [](QObject *o) {
+      for (auto m = o->metaObject(); m; m = m->superClass())
+        if (qstrcmp(m->className(), "QQuickFlickable") == 0)
+          return true;
+      return false;
+    };
+    for (auto p = item ? item->parentItem() : nullptr; p; p = p->parentItem()) {
+      if (!flickable(p))
+        continue;
+      auto content = p->property("contentItem").value<QQuickItem *>();
+      const double y = item->mapToItem(content, QPointF(0, 0)).y();
+      const double most = std::max(0.0, p->property("contentHeight").toDouble() - p->height());
+      p->setProperty("contentY", std::clamp(y - (p->height() - item->height()) / 2, 0.0, most));
+      QTest::qWait(150);
+      return;
+    }
+  }
   // A click scoped to one part of the window, where the same row names appear
   // in more than one list at once.
   void clickWithin(QQuickItem *parent, const QString &name) {
@@ -147,6 +168,7 @@ struct Check {
     check(item, "find " + name + " in " + (parent ? parent->objectName() : QString("nothing")));
     if (!item)
       return;
+    settleForInput(item);
     const auto point = item->mapToScene(item->boundingRect().center()).toPoint();
     QTest::mouseMove(window, point);
     QTest::qWait(60);
@@ -159,6 +181,7 @@ struct Check {
     check(item, "find " + name);
     if (!item)
       return;
+    settleForInput(item);
     const auto point = item->mapToScene(item->boundingRect().center()).toPoint();
     QTest::mouseMove(window, point);
     QTest::qWait(60);
@@ -603,14 +626,17 @@ void runArtistHeroTests(Backend *b, QQuickWindow *w) {
   }
 
   // --- Its actions work ---
-  // The band behind them is the cover, and Material keeps its elevated button
-  // for exactly that: a control that has to hold against a patterned ground.
+  // The band's buttons step down in emphasis, one variant each: Play filled,
+  // Shuffle tonal, Follow outlined. Shuffle is flat on its container, so it
+  // does not lift off the band the way an elevated button would.
   if (auto shuffle = shownItem(w->contentItem(), "artistHeroShuffle")) {
-    c.check(shuffle->property("elevated").toBool(),
-            "the secondary action is elevated over the cover band");
+    c.check(shuffle->property("tonal").toBool() && !shuffle->property("elevated").toBool(),
+            "the secondary action is a tonal button");
     auto container = shuffle->property("background").value<QQuickItem *>();
     auto lift = container ? anyItem(container, "elevation") : nullptr;
-    c.check(lift && lift->property("level").toInt() == 1, "by the one level that goes with it");
+    c.check(!lift || lift->property("level").toInt() == 0, "and casts no shadow");
+    if (auto play = shownItem(w->contentItem(), "artistHeroPlay"))
+      c.check(play->property("filled").toBool(), "one step below the filled Play");
   }
   c.check(b->queue()->count() == 0, "nothing is queued yet");
   c.click("artistHeroPlay");
@@ -4310,6 +4336,7 @@ void runMaterialAnatomyTests(Backend *b, QQuickWindow *w) {
             // read as one piece because they are drawn in the same role.
             const bool wasOn = sw->property("checked").toBool();
             if (wasOn) {
+              c.scrollIntoView(sw);
               c.clickWithin(rows, "ambientBackdropSwitch");
               c.until([&] { return !sw->property("checked").toBool(); }, 2000);
             }
@@ -4324,6 +4351,7 @@ void runMaterialAnatomyTests(Backend *b, QQuickWindow *w) {
                         c.themeColor("outline") != c.themeColor("muted"),
                     "neither of which is the role it used to take");
             if (wasOn) {
+              c.scrollIntoView(sw);
               c.clickWithin(rows, "ambientBackdropSwitch");
               c.until([&] { return sw->property("checked").toBool(); }, 2000);
             }

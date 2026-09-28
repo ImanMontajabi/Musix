@@ -70,8 +70,8 @@ void runSmokeTest(Backend *backend, QQuickWindow *window) {
       fprintf(stderr, "  %s\n", qPrintable(problem));
     QCoreApplication::exit(1);
   };
-  if (!Profile::isolated())
-    return fail("refusing to run without MUSIX_PROFILE: it would use the real library");
+  if (const auto why = Profile::unsafeReason(); !why.isEmpty())
+    return fail("refusing to run: " + why);
   previousHandler = qInstallMessageHandler(collect);
   QStringList passed;
   const auto step = [&](const QString &name, bool ok) {
