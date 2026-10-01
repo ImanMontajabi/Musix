@@ -21,6 +21,7 @@
 #include <QQmlComponent>
 #include <QQmlEngine>
 #include <QJSValue>
+#include <QFileInfo>
 #include <QFontInfo>
 #include <QFontDatabase>
 #include <QQuickWindow>
@@ -137,9 +138,31 @@ void runUiTests(Backend *b, QQuickWindow *w) {
   shot("search-dark");
   if (b->results()->count()) {
     b->setVolume(0.08);
+    // The app is started from Finder, whose PATH is the system's alone, with
+    // its own ffmpeg named for the helper. A terminal's PATH has Homebrew's
+    // ffmpeg on it, which once hid that a song's file reached the player
+    // unrepaired and showed twice its length. So the song is fetched as the
+    // packaged app fetches it: bare PATH, and the ffmpeg that ships.
+    const auto packagedFfmpeg = qEnvironmentVariable("SUNG_PACKAGED_FFMPEG_DIR");
+    check(QFileInfo(packagedFfmpeg + "/ffmpeg").isExecutable(), "the packaged ffmpeg is there to test with (SUNG_PACKAGED_FFMPEG_DIR)");
+    const auto path = qgetenv("PATH");
+    const auto ffmpegDir = qgetenv("SUNG_FFMPEG_DIR");
+    qputenv("PATH", "/usr/bin:/bin:/usr/sbin:/sbin");
+    qputenv("SUNG_FFMPEG_DIR", packagedFfmpeg.toUtf8());
     b->playResults();
     check(until([&] { return b->playing() && b->position() > 1500; }, 80000),
           "native streamed audio progresses");
+    qputenv("PATH", path);
+    if (ffmpegDir.isEmpty()) qunsetenv("SUNG_FFMPEG_DIR"); else qputenv("SUNG_FFMPEG_DIR", ffmpegDir);
+    // A song shows its real length: what the catalogue says it is, give or take
+    // the second or two a file's own timing differs by. Shown twice that, the
+    // audio ended mid-bar and the next song waited for the bar to end.
+    check(until([&] { return b->media()->duration() > 0; }, 20000), "the player has measured the streamed song");
+    {
+      const auto expected = b->current().value("seconds").toLongLong() * 1000;
+      fprintf(stdout, "STREAMED_LENGTH shown %lld ms, catalogue %lld ms\n", (long long)b->duration(), (long long)expected);
+      check(expected > 0 && qAbs(b->duration() - expected) < 2500, "a streamed song shows its real length");
+    }
     shot("playing-dark");
     check(validIconSizes(w->contentItem()), "active audio icons retain their intended size");
     click("playButton");

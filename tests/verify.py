@@ -170,8 +170,11 @@ if ready:
         else:
             e=profile('online-artwork-live-profile');e.update(SUNG_PYTHON=py)
             stage('online-artwork-live',['python3',str(root/'tests/online_artwork_live.py'),'--output',str(out/'online-artwork-live'),'--binary',str(app)],1500,e,retry=True)
+            # The packaged ffmpeg the live playback check fetches songs with; the
+            # gate builds it first (scripts/release-checks.sh).
+            packaged=os.environ.get('SUNG_PACKAGED_FFMPEG_DIR',str(root/'build-packaging/ffmpeg-out/bin'))
             for name,flag in [('native-features','--features-test'),('live-lyrics-motion','--lyrics-test'),('playback-recovery','--recovery-test'),('ui-playback','--ui-test'),('ui-audit','--audit')]:
-                e=profile(name+'-profile');e.update(SUNG_PYTHON=py,SUNG_HELPER=str(root/'helper/catalog.py'),SUNG_TEST_OUTPUT=str(out/name))
+                e=profile(name+'-profile');e.update(SUNG_PYTHON=py,SUNG_HELPER=str(root/'helper/catalog.py'),SUNG_TEST_OUTPUT=str(out/name),SUNG_PACKAGED_FFMPEG_DIR=packaged)
                 stage(name,[str(app),'--isolated',flag],480,e,retry=True)
             e=profile('hidpi-profile');e.update(SUNG_PYTHON=py,SUNG_HELPER=str(root/'helper/catalog.py'),SUNG_TEST_OUTPUT=str(out/'hidpi'),QT_SCALE_FACTOR='1.6')
             stage('ui-hidpi',[str(app),'--isolated','--ui-test'],480,e,retry=True)

@@ -359,6 +359,22 @@ helper "{\"op\":\"local-files\",\"files\":[\"$probe/tone.wav\"],\"artDirectory\"
 helper "{\"op\":\"online-artwork\",\"artworkCache\":\"$probe/art\",\"scratch\":\"$probe/scratch\"}"
 "$resources/runtime/bin/python3" -c "from yt_dlp import YoutubeDL
 from ytmusicapi import YTMusic" >/dev/null
+# YouTube's audio is fragmented MP4, which the Mac's player measures at twice
+# its length (a 4:45 song showed 9:30); the helper rewrites it whole with the
+# bundle's own ffmpeg, so that ffmpeg has to be able to. Run on a fixture shaped
+# like YouTube's, with a bare PATH as Finder gives.
+repair="$probe/fragmented.m4a"
+cp "$root/tests/fixtures/fragmented.m4a" "$repair"
+env -i PATH=/usr/bin:/bin:/usr/sbin:/sbin SUNG_FFMPEG_DIR="$resources/ffmpeg" "$resources/runtime/bin/python3" - "$resources/helper" "$repair" <<'REPAIR' ||
+import importlib.util, sys
+spec = importlib.util.spec_from_file_location('catalog', sys.argv[1] + '/catalog.py')
+catalog = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(catalog)
+assert catalog.fragmented_mp4(sys.argv[2]), 'the fixture should start out fragmented'
+assert catalog.make_whole(sys.argv[2]), 'the bundled ffmpeg could not make it whole'
+assert not catalog.fragmented_mp4(sys.argv[2])
+REPAIR
+  { echo "the bundled ffmpeg cannot rewrite a fragmented song as a whole file" >&2; exit 1; }
 
 say "Smoke test"
 # The app itself, launched from the bundle and used: a window, a local import

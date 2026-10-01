@@ -38,6 +38,9 @@
 !/tests/*.cpp
 !/tests/*.h
 !/tests/*.py
+!/tests/fixtures/
+/tests/fixtures/*
+!/tests/fixtures/fragmented.m4a
 /assets/*
 !/assets/readme-banner.png
 !/assets/sung.png

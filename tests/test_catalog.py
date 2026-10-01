@@ -164,6 +164,84 @@ class CatalogTests(unittest.TestCase):
                 catalog.run({'op':'resolve','id':'abcdefghijk','quality':quality})
                 self.assertEqual(mods['yt_dlp'].YoutubeDL.call_args[0][0]['format'],expected)
 
+    # YouTube's audio is fragmented MP4. macOS's player measures such a file at
+    # twice its length and plays on, silent, to the doubled end (a 4:45 song
+    # showed 9:30); the same audio rewritten whole is measured correctly. The
+    # helper makes sure what it hands the player is whole, whether or not ffmpeg
+    # happens to be on PATH, which it is not for an app opened from Finder.
+    def _audio(self, folder, fragmented, seconds=4):
+        import shutil, subprocess
+        if not shutil.which('ffmpeg'): self.skipTest('ffmpeg is needed to make the fixture')
+        path=str(pathlib.Path(folder)/('fragmented.m4a' if fragmented else 'whole.m4a'))
+        flags=['-movflags','frag_keyframe+empty_moov+default_base_moof'] if fragmented else []
+        subprocess.run(['ffmpeg','-nostdin','-v','error','-f','lavfi','-i','sine=frequency=330:sample_rate=44100','-t',str(seconds),
+                        '-c:a','aac','-b:a','96k',*flags,'-f','mp4',path],check=True,capture_output=True,timeout=20)
+        return path
+
+    def _duration(self, path):
+        import subprocess
+        return float(subprocess.run(['ffprobe','-v','error','-show_entries','format=duration','-of','csv=p=0',path],
+                                    check=True,capture_output=True,text=True,timeout=10).stdout)
+
+    def test_fragmented_audio_is_made_whole(self):
+        import shutil, tempfile
+        from unittest.mock import patch
+        with tempfile.TemporaryDirectory() as folder:
+            folder=str(pathlib.Path(folder).resolve())
+            path=self._audio(folder,True)
+            before=self._duration(path)
+            self.assertTrue(catalog.fragmented_mp4(path))
+            with patch.object(catalog,'_FFMPEG_DIR',str(pathlib.Path(shutil.which('ffmpeg')).parent)):
+                self.assertTrue(catalog.make_whole(path))
+            self.assertFalse(catalog.fragmented_mp4(path))
+            self.assertAlmostEqual(self._duration(path),before,delta=0.05)
+            self.assertEqual(sorted(p.name for p in pathlib.Path(folder).iterdir()),['fragmented.m4a'])
+
+    def test_whole_audio_is_left_alone(self):
+        import tempfile
+        from unittest.mock import patch
+        with tempfile.TemporaryDirectory() as folder:
+            path=self._audio(folder,False)
+            original=pathlib.Path(path).read_bytes()
+            self.assertFalse(catalog.fragmented_mp4(path))
+            # Nothing is run for a file that needs nothing: not even a missing ffmpeg matters.
+            with patch.object(catalog,'_FFMPEG_DIR','/nonexistent'):
+                self.assertTrue(catalog.make_whole(path))
+            self.assertEqual(pathlib.Path(path).read_bytes(),original)
+
+    def test_a_failed_repair_leaves_the_file_playable(self):
+        import tempfile
+        from unittest.mock import patch
+        with tempfile.TemporaryDirectory() as folder:
+            path=self._audio(folder,True)
+            original=pathlib.Path(path).read_bytes()
+            with patch.object(catalog,'_FFMPEG_DIR','/nonexistent'):
+                self.assertFalse(catalog.make_whole(path))
+            self.assertEqual(pathlib.Path(path).read_bytes(),original)
+            self.assertEqual(sorted(p.name for p in pathlib.Path(folder).iterdir()),['fragmented.m4a'])
+
+    def test_buffering_leaves_the_repair_to_the_helper(self):
+        import tempfile
+        from unittest.mock import patch, MagicMock
+        # The helper empties the buffer folder first, so the finished download
+        # is made somewhere else and named as yt-dlp's would be.
+        with tempfile.TemporaryDirectory() as folder, tempfile.TemporaryDirectory() as made:
+            folder=str(pathlib.Path(folder).resolve())
+            path=self._audio(str(pathlib.Path(made).resolve()),False)
+            downloader=MagicMock();downloader.__enter__.return_value=downloader
+            downloader.extract_info.return_value={'duration':4}
+            downloader.prepare_filename.return_value=path
+            with patch.dict('sys.modules',{'yt_dlp':MagicMock(YoutubeDL=MagicMock(return_value=downloader))}) as mods, \
+                 patch.object(catalog,'_FFMPEG_DIR','/opt/musix/ffmpeg'):
+                result=catalog.run({'op':'buffer','id':'abcdefghijk','directory':folder,'quality':'standard','playable':['m4a']})
+                options=mods['yt_dlp'].YoutubeDL.call_args[0][0]
+            # yt-dlp's own repair needs ffmpeg on PATH and aborts the download
+            # when it cannot run; it is off, and ffmpeg is named for anything else.
+            self.assertEqual(options['fixup'],'never')
+            self.assertEqual(options['ffmpeg_location'],'/opt/musix/ffmpeg')
+            self.assertTrue(result['whole'])
+            self.assertEqual(result['file'],path)
+
     def test_image_size(self):
         self.assertEqual(catalog.artwork({'thumbnails':[{'url':'https://yt3.googleusercontent.com/a=w60-h60-l90-rj'}]}),'https://yt3.googleusercontent.com/a=w544-h544-l90-rj')
 

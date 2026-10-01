@@ -11,6 +11,10 @@ set -uo pipefail
 root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 out="$root/verification/release-$(date +%Y%m%d-%H%M%S)"
 
+# The live stages fetch songs the way the packaged app does, with the ffmpeg
+# that ships; this builds it if it is not already built (a no-op otherwise).
+"$root/scripts/build-ffmpeg.sh" > "$root/build-packaging/ffmpeg-check.log" 2>&1 || { echo "building the packaged ffmpeg failed; see build-packaging/ffmpeg-check.log" >&2; exit 1; }
+export SUNG_PACKAGED_FFMPEG_DIR="$root/build-packaging/ffmpeg-out/bin"
 "$root/scripts/test.sh"
 unit=$?
 python3 "$root/tests/verify.py" --build-dir "$root/build-diag" --output "$out"

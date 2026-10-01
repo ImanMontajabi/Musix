@@ -11,8 +11,10 @@ target="${MACOSX_DEPLOYMENT_TARGET:-14.0}"
 export MACOSX_DEPLOYMENT_TARGET="$target"
 # Raised whenever the configure line below changes, so a tree or a cache built
 # with the old one is rebuilt rather than reused. 3: raw float audio output,
-# which the app reads to analyse songs ahead of playback.
-features=3
+# which the app reads to analyse songs ahead of playback. 4: the mp4 muxer,
+# which rewrites YouTube's fragmented audio as an ordinary file the Mac's
+# player measures correctly.
+features=4
 stamp="$target features-$features"
 if [ "${1:-}" = "--stamp" ]; then echo "$stamp"; exit 0; fi
 src="$here/ffmpeg-$ver"
@@ -42,7 +44,7 @@ fi
   --disable-ffplay --disable-avdevice --disable-postproc \
   --disable-devices --disable-hwaccels --disable-bsfs \
   --disable-encoders --enable-encoder=mjpeg,png,pcm_f32le \
-  --disable-muxers --enable-muxer=image2,mjpeg,pcm_f32le \
+  --disable-muxers --enable-muxer=image2,mjpeg,pcm_f32le,mp4 \
   --disable-filters --enable-filter=scale,null,anull,aformat,aresample,format \
   --disable-protocols --enable-protocol=file,pipe \
   --enable-ffmpeg --enable-ffprobe
@@ -55,5 +57,7 @@ make install
   { echo "ffmpeg was built without the pcm_f32le encoder" >&2; exit 1; }
 "$out/bin/ffmpeg" -hide_banner -muxers 2>/dev/null | grep -q " f32le " ||
   { echo "ffmpeg was built without the f32le muxer" >&2; exit 1; }
+"$out/bin/ffmpeg" -hide_banner -muxers 2>/dev/null | grep -q " mp4 " ||
+  { echo "ffmpeg was built without the mp4 muxer" >&2; exit 1; }
 echo "$stamp" > "$out/.musix-target"
 ls -lh "$out/bin/"

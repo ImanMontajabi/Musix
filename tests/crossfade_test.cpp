@@ -36,6 +36,74 @@ class CrossfadeTest : public QObject {
     return run.waitForFinished(20000) && run.exitCode() == 0;
   }
 
+  // A six-second song as YouTube serves audio: in fragments, with an index of
+  // them, and with the whole length also declared in the header (ffmpeg leaves
+  // that at zero, which the Mac's player copes with; YouTube's file does not,
+  // and the player counts the length twice). Returns the file's path, or
+  // nothing if ffmpeg could not make it.
+  QString fragmentedSong(const QString &name, const QString &title) {
+    const auto path = music.filePath(name);
+    QProcess run;
+    run.start("ffmpeg", {"-nostdin", "-v", "error", "-f", "lavfi", "-i", "sine=frequency=330:sample_rate=44100", "-t", "6",
+                         "-c:a", "aac", "-b:a", "96k", "-metadata", "title=" + title, "-metadata", "artist=Fixture artist",
+                         "-metadata", "album=Whole", "-movflags", "frag_keyframe+empty_moov+default_base_moof+global_sidx",
+                         "-f", "mp4", path});
+    if (!run.waitForFinished(20000) || run.exitCode() != 0)
+      return {};
+    QFile file(path);
+    if (!file.open(QIODevice::ReadWrite))
+      return {};
+    auto bytes = file.readAll();
+    // The three version 0 headers that carry a duration, at 44.1 kHz.
+    const struct { const char *kind; int offset; } fields[] = {{"mvhd", 24}, {"tkhd", 28}, {"mdhd", 24}};
+    for (const auto &field : fields) {
+      const auto at = bytes.indexOf(field.kind) - 4;
+      if (at < 0 || bytes.at(at + 8) != 0)
+        return {};
+      const quint32 length = qToBigEndian<quint32>(6 * 44100);
+      memcpy(bytes.data() + at + field.offset, &length, 4);
+    }
+    file.seek(0);
+    file.write(bytes);
+    return path;
+  }
+  QString madeWhole(const QString &fragmented, const QString &name) {
+    const auto path = music.filePath(name);
+    QProcess run;
+    run.start("ffmpeg", {"-nostdin", "-v", "error", "-i", fragmented, "-c", "copy", "-map", "0", "-dn", "-f", "mp4", path});
+    return run.waitForFinished(20000) && run.exitCode() == 0 ? path : QString();
+  }
+  std::unique_ptr<Backend> playing(const QStringList &songs, bool gapless) {
+    auto b = std::make_unique<Backend>();
+    b->setVolume(0.6);
+    b->setLyricsFallback(false);
+    b->setAutoplay(false);
+    b->setWatchMusicFolders(false);
+    b->setOnlineArtwork(false);
+    b->setPrepareNext(false);
+    b->setCrossfadeSeconds(0);
+    b->setGapless(gapless);
+    b->clearQueue();
+    QVariantList urls;
+    for (const auto &song : songs)
+      urls.append(QUrl::fromLocalFile(song));
+    b->importLocalFiles(urls);
+    if (!QTest::qWaitFor([&b] { return !b->importingLocal(); }, 20000))
+      return {};
+    b->library("files");
+    // The library outlives a test, so the songs are picked out by where they are.
+    QVariantList rows;
+    for (const auto &song : songs)
+      for (const auto &row : b->results()->rows)
+        if (row.toMap().value("localPath").toString() == QFileInfo(song).canonicalFilePath())
+          rows.append(row);
+    if (rows.size() != songs.size())
+      return {};
+    b->enqueueItems(rows);
+    b->playAt(0);
+    return b;
+  }
+
   // A backend with a three-song local queue, playing the first.
   std::unique_ptr<Backend> loaded(Backend **out = nullptr) {
     auto b = std::make_unique<Backend>();
@@ -536,6 +604,64 @@ private slots:
     QVERIFY2(tracks.isEmpty(), "the restore path is the one without a track change");
     QTRY_VERIFY_WITH_TIMEOUT(loudest(restored.audioLevels()) > 0.2, 3000);
     restored.stop();
+  }
+
+  // YouTube's audio is fragmented MP4, and the Mac's player measures such a
+  // file at twice its length: a 4:45 song showed 9:30, and its audio ended
+  // mid-bar, then nothing played until the bar reached the end. The helper
+  // rewrites what it downloads as an ordinary file, so that never reaches the
+  // player. This records the behaviour that makes the rewrite necessary; if a
+  // later macOS or Qt measures it correctly the expected failure passes, which
+  // fails the test, as a reminder that the rewrite can go.
+  void aFragmentedFileIsMeasuredAtTwiceItsLength() {
+    const auto fragmented = fragmentedSong("fragmented one.m4a", "Fragmented one");
+    QVERIFY(!fragmented.isEmpty());
+    auto b = playing({fragmented}, true);
+    QVERIFY(b);
+    // The player's own measurement, not the length stored with the song, which
+    // is what is shown until the player has read the file.
+    QTRY_VERIFY_WITH_TIMEOUT(b->playing() && b->media()->duration() > 0, 10000);
+    qInfo("fragmented six-second file: shown length %lld ms", (long long)b->duration());
+    QEXPECT_FAIL("", "the Mac's player measures a fragmented MP4 at twice its length", Continue);
+    QVERIFY2(qAbs(b->duration() - 6000) < 300, qPrintable(QString("shown length %1 ms").arg(b->duration())));
+    QVERIFY(b->duration() > 10000);
+    b->stop();
+  }
+
+  // What the user asked for: a song's shown length matches its real length,
+  // and the next song starts when its audio really ends, not at some later
+  // time. Both with the handover to the next song on and off.
+  void aSongShowsItsRealLengthAndTheNextStartsWhenItEnds_data() {
+    QTest::addColumn<bool>("gapless");
+    QTest::newRow("with gapless handover") << true;
+    QTest::newRow("without it") << false;
+  }
+  void aSongShowsItsRealLengthAndTheNextStartsWhenItEnds() {
+    QFETCH(bool, gapless);
+    const auto first = fragmentedSong(QString("whole first %1.m4a").arg(gapless), "Whole first");
+    const auto second = fragmentedSong(QString("whole second %1.m4a").arg(gapless), "Whole second");
+    QVERIFY(!first.isEmpty() && !second.isEmpty());
+    const auto wholeFirst = madeWhole(first, QString("first whole %1.m4a").arg(gapless));
+    const auto wholeSecond = madeWhole(second, QString("second whole %1.m4a").arg(gapless));
+    QVERIFY(!wholeFirst.isEmpty() && !wholeSecond.isEmpty());
+    auto b = playing({wholeFirst, wholeSecond}, gapless);
+    QVERIFY(b);
+    QTRY_VERIFY_WITH_TIMEOUT(b->playing() && b->media()->duration() > 0, 10000);
+    QCOMPARE(b->currentIndex(), 0);
+    QVERIFY2(qAbs(b->duration() - 6000) < 300, qPrintable(QString("shown length %1 ms for a six-second song").arg(b->duration())));
+    // Play it to within a second and a half of its real end, a point named
+    // outright so a wrongly measured file cannot move it.
+    b->seek(4500);
+    QElapsedTimer watch;
+    watch.start();
+    QTRY_VERIFY_WITH_TIMEOUT(b->currentIndex() == 1, 15000);
+    const auto took = watch.elapsed();
+    QVERIFY2(took > 900 && took < 3500,
+             qPrintable(QString("the next song started %1 ms after a song with 1500 ms left, not after about 1500").arg(took)));
+    QCOMPARE(b->current().value("title").toString(), QString("Whole second"));
+    QTRY_VERIFY_WITH_TIMEOUT(b->playing() && b->media()->duration() > 0, 5000);
+    QVERIFY2(qAbs(b->duration() - 6000) < 300, qPrintable(QString("the next song shows %1 ms").arg(b->duration())));
+    b->stop();
   }
 
   // A known issue, kept visible rather than hidden. Qt's darwin backend (6.11,

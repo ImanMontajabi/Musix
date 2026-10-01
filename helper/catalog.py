@@ -3,6 +3,8 @@
 import json
 import os
 import re
+import struct
+import subprocess
 import sys
 from urllib.parse import urlparse, parse_qs
 
@@ -20,6 +22,62 @@ _FFMPEG_DIR = os.environ.get('SUNG_FFMPEG_DIR', '')
 
 def _tool(name):
     return os.path.join(_FFMPEG_DIR, name) if _FFMPEG_DIR else name
+
+
+def fragmented_mp4(path):
+    """True if an MP4 is in fragments (a moof box after the header).
+
+    YouTube serves its audio this way. It plays, but macOS's player measures
+    such a file at twice its length and plays on, silent, to the doubled end;
+    the same file rewritten whole is measured correctly. Only the box headers
+    are read.
+    """
+    try:
+        with open(path, 'rb') as f:
+            size = os.fstat(f.fileno()).st_size
+            at = 0
+            while at + 8 <= size:
+                f.seek(at)
+                head = f.read(16)
+                length, kind = struct.unpack('>I4s', head[:8])
+                if kind == b'moof':
+                    return True
+                if length == 1 and len(head) == 16:
+                    length = struct.unpack('>Q', head[8:16])[0]
+                elif length == 0:
+                    break
+                if length < 8:
+                    break
+                at += length
+    except OSError:
+        pass
+    return False
+
+
+def make_whole(path):
+    """Rewrite a fragmented MP4 as an ordinary one, in place, without re-encoding.
+
+    yt-dlp does this itself when it is told where ffmpeg is; this is for when
+    it was not able to, so what reaches the player is a whole file either way.
+    Returns True if the file is whole afterwards.
+    """
+    path = str(path)
+    if not fragmented_mp4(path):
+        return True
+    whole = path + '.whole.m4a'
+    try:
+        subprocess.run([_tool('ffmpeg'), '-nostdin', '-v', 'error', '-y', '-i', path, '-c', 'copy', '-map', '0', '-dn',
+                        '-f', 'mp4', whole], check=True, timeout=60, capture_output=True)
+        if os.path.getsize(whole) > 0 and not fragmented_mp4(whole):
+            os.replace(whole, path)
+            return True
+    except (OSError, subprocess.SubprocessError):
+        pass
+    try:
+        os.unlink(whole)
+    except OSError:
+        pass
+    return False
 
 
 def artwork(item):
@@ -505,6 +563,13 @@ def run(req):
                     raise RuntimeError('This track is too large for temporary buffering')
             opts.update(skip_download=False, max_filesize=32*1024*1024,
                         outtmpl=str(directory/(vid+'.%(ext)s')),progress_hooks=[bound_size])
+            # yt-dlp's own repair of YouTube's fragmented audio needs ffmpeg on
+            # PATH, which a Finder launch does not have, and a repair that fails
+            # aborts the download. So it is switched off and make_whole does the
+            # same work afterwards, where a failure leaves a playable file.
+            opts['fixup'] = 'never'
+            if _FFMPEG_DIR:
+                opts['ffmpeg_location'] = _FFMPEG_DIR
             with yt_dlp.YoutubeDL(opts) as dl:
                 info=dl.extract_info('https://music.youtube.com/watch?v='+vid,download=True)
                 path=Path(dl.prepare_filename(info))
@@ -512,7 +577,7 @@ def run(req):
                 if (info.get('filesize') or info.get('filesize_approx') or 0)>32*1024*1024:
                     return {'url':info['url'],'headers':info.get('http_headers',{}),'seconds':info.get('duration',0)}
                 raise RuntimeError('Could not buffer this track')
-            return {'file':str(path),'seconds':info.get('duration',0)}
+            return {'file':str(path),'seconds':info.get('duration',0),'whole':make_whole(path)}
         with yt_dlp.YoutubeDL(opts) as dl:
             info = dl.extract_info('https://music.youtube.com/watch?v=' + vid, download=False)
         if not info or not info.get('url'):
