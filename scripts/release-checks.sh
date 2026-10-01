@@ -20,8 +20,23 @@ unit=$?
 python3 "$root/tests/verify.py" --build-dir "$root/build-diag" --output "$out"
 suites=$?
 
+# 0.14.1 through 0.15.1 showed every YouTube song at twice its length for anyone
+# who opened Musix from Finder, and every suite was green: the length check only
+# runs if the live search returned a song, and not at all under --offline. So
+# the release does not pass unless that check ran, under a bare PATH with the
+# ffmpeg that ships, and passed. verify.py's own summary can't say that.
+streamed=1
+if grep -q '^PASS a streamed song shows its real length$' "$out/ui-playback.log" 2>/dev/null &&
+   grep -q '^STREAMED_LENGTH shown ' "$out/ui-playback.log"; then
+  streamed=0
+  grep '^STREAMED_LENGTH' "$out/ui-playback.log"
+else
+  echo "the streamed-song length check did not run and pass in $out/ui-playback.log; a release needs it" >&2
+fi
+
 echo
 echo "ctest and Python:  $([ $unit -eq 0 ] && echo passed || echo "FAILED (exit $unit)")"
 echo "UI and live suites: $([ $suites -eq 0 ] && echo passed || echo "FAILED, see $out/report.txt")"
 [ $suites -ne 0 ] && grep -v '^PASS' "$out/report.txt"
-[ $unit -eq 0 ] && [ $suites -eq 0 ]
+echo "Streamed song length: $([ $streamed -eq 0 ] && echo passed || echo "MISSING")"
+[ $unit -eq 0 ] && [ $suites -eq 0 ] && [ $streamed -eq 0 ]
