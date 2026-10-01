@@ -39,3 +39,32 @@ again once the clock runs was written and measured (40–70 ms of added
 silence in the affected cases, none in ordinary seeks) and left out of 0.15.1:
 the error is under a second, it has been there since the first macOS release,
 and the choice between that and shipping a patched Qt plugin is still open.
+
+# Recorded, not verified
+
+Neither of these is an upstream report, and neither has been confirmed.
+
+## A jump from one song to the next, cause unknown
+
+In the first end-of-song run for 0.15.2 (a copy of the real library, 0.15.1,
+2026-10-01 about 03:16), the app went from Adele at 1:47 to the next song,
+"Bilit", at exactly 5:15, and then sat paused at 5:20. It was seen once and
+never reproduced in several later runs, which all handed over at the song's
+real end. It was closed with the cause unknown. Someone may have pressed Next,
+clicked the progress bar and paused in that window, but that was not
+established, and no code path that would do it by itself was found. Reopen it
+if it is seen again, and note what was playing and whether anyone touched the
+window.
+
+## The streamed-length check in the release gate
+
+`scripts/release-checks.sh` (7c27c50) fails unless `ui-playback.log` has the
+`STREAMED_LENGTH` line and its `PASS`. It has been tested only against a dead
+proxy, where it failed as intended. It has not yet been seen to pass in a
+full gate run. The first normal run of `./scripts/release-checks.sh` should
+confirm that it passes.
+
+It also measures the packaged ffmpeg from `build-packaging/ffmpeg-out/bin`,
+the build cache's copy, and not the binary inside the finished DMG. The DMG's
+copy is checked separately by `package-dmg.sh`, which repairs a fragmented
+file with it. Whether the two are the same build is not verified here.
