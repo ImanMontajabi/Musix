@@ -64,7 +64,13 @@ proxy, where it failed as intended. It has not yet been seen to pass in a
 full gate run. The first normal run of `./scripts/release-checks.sh` should
 confirm that it passes.
 
-It also measures the packaged ffmpeg from `build-packaging/ffmpeg-out/bin`,
-the build cache's copy, and not the binary inside the finished DMG. The DMG's
-copy is checked separately by `package-dmg.sh`, which repairs a fragmented
-file with it. Whether the two are the same build is not verified here.
+The packaged ffmpeg the check uses is `build-packaging/ffmpeg-out/bin`, the
+build cache's copy. What a user's Mac runs is the copy inside the DMG, so
+`dmg_ffmpeg` in the gate compares the SHA-256 of `ffmpeg` and `ffprobe` in the
+two and fails if they differ. The gate runs before the DMG exists: with the
+DMG for the version in `CMakeLists.txt` already built it makes the comparison,
+and without one it prints "NOT CHECKED". `./scripts/release-checks.sh
+--dmg-only`, run after `package-dmg.sh` and before tagging, makes just that
+comparison and fails without the DMG. It matched on the 0.15.2 DMG and failed,
+as intended, with an altered `ffmpeg` and with no DMG; it has not yet run as
+part of a full gate.
