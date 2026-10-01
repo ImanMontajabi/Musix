@@ -158,11 +158,24 @@ with a tag that did not match the build. The steps, in order:
    between the two. They must be identical. Signature, Gatekeeper, the
    minimum-macOS guard, the licence audit and the smoke test run inside the
    build; a failure in any of them stops it.
-3. **Tag the exact commit the DMG build printed, never `HEAD`** or the latest
+3. **Run the DMG the way a user's Mac does, and play a YouTube song.** The
+   build's smoke test and a launch from a terminal both inherit Homebrew's
+   `PATH`; an app opened from Finder has `/usr/bin:/bin:/usr/sbin:/sbin` only.
+   0.14.1 through 0.15.1 shipped every YouTube song at twice its length because
+   of that, and nothing in the release looked. So launch the final DMG's app as
+   `env -i HOME=$HOME PATH=/usr/bin:/bin:/usr/sbin:/sbin TMPDIR=$TMPDIR
+   MUSIX_PROFILE=<scratch> …/Musix.app/Contents/MacOS/musix --isolated`, search
+   a song, play it, and compare the length it shows with the real one; then let
+   it play to its end and see the next song start. The gate runs the same
+   check headless (`ui-playback`, which `release-checks.sh` refuses to pass
+   without), but a person looks at the packaged app too. Then install it with
+   the user, who downloads it with Safari and drags it to Applications; the
+   user clicks any Gatekeeper prompt.
+4. **Tag the exact commit the DMG build printed, never `HEAD`** or the latest
    commit. Tags are lowercase: `v<version>`. Push `main`, then the tag.
-4. `gh release create v<version>` with the DMG, the FFmpeg source tarball and
+5. `gh release create v<version>` with the DMG, the FFmpeg source tarball and
    `SHA256SUMS.txt`, marked as the latest release.
-5. **Verify the upload**: download every asset again and check its SHA-256
+6. **Verify the upload**: download every asset again and check its SHA-256
    against the local file and against `SHA256SUMS.txt`.
-6. The user decides when to publish: draft the notes and wait for their OK.
+7. The user decides when to publish: draft the notes and wait for their OK.
 
