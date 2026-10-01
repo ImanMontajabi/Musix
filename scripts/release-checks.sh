@@ -9,31 +9,22 @@
 # on a profile of its own. It needs the network for the live stages.
 #
 # The live stages fetch songs with the ffmpeg in build-packaging/ffmpeg-out/bin;
-# what a user's Mac runs is the copy inside the DMG. dmg_ffmpeg compares the two
-# byte for byte. The gate runs before the DMG exists, so with the DMG for this
-# version already built it checks it, and otherwise says plainly that it did
-# not. `--dmg-only` runs just that check and needs the DMG: run it after
-# package-dmg.sh and before tagging.
+# what a user's Mac runs is the copy inside the DMG. package-dmg.sh compares the
+# two byte for byte (scripts/check-dmg-ffmpeg.sh) and fails the build if they
+# differ, so no DMG exists without that. `--dmg-only` makes the same comparison
+# again on the DMG for this version, to re-check it later, and the full gate
+# does it too when that DMG is already built; without one it says it did not.
 set -uo pipefail
 root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 out="$root/verification/release-$(date +%Y%m%d-%H%M%S)"
 
 # 0 identical, 1 differ or unreadable, 2 no DMG for this version yet.
 dmg_ffmpeg() {
-  local version dmg mount tool a b rc=0
+  local version dmg
   version="$(sed -n 's/^project(Musix VERSION \([0-9.]*\).*/\1/p' "$root/CMakeLists.txt")"
   dmg="$root/Musix-$version-arm64.dmg"
   [ -f "$dmg" ] || { echo "no $dmg" >&2; return 2; }
-  mount="$(mktemp -d)"
-  hdiutil attach -readonly -nobrowse -noverify -mountpoint "$mount" "$dmg" >/dev/null || { rmdir "$mount"; echo "could not open $dmg" >&2; return 1; }
-  for tool in ffmpeg ffprobe; do
-    a="$(shasum -a 256 < "$root/build-packaging/ffmpeg-out/bin/$tool" 2>/dev/null | cut -d' ' -f1)"
-    b="$(shasum -a 256 < "$mount/Musix.app/Contents/Resources/ffmpeg/$tool" 2>/dev/null | cut -d' ' -f1)"
-    if [ -n "$a" ] && [ "$a" = "$b" ]; then echo "$tool in the DMG is the one the live checks use: $a"
-    else echo "$tool differs: build-packaging/ffmpeg-out/bin has ${a:-nothing}, the DMG has ${b:-nothing}" >&2; rc=1; fi
-  done
-  hdiutil detach "$mount" >/dev/null 2>&1; rmdir "$mount" 2>/dev/null
-  return $rc
+  "$root/scripts/check-dmg-ffmpeg.sh" "$dmg"
 }
 if [ "${1:-}" = "--dmg-only" ]; then dmg_ffmpeg; rc=$?; [ $rc -eq 2 ] && echo "build the DMG first" >&2; exit $rc; fi
 

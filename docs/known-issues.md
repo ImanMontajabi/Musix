@@ -66,11 +66,14 @@ confirm that it passes.
 
 The packaged ffmpeg the check uses is `build-packaging/ffmpeg-out/bin`, the
 build cache's copy. What a user's Mac runs is the copy inside the DMG, so
-`dmg_ffmpeg` in the gate compares the SHA-256 of `ffmpeg` and `ffprobe` in the
-two and fails if they differ. The gate runs before the DMG exists: with the
-DMG for the version in `CMakeLists.txt` already built it makes the comparison,
-and without one it prints "NOT CHECKED". `./scripts/release-checks.sh
---dmg-only`, run after `package-dmg.sh` and before tagging, makes just that
-comparison and fails without the DMG. It matched on the 0.15.2 DMG and failed,
-as intended, with an altered `ffmpeg` and with no DMG; it has not yet run as
-part of a full gate.
+`package-dmg.sh` runs `scripts/check-dmg-ffmpeg.sh` on the finished DMG, hashes
+`ffmpeg` and `ffprobe` in it and in the cache, and removes the DMG and fails
+the build if they differ. `./scripts/release-checks.sh --dmg-only` makes the
+same comparison later, and the full gate makes it when the DMG for the version
+in `CMakeLists.txt` is already built, and otherwise prints "NOT CHECKED".
+
+Tested: the comparison matched on the 0.15.2 DMG, and failed, as intended, with
+an altered `ffmpeg` and with no DMG. Not yet tested: the call in
+`package-dmg.sh` itself (no packaging build has run since it was added; the
+next one rebuilds the Python runtime once as well), and the check as part of a
+full gate.

@@ -171,9 +171,10 @@ with a tag that did not match the build. The steps, in order:
    without), but a person looks at the packaged app too. Then install it with
    the user, who downloads it with Safari and drags it to Applications; the
    user clicks any Gatekeeper prompt.
-   Run `./scripts/release-checks.sh --dmg-only` here too: it fails unless the
-   ffmpeg and ffprobe inside the DMG are byte-identical to the ones the gate's
-   live checks used.
+   `package-dmg.sh` already refuses to make a DMG whose ffmpeg and ffprobe are
+   not byte-identical to the ones the gate's live checks used
+   (`scripts/check-dmg-ffmpeg.sh`); `./scripts/release-checks.sh --dmg-only`
+   makes the same comparison again later, on the DMG as it now stands.
 4. **Tag the exact commit the DMG build printed, never `HEAD`** or the latest
    commit. Tags are lowercase: `v<version>`. Push `main`, then the tag.
 5. `gh release create v<version>` with the DMG, the FFmpeg source tarball and

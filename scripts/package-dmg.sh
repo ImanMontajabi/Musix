@@ -418,6 +418,10 @@ dmg="$root/Musix-$version-arm64.dmg"
 rm -f "$dmg"
 hdiutil create -volname "Musix $version" -srcfolder "$stage" -ov -format UDZO \
   -quiet "$dmg"
+# The release gate's live checks fetch songs with build-packaging/ffmpeg-out/bin;
+# a user's Mac runs the copy in this DMG. A DMG whose copy is not the tested
+# one is not made, so a release cannot skip the comparison.
+"$root/scripts/check-dmg-ffmpeg.sh" "$dmg" "$cache/ffmpeg-out/bin" || { rm -f "$dmg"; echo "the ffmpeg in the DMG is not the one that was tested; no DMG made" >&2; exit 1; }
 
 say "Artifacts"
 # These go up together: the DMG, and the source the LGPL entitles its
