@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Stands in for helper/telegram.py in the C++ tests: the same lines on stdin and
 stdout, a scripted account behind them, and no Telegram. FIXTURE_MODE picks a
-misbehaviour: flood (a sync ends with a long FLOOD_WAIT after its first page), slow (a sync takes
+misbehaviour: fetchslow (a download takes its time, so it can be cancelled), flood (a sync ends with a long FLOOD_WAIT after its first page), slow (a sync takes
 its time, so it can be cancelled), crash (dies once after the first state, then behaves), silent
 (never says anything), exit2 (says why and leaves, asking for no restart)."""
 import json, os, sys, threading, time
@@ -36,15 +36,20 @@ DIALOGS = [dict(chatId=4242, title='Saved Messages', kind='saved', username=''),
 TOPICS = {-1003: [dict(topicId=11, title='Jazz'), dict(topicId=12, title='Rock')]}
 COUNTS = {(4242, 0): 3, (-1001, 0): 250, (-1002, 0): 4, (-1003, 0): 3, (-1003, 11): 2, (-1003, 12): 1, (-100777, 0): 5}
 
+def song_row(chat, index):
+    """Saved Messages' third song is a plain document: no duration, no artist, its file name for a title."""
+    if chat == 4242 and index == 2:
+        return dict(messageId=1002, title='Plain', artist='', seconds=0, mime='audio/x-wav', size=16044, date=1700000002, fileName='Plain.wav')
+    return dict(messageId=1000 + index, title='Song %d' % index, artist='Artist', seconds=180, mime='audio/mpeg',
+                size=4000000, date=1700000000 + index, fileName='s.mp3')
+
 def sync(request, replies):
     job, chat, topic = request['job'], int(request['chatId']), int(request.get('topicId') or 0)
     total = COUNTS.get((chat, topic), 0)
     sent = 0
     while sent < total:
         n = min(100, total - sent)
-        emit(event='songs', job=job, songs=[dict(messageId=1000 + sent + i, title='Song %d' % (sent + i), artist='Artist',
-                                                  seconds=180, mime='audio/mpeg', size=4000000, date=1700000000 + sent + i,
-                                                  fileName='s.mp3') for i in range(n)])
+        emit(event='songs', job=job, songs=[song_row(chat, sent + i) for i in range(n)])
         sent += n
         emit(event='progress', job=job, scanned=sent)
         if mode == 'flood':
@@ -58,6 +63,41 @@ def sync(request, replies):
         if sent == 100 and total > 200:
             emit(event='wait', job=job, seconds=3); time.sleep(0.2); emit(event='wait', job=job, seconds=0)
     replies.put({'id': request['id'], 'ok': True, 'result': dict(count=total, complete=True)})
+
+# Long enough, when the UI suite asks, for a crossfade to fit in a song.
+WAV_SECONDS = int(os.environ.get('FIXTURE_WAV_SECONDS') or 1)
+
+def wav_bytes():
+    import io, wave
+    buffer = io.BytesIO()
+    w = wave.open(buffer, 'wb'); w.setnchannels(1); w.setsampwidth(2); w.setframerate(8000); w.writeframes(b'\0\0' * 8000 * WAV_SECONDS); w.close()
+    return buffer.getvalue()
+
+def fetch(request, replies):
+    """A download of one song: message 9999 is gone, 8888 is over the cap, 1001 takes three seconds, any other is a one-second WAV."""
+    job, message = request['job'], int(request['messageId'])
+    with open(directory / 'fetches.log', 'a') as log:
+        log.write('%d\n' % message)
+    reply = {'id': request['id']}
+    if message == 9999:
+        replies.put(dict(reply, ok=False, error='This song is no longer in the chat.')); return
+    if message == 8888:
+        replies.put(dict(reply, ok=False, error='This file is 300 MB; Musix plays Telegram songs up to 200 MB.')); return
+    out = Path(request['directory'])
+    part, target = out / (request['name'] + '.part'), out / (request['name'] + '.wav')
+    data = wav_bytes()
+    part.write_bytes(data[:len(data) // 2])
+    emit(event='progress', job=job, received=len(data) // 2, total=len(data))
+    for _ in range(60 if mode == 'fetchslow' or message == 1001 else 4):
+        if job in cancelled:
+            part.unlink(missing_ok=True)
+            replies.put(dict(reply, ok=False, error='Cancelled.')); return
+        time.sleep(0.05)
+    part.write_bytes(data)
+    emit(event='progress', job=job, received=len(data), total=len(data))
+    part.replace(target)
+    replies.put(dict(reply, ok=True, result=dict(file=str(target), size=len(data),
+                                                 tags=dict(seconds=WAV_SECONDS, title='Tagged %d' % message, artist='Tag Artist'))))
 
 import queue
 cancelled = set()
@@ -86,8 +126,8 @@ for line in sys.stdin:
             reply['result'] = dict(chat=dict(chatId=-100777, title='Public Music', kind='channel', username='public_music'))
         else:
             reply.update(ok=False, error='There is no public channel called %s.' % request['query'])
-    elif cmd == 'sync':
-        worker = threading.Thread(target=sync, args=(request, replies), daemon=True)
+    elif cmd in ('sync', 'fetch'):
+        worker = threading.Thread(target={'sync': sync, 'fetch': fetch}[cmd], args=(request, replies), daemon=True)
         workers.append(worker); worker.start()
         continue
     elif cmd == 'cancel':

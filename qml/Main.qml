@@ -1469,7 +1469,12 @@ ApplicationWindow {
                         Layout.fillWidth: true; spacing: Theme.space8
                         SungText { font.features: {"tnum": 1}; text: app.formatTime(app.position); color: Theme.muted; font.pixelSize: Theme.labelSmall; labelRole: true; Layout.preferredWidth: 34 }
                         SeekBar { Layout.fillWidth: true; objectName: "seekBar" }
-                        SungText { font.features: {"tnum": 1}; text: app.formatTime(app.duration); color: Theme.muted; font.pixelSize: Theme.labelSmall; labelRole: true; Layout.preferredWidth: 34; horizontalAlignment: Text.AlignRight }
+                        SungText {
+                            objectName: "durationLabel"; font.features: {"tnum": 1}; color: Theme.muted; font.pixelSize: Theme.labelSmall; labelRole: true; Layout.preferredWidth: 34; horizontalAlignment: Text.AlignRight
+                            // A Telegram song is downloaded whole before it plays; until then the length is unknown and the progress is the news.
+                            readonly property var download: app.telegram.download
+                            text: download.id && download.id === app.current.id && download.total > 0 ? Math.min(99, Math.round(100*download.received/download.total)) + "%" : app.formatTime(app.duration)
+                        }
                     }
                 }
                 RowLayout {

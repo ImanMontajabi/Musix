@@ -49,6 +49,8 @@ Backend::Backend(QObject *parent) : QObject(parent) {
   m_telegram.setLauncher([this]{return pythonExecutable();},[this]{return telegramScript();});
   connect(&m_telegram,&Telegram::songsReady,this,&Backend::telegramSongs);
   connect(&m_telegram,&Telegram::sourceRemoved,this,&Backend::telegramRemoved);
+  connect(&m_telegram,&Telegram::songLearned,this,&Backend::telegramLearned);
+  m_telegram.setCacheDirectory(Profile::location(QStandardPaths::CacheLocation)+"/telegram-audio");
   // Both decks report everything; only the one being heard is listened to.
   const auto eachDeck=[this](const std::function<void(QMediaPlayer *)> &wire){wire(&m_deckA);wire(&m_deckB);};
   m_userVolume=qBound(0.0,m_settings.value("volume",0.65).toDouble(),1.0);
@@ -562,7 +564,7 @@ QVariantList Backend::playable(const QVariantList &items) {
   QVariantList r;
   for (const auto &i : items) {
     const auto t = i.toMap();
-    if (((isServerSource(t.value("source")) && t.value("kind")=="song" && !t.value("remoteId").toString().isEmpty() && !t.value("server").toString().isEmpty()) || !t.value("videoId").toString().isEmpty() || (t.value("id").toString().startsWith("local_") && QDir::isAbsolutePath(t.value("localPath").toString()))) &&
+    if (((isServerSource(t.value("source")) && t.value("kind")=="song" && !t.value("remoteId").toString().isEmpty() && !t.value("server").toString().isEmpty()) || (t.value("source")=="telegram" && t.value("kind")=="song" && t.value("remoteId").toString().contains(':')) || !t.value("videoId").toString().isEmpty() || (t.value("id").toString().startsWith("local_") && QDir::isAbsolutePath(t.value("localPath").toString()))) &&
         t.value("available", true).toBool())
       r.append(t);
   }
@@ -573,11 +575,7 @@ void Backend::playResults(int index) {
   invalidateUndo("queue");
   const auto target = m_results.get(index);
   auto items = playable(m_results.rows);
-  if (items.isEmpty()) {
-    // Listed and synced, not playable yet: say so rather than do nothing.
-    if (target.value("source") == "telegram") emit toast("Playing Telegram songs isn’t available yet.");
-    return;
-  }
+  if (items.isEmpty()) return;
   int actual = 0;
   for (int i = 0; i < items.size(); ++i)
     if (itemId(items[i]) == target.value("id").toString()) {
@@ -620,10 +618,7 @@ void Backend::playCover(const QVariantMap &item) {
   request("coverplay",{{"op",kind},{"id",m_coverPlayId},{"limit",5000}},[finish](const QVariantMap &data){finish(data.value("items").toList(),data.value("ok").toBool()?QString():data.value("error","Could not load this collection.").toString());});
 }
 void Backend::playItem(const QVariantMap &item) {
-  if (playable({item}).isEmpty()) {
-    if (item.value("source") == "telegram") emit toast("Playing Telegram songs isn’t available yet.");
-    return;
-  }
+  if (playable({item}).isEmpty()) return;
   invalidateUndo("queue");
   m_queue.reconcile(queueWithOrigin({item},"manual"));
   playAt(0);
@@ -640,6 +635,7 @@ void Backend::playAt(int index, int direction) {
   if(m_sleepAtEnd)setSleep(0);
   m_wantPlay = true; m_stopped=false; m_recoveryAttempts=0; m_recovering=false; ++m_trackToken; m_savedPosition=0;
   cancel("play");
+  cancelTelegramFetch();
   cancel("linkplay");
   cancel("lyrics");
   cancel("radio");
@@ -705,6 +701,24 @@ void Backend::resolveCurrent(bool retry) {
       m_media().setSource(QUrl::fromLocalFile(data.value("file").toString()));if(m_wantPlay)m_media().play();emit playbackChanged();
       analyseSource(current(),data.value("file").toString(),true);
     });emit playbackChanged();return;
+  }
+  if(current().value("source")=="telegram"){
+    cancelPreparation();cancel("play");m_audioCache.reset();m_recovering=false;m_resolving=true;m_stopped=false;
+    if(!retry&&m_savedPosition>0)m_restorePosition=m_savedPosition;
+    const auto token=m_trackToken;const auto song=current();const auto id=song.value("id").toString();
+    m_telegramFetchId=id;
+    m_telegram.keep({id});
+    m_telegram.fetch(song,[this,token,id](const QVariantMap &data,const QString &error){
+      if(token!=m_trackToken)return;
+      m_telegramFetchId.clear();
+      if(!error.isEmpty()){m_resolving=false;m_wantPlay=false;notifyError(error,"play");emit playbackChanged();return;}
+      const QFileInfo file(data.value("file").toString());
+      if(!file.isFile()||!file.isReadable()){m_resolving=false;m_wantPlay=false;notifyError("The downloaded song can’t be opened.","play");emit playbackChanged();return;}
+      m_media().setSource(QUrl::fromLocalFile(file.absoluteFilePath()));if(m_wantPlay)m_media().play();
+      analyseSource(current(),file.absoluteFilePath(),true);
+      emit playbackChanged();
+    });
+    emit playbackChanged();return;
   }
   if(!current().value("localPath").toString().isEmpty()) {
     cancelPreparation();m_audioCache.reset();m_recovering=false;m_resolving=false;
@@ -1345,6 +1359,7 @@ void Backend::clearCache() {
       Profile::location(QStandardPaths::CacheLocation) + "/art";
   QDir(p).removeRecursively();
   m_streams.clear();
+  m_telegram.clearAudio();
   m_analysis.clearCache();
   emit artworkCacheCleared();
   emit toast("Cache cleared");
@@ -1574,6 +1589,27 @@ void Backend::telegramSongs(const QString &key, const QString &title, const QVar
                                  {"source", "telegram"}, {"telegramKey", key}});
   emit libraryChanged();
   m_saveTimer.start();
+}
+void Backend::cancelTelegramFetch() {
+  if(m_telegramFetchId.isEmpty())return;
+  m_telegram.cancelFetch(m_telegramFetchId);
+  m_telegramFetchId.clear();
+}
+// A downloaded file knew more about the song than the message did.
+void Backend::telegramLearned(const QString &id, const QVariantMap &changes) {
+  auto apply=[&](QVariant row){auto map=row.toMap();for(auto it=changes.begin();it!=changes.end();++it)map[it.key()]=it.value();return QVariant(map);};
+  auto queue=m_queue.rows;bool inQueue=false;
+  for(auto &row:queue)if(itemId(row)==id){row=apply(row);inQueue=true;}
+  if(inQueue){m_queue.reconcile(queue);emit trackChanged();}
+  bool inLibrary=false;
+  for(auto &p:m_playlists){
+    auto playlist=p.toMap();auto tracks=playlist.value("tracks").toList();bool changed=false;
+    for(auto &t:tracks)if(itemId(t)==id){t=apply(t);changed=true;}
+    if(!changed)continue;
+    playlist["tracks"]=tracks;p=playlist;inLibrary=true;
+    if(m_libraryId==playlist.value("id").toString()&&m_page=="local")m_results.assign(tracks);
+  }
+  if(inLibrary){emit libraryChanged();m_saveTimer.start();}
 }
 void Backend::telegramRemoved(const QString &key) {
   const auto id = Telegram::playlistId(key);
@@ -2106,10 +2142,33 @@ void Backend::cancelPreparation(){
 void Backend::updatePreparation(){
   m_prepareTimer.stop();
   QString nextId;
+  QVariantMap nextTelegram;
   if(prepareNext()&&playing()&&m_wantPlay&&!m_resolving&&!shuffle()&&repeat()!=2&&!m_sleepAtEnd&&m_index>=0){
     const int next=m_index+1<m_queue.count()?m_index+1:repeat()==1?0:-1;
-    if(next>=0&&next!=m_index)nextId=m_queue.get(next).value("videoId").toString();
-    if(m_sleepTimer.isActive()&&m_sleepTimer.remainingTime()<qMax<qint64>(0,duration()-position())/playbackRate())nextId.clear();
+    if(next>=0&&next!=m_index){
+      const auto track=m_queue.get(next);
+      nextId=track.value("videoId").toString();
+      if(track.value("source")=="telegram")nextTelegram=track;
+    }
+    const bool sleeps=m_sleepTimer.isActive()&&m_sleepTimer.remainingTime()<qMax<qint64>(0,duration()-position())/playbackRate();
+    if(sleeps){nextId.clear();nextTelegram.clear();}
+  }
+  // A song that was going to be next and no longer is stops coming down.
+  if(!m_telegramPrefetchId.isEmpty() && m_telegramPrefetchId!=nextTelegram.value("id").toString()){
+    if(m_telegramPrefetchId!=m_telegramFetchId)m_telegram.cancelFetch(m_telegramPrefetchId);
+    m_telegramPrefetchId.clear();
+  }
+  if(!nextTelegram.isEmpty()){
+    // Telegram's next song is downloaded into the song cache a minute before
+    // it is needed, which is also what lets gapless and crossfade start it.
+    cancelPreparation();
+    const qint64 remaining=(duration()-position())/playbackRate();
+    if(duration()<=0)return;
+    if(remaining>60000){m_prepareTimer.start(int(qMin<qint64>(remaining-60000,2147483647)));return;}
+    m_telegram.keep({current().value("id").toString(),nextTelegram.value("id").toString()});
+    m_telegramPrefetchId=nextTelegram.value("id").toString();
+    m_telegram.prefetch(nextTelegram);
+    return;
   }
   if(nextId.isEmpty()){cancelPreparation();m_preparationAttempt.clear();return;}
   if(m_preparedId!=nextId){cancelPreparation();m_preparationAttempt.clear();m_preparedId=nextId;}
@@ -2733,6 +2792,10 @@ QUrl Backend::readySource(const QVariantMap &track) const {
   if(!local.isEmpty()){
     const QFileInfo file(local);
     return file.isFile() && file.isReadable() ? QUrl::fromLocalFile(file.absoluteFilePath()) : QUrl();
+  }
+  if(track.value("source")=="telegram"){
+    const auto path=m_telegram.cached(track.value("id").toString());
+    return path.isEmpty()?QUrl():QUrl::fromLocalFile(path);
   }
   const auto id=track.value("videoId").toString();
   if(id.isEmpty() || id!=m_preparedId || m_preparedData.isEmpty())return {};

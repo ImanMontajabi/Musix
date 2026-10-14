@@ -4,6 +4,8 @@
 #include <QDateTime>
 #include <QDir>
 #include <QFile>
+#include <QFileInfo>
+#include <QSaveFile>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QProcessEnvironment>
@@ -47,8 +49,14 @@ Telegram::Telegram(const QString &directory, QObject *parent)
   });
   m_restart.setSingleShot(true);
   connect(&m_restart, &QTimer::timeout, this, [this] { if (wanted()) start(); });
+  // Playing a song brings the helper up, which takes a few seconds; it stays
+  // for a while after the last download so the next song does not wait for that.
+  m_linger.setSingleShot(true);
+  m_linger.setInterval(90000);
+  connect(&m_linger, &QTimer::timeout, this, [this] { releaseIfIdle(); });
   restoreAccount();
   loadSources();
+  loadTags();
 }
 
 Telegram::~Telegram() { stopProcess(); }
@@ -152,6 +160,7 @@ void Telegram::start() {
             const bool listed = m_listing > 0;
             m_listing = 0;
             abandonJobs("Telegram stopped. Refresh to try again.");
+            failFetches(true, "Telegram stopped. Try again.");
             if (listed) m_listError = "Telegram stopped. Try again.";
             emit listChanged();
             if (code == 2 && m_state != "starting") {
@@ -220,7 +229,11 @@ void Telegram::submitPhone(const QString &phone) { send("phone", {{"phone", phon
 void Telegram::submitCode(const QString &code) { send("code", {{"code", code}}); }
 void Telegram::submitPassword(const QString &password) { send("password", {{"password", password}}); }
 void Telegram::back() { send("back"); }
-void Telegram::logout() { send("logout"); }
+void Telegram::logout() {
+  failFetches(true, "Signed out of Telegram.");
+  clearCache();
+  send("logout");
+}
 
 // --- Requests that carry an answer ----------------------------------------
 
@@ -258,6 +271,7 @@ void Telegram::failWaiting(const QString &message) {
   m_afterReady.clear();
   m_listing = 0;
   const auto reason = message.isEmpty() ? QStringLiteral("Sign in to Telegram first.") : message;
+  failFetches(false, reason);
   for (auto &source : m_sources) {
     auto map = source.toMap();
     if (map.value("status") != "queued") continue;
@@ -387,7 +401,12 @@ QVariantMap Telegram::songRow(const QVariantMap &source, const QJsonObject &song
                   {"size", qint64(song.value("size").toDouble())},
                   {"added", qint64(song.value("date").toDouble())},
                   {"telegramChat", chat},
-                  {"telegramMessage", message}};
+                  {"telegramMessage", message},
+                  {"fileName", song.value("fileName").toString()}};
+  // What a file said about itself when it was played stays, through a refresh
+  // that only knows what the message carried.
+  const auto learned = m_tags.value(row.value("id").toString());
+  for (auto it = learned.begin(); it != learned.end(); ++it) row[it.key()] = it.value();
   if (const auto topic = source.value("topicId").toString(); !topic.isEmpty() && topic != "0") row["telegramTopic"] = topic;
   return row;
 }
@@ -545,6 +564,15 @@ void Telegram::handle(const QJsonObject &message) {
     return;
   }
   const auto event = message.value("event").toString();
+  if (event == "progress" && message.contains("received")) {
+    const int job = message.value("job").toInt();
+    if (!m_fetches.contains(job)) return;
+    auto &entry = m_fetches[job];
+    entry.received = qint64(message.value("received").toDouble());
+    entry.total = qint64(message.value("total").toDouble());
+    setDownload();
+    return;
+  }
   if (event == "songs" || event == "progress" || event == "wait") {
     const int job = message.value("job").toInt();
     if (!m_jobs.contains(job)) return;
@@ -573,6 +601,7 @@ void Telegram::handle(const QJsonObject &message) {
     m_userId = idText(message.value("userId"));
   } else if (state == "wait-phone") {
     // Signed out, whether by asking to or because Telegram ended the session.
+    if (!m_name.isEmpty()) clearCache();
     m_name.clear();
     m_username.clear();
     m_userId.clear();
@@ -585,5 +614,214 @@ void Telegram::handle(const QJsonObject &message) {
   } else if (state == "wait-phone" || state == "offline") {
     if (!m_afterReady.isEmpty() || m_listing > 0)
       failWaiting(state == "offline" ? message.value("error").toString() : QStringLiteral("Sign in to Telegram first."));
+  }
+}
+
+// --- Songs, whole -----------------------------------------------------------
+
+void Telegram::setCacheDirectory(const QString &directory) {
+  m_cacheDirectory = directory;
+  QDir().mkpath(directory);
+  QFile::setPermissions(directory, QFileDevice::ReadOwner | QFileDevice::WriteOwner | QFileDevice::ExeOwner);
+  // A download that was cut off by the app closing leaves its half behind.
+  for (const auto &name : QDir(directory).entryList({"*.part"}, QDir::Files)) QFile::remove(directory + "/" + name);
+}
+
+QString Telegram::cached(const QString &songId) const {
+  if (m_cacheDirectory.isEmpty() || songId.isEmpty()) return {};
+  for (const auto &name : QDir(m_cacheDirectory).entryList({songId + ".*"}, QDir::Files))
+    if (!name.endsWith(".part")) return m_cacheDirectory + "/" + name;
+  return {};
+}
+
+bool Telegram::fetching(const QString &songId) const {
+  for (const auto &entry : m_fetches)
+    if (entry.song.value("id") == songId) return true;
+  return false;
+}
+
+void Telegram::setDownload() {
+  QVariantMap next;
+  for (const auto &entry : m_fetches)
+    if (entry.started && entry.done) {
+      next = {{"id", entry.song.value("id")}, {"received", entry.received}, {"total", entry.total ? entry.total : entry.song.value("size").toLongLong()}};
+      break;
+    }
+  if (next == m_download) return;
+  m_download = next;
+  emit downloadChanged();
+}
+
+void Telegram::fetch(const QVariantMap &song, Fetched done) {
+  const auto id = song.value("id").toString();
+  const auto remote = song.value("remoteId").toString();
+  const auto colon = remote.lastIndexOf(':');
+  if (id.isEmpty() || colon <= 0 || m_cacheDirectory.isEmpty()) {
+    if (done) done({}, "This Telegram song can’t be found again. Refresh its playlist.");
+    return;
+  }
+  if (const auto path = cached(id); !path.isEmpty()) {
+    // Used now, so it is the last to go.
+    if (QFile used(path); used.open(QIODevice::ReadOnly)) used.setFileTime(QDateTime::currentDateTime(), QFileDevice::FileModificationTime);
+    if (done) done({{"file", path}, {"cached", true}}, {});
+    return;
+  }
+  for (auto it = m_fetches.begin(); it != m_fetches.end(); ++it)
+    if (it->song.value("id") == id) {
+      if (done) it->done = std::move(done);
+      setDownload();
+      return;
+    }
+  const int job = m_nextJob++;
+  m_fetches.insert(job, Fetch{song, std::move(done), false, 0, 0});
+  whenReady([this, job] { startFetch(job); });
+}
+
+void Telegram::prefetch(const QVariantMap &song) { fetch(song, {}); }
+
+void Telegram::startFetch(int job) {
+  auto it = m_fetches.find(job);
+  if (it == m_fetches.end()) return;
+  const auto remote = it->song.value("remoteId").toString();
+  const auto colon = remote.lastIndexOf(':');
+  it->started = true;
+  setDownload();
+  send("fetch", {{"chatId", remote.left(colon)}, {"messageId", remote.mid(colon + 1)}, {"name", it->song.value("id").toString()},
+                 {"directory", m_cacheDirectory}, {"limit", double(MaxSongBytes)}, {"job", job}},
+       [this, job](const QJsonObject &reply) { finishFetch(job, reply); });
+}
+
+void Telegram::finishFetch(int job, const QJsonObject &reply) {
+  if (!m_fetches.contains(job)) return; // cancelled meanwhile
+  auto finished = m_fetches.take(job);
+  setDownload();
+  const auto id = finished.song.value("id").toString();
+  QString error;
+  QVariantMap data;
+  if (reply.value("ok").toBool()) {
+    const auto result = reply.value("result").toObject();
+    const QFileInfo file(result.value("file").toString());
+    // The helper is trusted with the account, not with where files go.
+    if (file.isFile() && file.canonicalPath() == QFileInfo(m_cacheDirectory).canonicalFilePath()) {
+      data = {{"file", file.absoluteFilePath()}, {"cached", false}, {"tags", result.value("tags").toObject().toVariantMap()}};
+      learn(finished.song, result.value("tags").toObject());
+      evict(id);
+    } else {
+      error = "Telegram didn’t deliver the song. Try again.";
+    }
+  } else {
+    error = reply.value("error").toString();
+  }
+  releaseSoon();
+  if (finished.done) finished.done(data, error);
+}
+
+void Telegram::cancelFetch(const QString &songId) {
+  for (auto it = m_fetches.begin(); it != m_fetches.end(); ++it) {
+    if (it->song.value("id") != songId) continue;
+    const bool started = it->started;
+    const int job = it.key();
+    m_fetches.erase(it);
+    // Queued behind the session: the action finds nothing to start. Running:
+    // the helper stops reading and removes its half-file.
+    if (started) send("cancel", {{"job", job}}, {});
+    setDownload();
+    if (started) releaseSoon(); // the next song is likely to want the session at once
+    else releaseIfIdle();
+    return;
+  }
+}
+
+// Fetches that cannot go on tell whoever waits; a prefetch has nobody to tell.
+void Telegram::failFetches(bool startedToo, const QString &message) {
+  QList<Fetched> waiting;
+  for (auto it = m_fetches.begin(); it != m_fetches.end();) {
+    if (it->started && !startedToo) {
+      ++it;
+      continue;
+    }
+    if (it->done) waiting.append(it->done);
+    it = m_fetches.erase(it);
+  }
+  setDownload();
+  for (auto &done : waiting) done({}, message);
+}
+
+void Telegram::releaseSoon() {
+  if (m_holders > 0 || !m_jobs.isEmpty()) return;
+  m_linger.start();
+}
+
+// Fill what the sync could not know. A plain document carries no duration and
+// no artist, and its title is its file name; the file's own tags usually do.
+void Telegram::learn(const QVariantMap &song, const QJsonObject &tags) {
+  QVariantMap changes;
+  const auto seconds = tags.value("seconds").toInt();
+  if (song.value("seconds").toInt() <= 0 && seconds > 0) changes["seconds"] = seconds;
+  const auto artist = tags.value("artist").toString();
+  if (song.value("artist").toString().isEmpty() && !artist.isEmpty()) changes["artist"] = artist;
+  const auto title = tags.value("title").toString();
+  const auto current = song.value("title").toString();
+  const auto stem = QFileInfo(song.value("fileName").toString()).completeBaseName();
+  if (!title.isEmpty() && (current == "Untitled" || (!stem.isEmpty() && current == stem))) changes["title"] = title;
+  if (changes.isEmpty()) return;
+  const auto id = song.value("id").toString();
+  auto kept = m_tags.value(id);
+  for (auto it = changes.begin(); it != changes.end(); ++it) kept[it.key()] = it.value();
+  m_tags.insert(id, kept);
+  saveTags();
+  emit songLearned(id, changes);
+}
+
+void Telegram::loadTags() {
+  QFile file(m_directory + "/tags.json");
+  if (!file.open(QIODevice::ReadOnly)) return;
+  const auto all = QJsonDocument::fromJson(file.readAll()).object();
+  for (auto it = all.begin(); it != all.end(); ++it) m_tags.insert(it.key(), it.value().toObject().toVariantMap());
+}
+
+void Telegram::saveTags() const {
+  QDir().mkpath(m_directory);
+  QJsonObject all;
+  for (auto it = m_tags.begin(); it != m_tags.end(); ++it) all.insert(it.key(), QJsonObject::fromVariantMap(it.value()));
+  QSaveFile file(m_directory + "/tags.json");
+  if (!file.open(QIODevice::WriteOnly)) return;
+  file.write(QJsonDocument(all).toJson(QJsonDocument::Compact));
+  if (file.commit()) QFile::setPermissions(m_directory + "/tags.json", QFileDevice::ReadOwner | QFileDevice::WriteOwner);
+}
+
+// Oldest first out, until both the song count and the size are within bounds;
+// what is playing, what plays next and what just arrived stay whatever the sum.
+void Telegram::evict(const QString &alsoKeep) {
+  if (m_cacheDirectory.isEmpty()) return;
+  int songs = 0;
+  qint64 bytes = 0;
+  for (const auto &info : QDir(m_cacheDirectory).entryInfoList(QDir::Files, QDir::Time)) { // newest first
+    if (info.suffix() == "part") continue;
+    const bool kept = info.completeBaseName() == alsoKeep || m_keep.contains(info.completeBaseName());
+    if (!kept && (songs >= m_cacheSongs || bytes + info.size() > m_cacheBytes)) {
+      QFile::remove(info.absoluteFilePath());
+      continue;
+    }
+    ++songs;
+    bytes += info.size();
+  }
+}
+
+// The settings' "Clear cache": the downloaded songs go, except the ones playing
+// or next, which the player has open. What the files taught is kept.
+void Telegram::clearAudio() {
+  if (m_cacheDirectory.isEmpty()) return;
+  for (const auto &info : QDir(m_cacheDirectory).entryInfoList(QDir::Files))
+    if ((info.suffix() == "part" && m_fetches.isEmpty()) || (info.suffix() != "part" && !m_keep.contains(info.completeBaseName()))) QFile::remove(info.absoluteFilePath());
+}
+
+// Signing out: nothing of the account stays on this Mac.
+void Telegram::clearCache() {
+  if (!m_cacheDirectory.isEmpty())
+    for (const auto &name : QDir(m_cacheDirectory).entryList(QDir::Files)) QFile::remove(m_cacheDirectory + "/" + name);
+  if (!m_tags.isEmpty()) {
+    m_tags.clear();
+    QFile::remove(m_directory + "/tags.json");
   }
 }

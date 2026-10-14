@@ -5488,19 +5488,91 @@ void runTelegramTests(Backend *b, QQuickWindow *w) {
   c.check(settledSource("-1001") && settledSource("4242"), "Refresh all syncs them again");
   c.check(playlist("telegram:-1001").value("count").toInt() == 250, "replacing, not adding to, the songs");
 
-  // Telegram songs are listed but cannot be played yet; that says so.
-  QStringList toasts;
-  QObject::connect(b, &Backend::toast, b, [&](const QString &message) { toasts << message; });
+  // --- Playing -------------------------------------------------------------
+  // Saved Messages holds two ordinary songs and a plain document that tells
+  // nothing about itself; message 1001 is slow to download, so it can be skipped.
+  const int wavSeconds = qMax(1, qEnvironmentVariableIntValue("FIXTURE_WAV_SECONDS"));
+  account->setLinger(1500); // the helper stays this long after a song; the real wait is 90 s
   b->openPlaylist("telegram:4242");
   c.check(c.until([&] { return b->results()->count() == 3; }), "a Telegram playlist opens like any other");
+  const auto songId = [&](int i) { return b->results()->get(i).value("id").toString(); };
+  const auto fetchLog = [&] {
+    QFile log(account->sessionFolder() + "/fetches.log");
+    return log.open(QIODevice::ReadOnly) ? int(log.readAll().split('\n').size()) - 1 : 0;
+  };
+  c.check(b->results()->get(2).value("seconds").toInt() == 0 && b->results()->get(2).value("artist").toString().isEmpty(),
+          "the plain document was listed with no length and no artist");
+  b->playResults(2);
+  c.check(b->resolving() || b->playing(), "choosing a Telegram song starts getting it");
+  c.check(c.until([&] { return b->playing() && b->duration() > 0; }, 20000), "the downloaded song plays");
+  c.check(!account->cached(songId(2)).isEmpty() && QFileInfo(account->cached(songId(2))).isFile(), "from a file in the song cache");
+  c.check(c.until([&] { return b->current().value("artist").toString() == "Tag Artist"; }), "its own tags filled in the artist");
+  c.check(b->current().value("title").toString() == "Tagged 1002" && b->current().value("seconds").toInt() == wavSeconds, "and the title and length");
+  c.check(c.until([&] { return b->results()->get(2).value("artist").toString() == "Tag Artist"; }),
+          "the open playlist shows what was learned");
+  c.shot("13-playing");
+  // A refresh knows only what the message says, and must not forget it.
+  account->refresh("4242");
+  c.check(settledSource("4242"), "refreshing the source again");
+  c.check(b->results()->get(2).value("title").toString() == "Tagged 1002" && b->results()->get(2).value("artist").toString() == "Tag Artist",
+          "keeps the title and artist the file gave");
+
+  // The same song again is the cache: no second download.
+  const int downloads = fetchLog();
   b->playResults(0);
-  c.check(toasts.join("|").contains("Telegram songs"), "playing one says that is not available yet");
+  c.check(c.until([&] { return b->playing() && b->current().value("id").toString() == songId(0); }, 20000), "another song plays");
+  c.check(fetchLog() == downloads + 1, "after downloading once");
+  // The song after it in the queue is already on its way while this one plays.
+  c.check(c.until([&] { return account->fetching(songId(1)); }, 10000), "the next song is already coming down while this one plays");
+  b->playResults(2);
+  c.check(c.until([&] { return b->playing() && b->current().value("id").toString() == songId(2) && b->duration() > 0; }, 20000), "going back to the first one");
+  c.check(fetchLog() == downloads + 1, "is the cache: Telegram was not asked again");
+  c.check(c.until([&] { return !account->fetching(songId(1)); }, 10000), "and the last song has nothing after it, so the preload stops");
+
+  // A next song already in the cache is handed over to without a wait, with
+  // or without an overlap: the spare deck opens the cached file at once.
+  if (wavSeconds >= 4) {
+    bool waited = false;
+    QObject::connect(b, &Backend::playbackChanged, b, [&] { if (b->resolving()) waited = true; });
+    const int before = fetchLog();
+    for (const int overlap : {0, 1}) {
+      b->setGapless(overlap == 0);
+      b->setCrossfadeSeconds(overlap);
+      b->playItem(b->results()->get(0));
+      b->enqueue(b->results()->get(2));
+      c.check(c.until([&] { return b->playing() && b->current().value("id").toString() == songId(0) && b->duration() > 0; }, 20000), "song one plays");
+      c.check(c.until([&] { return !b->resolving(); }), "it has stopped resolving");
+      waited = false;
+      if (overlap) c.check(c.until([&] { return b->crossfading(); }, 20000), "the next song fades in over it");
+      c.check(c.until([&] { return b->current().value("id").toString() == songId(2); }, 20000), overlap ? "and takes over" : "the next song follows with no gap");
+      c.check(!waited, overlap ? "without the player waiting for anything" : "without the player ever waiting");
+      c.check(c.until([&] { return b->playing() && b->duration() > 0; }), "and plays");
+    }
+    c.check(fetchLog() == before, "neither needed Telegram");
+    b->setCrossfadeSeconds(0);
+    b->setGapless(false);
+  }
+
+  // Skipping away from a download in progress stops it.
+  b->playResults(1);
+  c.check(c.until([&] { return account->download().value("id").toString() == songId(1); }, 20000), "a slow song is downloading");
+  c.check(b->resolving(), "and the player waits for it");
+  auto lengthLabel = [&] { auto i = shownItem(w->contentItem(), "durationLabel"); return i ? i->property("text").toString() : QString(); };
+  c.check(c.until([&] { return lengthLabel().endsWith("%"); }, 10000), "where the song's length goes, the player shows how much has come down");
+  c.shot("14-downloading");
+  b->playResults(2);
+  c.check(c.until([&] { return b->playing() && b->current().value("id").toString() == songId(2) && b->duration() > 0; }, 20000), "skipping to another song plays that one");
+  c.check(!account->fetching(songId(1)) && account->download().isEmpty(), "and the download that was skipped is cancelled");
+  QTest::qWait(500);
+  c.check(account->cached(songId(1)).isEmpty() && QDir(QFileInfo(account->cached(songId(2))).absolutePath()).entryList({"*.part"}).isEmpty(),
+          "leaving no file of it behind");
+  c.check(b->error().isEmpty(), "with no error shown");
 
   // Removing a source takes its playlist with it.
   account->removeSource("4242");
   c.check(playlist("telegram:4242").isEmpty() && account->sources().size() == 3, "removing a source removes its playlist");
   c.click("telegramSourcesClose");
-  c.check(c.until([&] { return account->state() == "closed"; }), "closing the dialog lets the helper go");
+  c.check(c.until([&] { return account->state() == "closed"; }, 20000), "closing the dialog lets the helper go, once the last song has had its moment");
 
   // Back to the account dialog to sign out.
   c.dialog("settingsDialog");

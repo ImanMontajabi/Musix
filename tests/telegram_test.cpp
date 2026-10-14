@@ -10,6 +10,12 @@
 #include <QtTest>
 #include <csignal>
 
+struct Got {
+  bool done = false;
+  QVariantMap data;
+  QString error;
+};
+
 class TelegramTest : public QObject {
   Q_OBJECT
   QTemporaryDir storage;
@@ -33,7 +39,7 @@ private slots:
     qputenv("MUSIX_TELEGRAM_API_ID", "12345");
     qputenv("MUSIX_TELEGRAM_API_HASH", "abcdef");
   }
-  void init() { clean(); }
+  void init() { clean(); QDir(cache()).removeRecursively(); }
 
   void withoutCredentialsThereIsNothingToStart() {
     qputenv("MUSIX_TELEGRAM_API_ID", "0");
@@ -199,6 +205,24 @@ private slots:
       return false;
     }, 15000);
   }
+  // A song the way the library keeps it, before anything is known about the file.
+  static QVariantMap song(const QString &id, int message, int seconds = 0) {
+    return {{"id", id}, {"source", "telegram"}, {"kind", "song"}, {"remoteId", "-1001:" + QString::number(message)},
+            {"title", "Untitled"}, {"artist", ""}, {"seconds", seconds}, {"fileName", "Untitled.wav"}};
+  }
+  static Telegram::Fetched into(Got &got) {
+    return [&got](const QVariantMap &data, const QString &error) { got.done = true; got.data = data; got.error = error; };
+  }
+  bool fetched(Telegram &t, const QVariantMap &s, Got &got) {
+    got = {};
+    t.fetch(s, into(got));
+    return QTest::qWaitFor([&] { return got.done; }, 15000);
+  }
+  QString cache() const { return storage.path() + "/cache"; }
+  int fetchesLogged() const {
+    QFile log(storage.path() + "/telegram/fetches.log");
+    return log.open(QIODevice::ReadOnly) ? log.readAll().split('\n').size() - 1 : 0;
+  }
   QVariantMap source(Telegram &t, const QString &key) {
     for (const auto &v : t.sources())
       if (v.toMap().value("key") == key) return v.toMap();
@@ -352,6 +376,198 @@ private slots:
     QCOMPARE(source(*t, "-1001").value("message").toString(), QString("Cancelled."));
     QCOMPARE(ready.count(), 1);
     QVERIFY(!ready.first().at(3).toBool());
+  }
+  void aSongIsDownloadedWholeIntoTheCacheAndItsTagsFillTheGaps() {
+    signIn();
+    auto t = make();
+    t->setCacheDirectory(cache());
+    QSignalSpy learned(t.get(), &Telegram::songLearned);
+    QList<QVariantMap> shown;
+    connect(t.get(), &Telegram::downloadChanged, this, [&] { shown.append(t->download()); });
+    Got got;
+    QVERIFY(fetched(*t, song("tg_one", 12), got));
+    QVERIFY2(got.error.isEmpty(), qPrintable(got.error));
+    QVERIFY(!got.data.value("cached").toBool());
+    QCOMPARE(got.data.value("file").toString(), cache() + "/tg_one.wav");
+    QVERIFY(QFileInfo(got.data.value("file").toString()).isFile());
+    QCOMPARE(t->cached("tg_one"), cache() + "/tg_one.wav");
+    // The length, artist and the file-name title were unknown; the file knew.
+    QCOMPARE(learned.count(), 1);
+    QCOMPARE(learned.first().at(0).toString(), QString("tg_one"));
+    const auto changes = learned.first().at(1).toMap();
+    QCOMPARE(changes.value("seconds").toInt(), 1);
+    QCOMPARE(changes.value("artist").toString(), QString("Tag Artist"));
+    QCOMPARE(changes.value("title").toString(), QString("Tagged 12"));
+    // Progress was shown while it ran, and is gone when it finished.
+    QVERIFY(!shown.isEmpty());
+    QCOMPARE(shown.first().value("id").toString(), QString("tg_one"));
+    qint64 most = 0;
+    for (const auto &entry : shown) most = qMax(most, entry.value("received").toLongLong());
+    QVERIFY(most > 0);
+    QVERIFY(t->download().isEmpty());
+    // What was learned is kept on disk for the next refresh, readable by the owner only.
+    QFile kept(storage.path() + "/telegram/tags.json");
+    QVERIFY(kept.exists());
+    const auto mode = QFileInfo(kept).permissions();
+    QVERIFY(mode.testFlags(QFileDevice::ReadOwner | QFileDevice::WriteOwner));
+    QVERIFY(!(mode & (QFileDevice::ReadGroup | QFileDevice::WriteGroup | QFileDevice::ExeGroup | QFileDevice::ReadOther | QFileDevice::WriteOther | QFileDevice::ExeOther)));
+    // The second play is the cache: instant, and the helper is not asked again.
+    QVERIFY(fetched(*t, song("tg_one", 12), got));
+    QVERIFY(got.data.value("cached").toBool());
+    QCOMPARE(fetchesLogged(), 1);
+  }
+  void aSongWithKnownDetailsIsLeftAlone() {
+    signIn();
+    auto t = make();
+    t->setCacheDirectory(cache());
+    QSignalSpy learned(t.get(), &Telegram::songLearned);
+    auto known = song("tg_known", 13, 200);
+    known["artist"] = "Real Artist";
+    known["title"] = "Real Title";
+    Got got;
+    QVERIFY(fetched(*t, known, got));
+    QCOMPARE(learned.count(), 0);
+  }
+  void theCacheKeepsTheRecentSongsAndDropsTheOldest() {
+    signIn();
+    auto t = make();
+    t->setCacheDirectory(cache());
+    t->setCacheLimits(2, 100 * 1024 * 1024);
+    Got got;
+    for (const char *id : {"tg_a", "tg_b"}) QVERIFY(fetched(*t, song(id, 1), got));
+    // Playing a again makes b the oldest.
+    QVERIFY(fetched(*t, song("tg_a", 1), got));
+    QVERIFY(got.data.value("cached").toBool());
+    QVERIFY(fetched(*t, song("tg_c", 1), got));
+    QVERIFY(!t->cached("tg_a").isEmpty());
+    QVERIFY(t->cached("tg_b").isEmpty());
+    QVERIFY(!t->cached("tg_c").isEmpty());
+  }
+  void theCacheIsAlsoBoundedBySize() {
+    signIn();
+    auto t = make();
+    t->setCacheDirectory(cache());
+    t->setCacheLimits(10, 20000); // a song is a little over 16 kB
+    Got got;
+    for (const char *id : {"tg_a", "tg_b", "tg_c"}) QVERIFY(fetched(*t, song(id, 1), got));
+    QVERIFY(!t->cached("tg_c").isEmpty()); // the newest always stays, even alone over the budget
+    QVERIFY(t->cached("tg_a").isEmpty());
+    QVERIFY(t->cached("tg_b").isEmpty());
+  }
+  void whatIsPlayingOrNextIsNeverEvicted() {
+    signIn();
+    auto t = make();
+    t->setCacheDirectory(cache());
+    t->setCacheLimits(1, 100 * 1024 * 1024);
+    Got got;
+    QVERIFY(fetched(*t, song("tg_a", 1), got));
+    t->keep({"tg_a", "tg_b"});
+    QVERIFY(fetched(*t, song("tg_b", 1), got));
+    QVERIFY(fetched(*t, song("tg_c", 1), got));
+    QVERIFY(!t->cached("tg_a").isEmpty());
+    QVERIFY(!t->cached("tg_b").isEmpty());
+    t->clearAudio(); // the settings' Clear cache spares them too
+    QVERIFY(t->cached("tg_c").isEmpty());
+    QVERIFY(!t->cached("tg_a").isEmpty());
+  }
+  void aDownloadThatIsSkippedIsCancelledAndLeavesNothing() {
+    signIn();
+    auto t = make("fetchslow");
+    t->setCacheDirectory(cache());
+    Got got;
+    t->fetch(song("tg_skip", 21), into(got));
+    QVERIFY(QTest::qWaitFor([&] { return t->download().value("id") == "tg_skip"; }, 10000));
+    t->cancelFetch("tg_skip");
+    QVERIFY(t->download().isEmpty());
+    QTest::qWait(600);
+    QVERIFY(!got.done); // nobody is told about a download they walked away from
+    QVERIFY(QDir(cache()).entryList(QDir::Files).isEmpty());
+    // The helper is still there for the next song.
+    QCOMPARE(t->state(), QString("ready"));
+  }
+  void askingForASongAlreadyComingDownloadsItOnce() {
+    signIn();
+    auto t = make();
+    t->setCacheDirectory(cache());
+    Got first, second;
+    t->prefetch(song("tg_next", 31)); // the preload a minute before the end
+    t->fetch(song("tg_next", 31), into(second)); // then the track change that wants it
+    QVERIFY(QTest::qWaitFor([&] { return second.done; }, 15000));
+    QVERIFY(second.error.isEmpty());
+    QCOMPARE(fetchesLogged(), 1);
+    QVERIFY(!first.done);
+  }
+  void aMissingSongAndATooBigOneSayWhy() {
+    signIn();
+    auto t = make();
+    t->setCacheDirectory(cache());
+    Got got;
+    QVERIFY(fetched(*t, song("tg_gone", 9999), got));
+    QCOMPARE(got.error, QString("This song is no longer in the chat."));
+    QVERIFY(fetched(*t, song("tg_big", 8888), got));
+    QVERIFY(got.error.contains("200 MB"));
+    QVERIFY(QDir(cache()).entryList(QDir::Files).isEmpty());
+  }
+  void aSongThatCanNotBeFoundAgainSaysSo() {
+    signIn();
+    auto t = make();
+    t->setCacheDirectory(cache());
+    Got got;
+    auto bad = song("tg_bad", 1);
+    bad["remoteId"] = "nonsense";
+    QVERIFY(fetched(*t, bad, got));
+    QVERIFY(got.error.contains("Refresh"));
+  }
+  void withoutASessionPlayingSaysToSignInAndLetsTheHelperGo() {
+    auto t = make(); // no account.json: the helper starts signed out
+    QDir().mkpath(storage.path() + "/telegram");
+    t->setCacheDirectory(cache());
+    Got got;
+    QVERIFY(fetched(*t, song("tg_nosession", 1), got));
+    QVERIFY(got.error.contains("Sign in"));
+    QVERIFY(reach(*t, "closed"));
+  }
+  void aHelperThatDiesDuringADownloadFailsItInsteadOfHanging() {
+    signIn();
+    auto t = make("fetchslow");
+    t->setCacheDirectory(cache());
+    Got got;
+    t->fetch(song("tg_die", 41), into(got));
+    QVERIFY(QTest::qWaitFor([&] { return t->download().value("id") == "tg_die"; }, 10000));
+    QProcess::execute("pkill", {"-f", "telegram_fixture.py"});
+    QVERIFY(QTest::qWaitFor([&] { return got.done; }, 10000));
+    QVERIFY(!got.error.isEmpty());
+  }
+  void theHelperStaysUpForAWhileAfterASongSoTheNextOneDoesNotWaitForIt() {
+    signIn();
+    auto t = make();
+    t->setCacheDirectory(cache());
+    Got got;
+    QVERIFY(fetched(*t, song("tg_linger", 1), got));
+    QTest::qWait(300);
+    QCOMPARE(t->state(), QString("ready"));
+  }
+  void halfFilesFromAnInterruptedRunAreRemoved() {
+    QDir().mkpath(cache());
+    QFile half(cache() + "/tg_half.part");
+    QVERIFY(half.open(QIODevice::WriteOnly));
+    half.write("xx");
+    half.close();
+    auto t = make();
+    t->setCacheDirectory(cache());
+    QVERIFY(!QFile::exists(cache() + "/tg_half.part"));
+    QVERIFY(t->cached("tg_half").isEmpty());
+  }
+  void signingOutLeavesNoSongsOrTagsBehind() {
+    signIn();
+    auto t = make();
+    t->setCacheDirectory(cache());
+    Got got;
+    QVERIFY(fetched(*t, song("tg_gone_on_logout", 1), got));
+    QVERIFY(QFile::exists(storage.path() + "/telegram/tags.json"));
+    t->logout();
+    QVERIFY(QDir(cache()).entryList(QDir::Files).isEmpty());
+    QVERIFY(!QFile::exists(storage.path() + "/telegram/tags.json"));
   }
   void aRefreshWithoutASessionSaysToSignInAndLetsTheHelperGo() {
     // No account.json: the helper starts signed out.

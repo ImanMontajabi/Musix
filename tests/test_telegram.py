@@ -497,6 +497,171 @@ class Songs(Case):
         self.assertTrue(replies[10]['ok'])
 
 
+class Fetching(Case):
+    """Downloading one song whole, by the ids the library kept for it."""
+    def setUp(self):
+        super().setUp()
+        self.audio = self.dir / 'audio'
+        self.audio.mkdir()
+
+    def ready(self, messages, size=None):
+        a = self.account(authorised=True); run(a.start()); self.events.clear()
+        a.client.downloaded = []
+
+        async def entity(chat): return 'peer'
+
+        async def get_messages(peer, ids=None):
+            return messages.get(ids)
+
+        async def download_file(document, out, file_size=None, progress_callback=None):
+            a.client.downloaded.append(document)
+            for step in (1, 2):
+                out.write(b'RIFF' if step == 1 else b'')
+                if progress_callback: progress_callback(step * 50, 100)
+            if getattr(document, 'payload', None) is not None:
+                out.seek(0); out.write(document.payload); out.truncate()
+        a.client.get_input_entity, a.client.get_messages, a.client.download_file = entity, get_messages, download_file
+        return a
+
+    @staticmethod
+    def sized_unknown():
+        return Message(7, Document('audio/mpeg', [DocumentAttributeAudio('T', 'A', 100), DocumentAttributeFilename('x.mp3')], size=0))
+
+    def fetch(self, a, **extra):
+        return run(a.handle(dict({'cmd': 'fetch', 'chatId': -1001, 'messageId': 7, 'job': 3, 'name': 'tg_abc',
+                                  'directory': str(self.audio)}, **extra)))
+
+    @staticmethod
+    def wav(path_name, tags=True):
+        import io, wave
+        buffer = io.BytesIO()
+        w = wave.open(buffer, 'wb'); w.setnchannels(1); w.setsampwidth(2); w.setframerate(8000); w.writeframes(b'\0\0' * 16000); w.close()
+        return buffer.getvalue()
+
+    def test_the_song_is_downloaded_under_its_name_with_progress(self):
+        doc = Document('audio/mpeg', [DocumentAttributeFilename('Some Song.mp3')], size=0)
+        doc.payload = b'ID3-not-really-audio'
+        a = self.ready({7: Message(7, doc)})
+        result = self.fetch(a)
+        self.assertEqual(Path(result['file']), self.audio / 'tg_abc.mp3')
+        self.assertEqual((self.audio / 'tg_abc.mp3').read_bytes(), b'ID3-not-really-audio')
+        self.assertEqual(list(self.audio.iterdir()), [self.audio / 'tg_abc.mp3'])
+        progress = [e for e in self.events if e.get('event') == 'progress']
+        self.assertEqual([(e['job'], e['received'], e['total']) for e in progress], [(3, 50, 100), (3, 100, 100)])
+
+    def test_a_file_over_the_cap_is_refused_before_anything_is_downloaded(self):
+        big = Message(7, Document('audio/flac', [DocumentAttributeFilename('Album.flac')], size=201 * 1048576))
+        a = self.ready({7: big})
+        with self.assertRaises(telegram.Rejected) as caught:
+            self.fetch(a)
+        self.assertIn('201 MB', str(caught.exception))
+        self.assertIn('200 MB', str(caught.exception))
+        self.assertEqual(a.client.downloaded, [])
+        self.assertEqual(list(self.audio.glob('tg_abc*')), [])
+
+    def test_a_lossless_file_under_the_cap_is_fine(self):
+        doc = Document('audio/flac', [DocumentAttributeFilename('Album.flac')], size=150 * 1048576)
+        doc.payload = b'x'
+        a = self.ready({7: Message(7, doc)})
+        with self.assertRaises(telegram.Rejected) as caught:   # the fake delivers 1 byte, not 150 MB
+            self.fetch(a)
+        self.assertIn('incomplete', str(caught.exception))
+        self.assertEqual(list(self.audio.glob('tg_abc*')), [])
+
+    def test_a_deleted_message_or_a_non_song_is_said_plainly(self):
+        a = self.ready({7: Message(7, Document('application/pdf', [DocumentAttributeFilename('a.pdf')]))})
+        for message_id in (7, 8):
+            with self.assertRaises(telegram.Rejected) as caught:
+                self.fetch(a, messageId=message_id)
+            self.assertEqual(str(caught.exception), 'This song is no longer in the chat.')
+
+    def test_a_name_that_could_leave_the_folder_is_refused(self):
+        a = self.ready({7: self.sized_unknown()})
+        for bad in ('../x', 'a/b', '', 'x.mp3'):
+            with self.assertRaises(telegram.Rejected, msg=bad):
+                self.fetch(a, name=bad)
+
+    def test_a_cancelled_download_leaves_no_partial_file(self):
+        a = self.ready({7: self.sized_unknown()})
+
+        async def scenario():
+            started = asyncio.Event()
+
+            async def download_file(document, out, file_size=None, progress_callback=None):
+                out.write(b'half'); started.set(); await asyncio.sleep(30)
+            a.client.download_file = download_file
+            task = asyncio.create_task(telegram.answer(a, {'id': 9, 'cmd': 'fetch', 'chatId': 5, 'messageId': 7, 'job': 4,
+                                                           'name': 'tg_abc', 'directory': str(self.audio)}))
+            await started.wait()
+            await telegram.answer(a, {'id': 10, 'cmd': 'cancel', 'job': 4})
+            await task
+        run(scenario())
+        reply = [e for e in self.events if e.get('id') == 9][0]
+        self.assertEqual(reply['error'], 'Cancelled.')
+        self.assertEqual(list(self.audio.glob('tg_abc*')), [])
+
+    def test_a_flood_wait_during_a_download_is_waited_out_and_the_download_starts_again(self):
+        a = self.ready({7: self.sized_unknown()})
+        attempts = []
+
+        async def sleeping(seconds): pass
+        real = asyncio.sleep
+        telegram.asyncio.sleep = sleeping
+        self.addCleanup(setattr, telegram.asyncio, 'sleep', real)
+
+        async def download_file(document, out, file_size=None, progress_callback=None):
+            attempts.append(1)
+            if len(attempts) == 1:
+                out.write(b'old'); raise FloodWaitError(20)
+            out.write(b'fresh')
+        a.client.download_file = download_file
+        result = self.fetch(a)
+        self.assertEqual(Path(result['file']).read_bytes(), b'fresh')
+        waits = [e['seconds'] for e in self.events if e.get('event') == 'wait']
+        self.assertEqual(waits, [20, 0])
+
+    def test_a_chat_the_session_has_not_seen_yet_is_found_through_the_chat_list(self):
+        a = self.ready({7: self.sized_unknown()})
+        seen = []
+
+        async def entity(chat):
+            if not seen: raise ValueError('not cached')
+            return 'peer'
+        a.client.get_input_entity = entity
+        a.client.iter_dialogs = lambda limit=None: self._chats(seen)
+        result = self.fetch(a)
+        self.assertEqual(seen, ['listed'])
+        self.assertTrue(Path(result['file']).is_file())
+
+    @staticmethod
+    def _chats(seen):
+        async def gen():
+            seen.append('listed')
+            if False: yield
+        return gen()
+
+    @unittest.skipUnless(importlib.util.find_spec('mutagen'), 'mutagen is in the project runtime (helper/requirements.txt), not the system Python')
+    def test_the_files_own_tags_and_length_are_read_for_the_app_to_fill_in(self):
+        import wave
+        from mutagen.id3 import TIT2, TPE1
+        from mutagen.wave import WAVE
+        path = self.dir / 'tagged.wav'
+        w = wave.open(str(path), 'wb'); w.setnchannels(1); w.setsampwidth(2); w.setframerate(8000); w.writeframes(b'\0\0' * 16000); w.close()
+        f = WAVE(str(path)); f.add_tags(); f.tags.add(TIT2(encoding=3, text='Tagged')); f.tags.add(TPE1(encoding=3, text='Band')); f.save()
+        self.assertEqual(telegram.read_tags(path), {'seconds': 2, 'title': 'Tagged', 'artist': 'Band'})
+
+    def test_a_file_mutagen_cannot_read_has_no_tags_rather_than_an_error(self):
+        path = self.dir / 'junk.mp3'
+        path.write_bytes(b'not audio at all')
+        self.assertEqual(telegram.read_tags(path), {})
+        self.assertEqual(telegram.read_tags(self.dir / 'missing.mp3'), {})
+
+    def test_the_extension_follows_the_name_then_the_type(self):
+        self.assertEqual(telegram.audio_extension('A.FLAC', 'application/octet-stream'), '.flac')
+        self.assertEqual(telegram.audio_extension('noext', 'audio/mpeg'), '.mp3')
+        self.assertEqual(telegram.audio_extension('', 'audio/x-weird'), '.audio')
+
+
 async def _done(value):
     return value
 

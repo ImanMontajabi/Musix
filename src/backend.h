@@ -709,6 +709,9 @@ private:
   QString telegramScript() const;
   void telegramSongs(const QString &key, const QString &title, const QVariantList &songs, bool complete);
   void telegramRemoved(const QString &key);
+  void telegramLearned(const QString &id, const QVariantMap &changes);
+  void cancelTelegramFetch();
+  QString m_telegramFetchId, m_telegramPrefetchId;
   QString pythonExecutable() const;
   QString ffmpegDirectory() const;
   QString writableRuntime() const;

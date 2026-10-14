@@ -12,11 +12,12 @@ written here.
 
 Requests   {"id": 1, "cmd": "phone", "phone": "+49 151 2345678"}
            cmd: status | phone | code | password | back | logout
-                dialogs | topics | resolve | sync | cancel   (signed in only)
+                dialogs | topics | resolve | sync | fetch | cancel   (signed in only)
 Replies    {"id": 1, "ok": true[, "result": {...}]}   or   {"id": 1, "ok": false, "error": "..."}
 Events     {"event": "state", "state": "...", ...}
            {"event": "songs", "job": n, "songs": [...]}   one batch of a sync
-           {"event": "progress", "job": n, "scanned": n}
+           {"event": "progress", "job": n, "scanned": n}     a sync
+           {"event": "progress", "job": n, "received": n, "total": n}   a fetch
            {"event": "wait", "job": n, "seconds": n}      Telegram asked for a pause; 0 when over
 States     starting, offline, wait-phone, wait-code, wait-password, ready
 
@@ -38,12 +39,19 @@ ACCOUNT_FILE = 'account.json'
 SESSION_NAME = 'session'
 BATCH = 100
 MAX_SONGS = 20000
+# Telegram is where people keep lossless albums, so the cap is far above what a
+# streamed song needs. Past it the song is refused rather than half downloaded.
+MAX_FETCH = 200 * 1024 * 1024
+MIME_EXTENSIONS = {'audio/mpeg': '.mp3', 'audio/mp3': '.mp3', 'audio/flac': '.flac', 'audio/x-flac': '.flac',
+                   'audio/mp4': '.m4a', 'audio/x-m4a': '.m4a', 'audio/aac': '.aac', 'audio/ogg': '.ogg',
+                   'application/ogg': '.ogg', 'audio/opus': '.opus', 'audio/wav': '.wav', 'audio/x-wav': '.wav',
+                   'audio/vnd.wave': '.wav', 'audio/x-ms-wma': '.wma', 'audio/aiff': '.aiff', 'audio/x-aiff': '.aiff'}
 # A pause Telegram asks for (FLOOD_WAIT) is waited out when it is short, with
 # the person told; a longer one ends the request and the person is told when to
 # come back. Telethon would sleep silently for anything under a minute.
 FLOOD_LIMIT = 180
 AUDIO_EXTENSIONS = ('.mp3', '.flac', '.m4a', '.ogg', '.opus', '.wav', '.aac', '.wma', '.alac', '.aiff', '.ape')
-DATA_COMMANDS = ('dialogs', 'topics', 'resolve', 'sync')
+DATA_COMMANDS = ('dialogs', 'topics', 'resolve', 'sync', 'fetch')
 
 
 class Rejected(Exception):
@@ -147,6 +155,49 @@ def song_from(message):
         'date': int(date.timestamp()) if date else 0,
         'fileName': name,
     }
+
+
+def audio_extension(file_name, mime):
+    """The extension a downloaded song is kept under: the file's own, else the type's."""
+    suffix = Path(file_name or '').suffix.lower()
+    if suffix in AUDIO_EXTENSIONS:
+        return suffix
+    return MIME_EXTENSIONS.get((mime or '').lower(), '.audio')
+
+
+def read_tags(path):
+    """What the file itself says about the song, or {} when mutagen can't read it.
+
+    The sync only knows what the message's audio attribute carried, which for a
+    plain document is nothing: no duration, no artist, the file name for a title.
+    """
+    try:
+        import mutagen
+        found = mutagen.File(str(path), easy=True)
+    except Exception:
+        return {}
+    if found is None:
+        return {}
+    tags = {}
+    length = getattr(getattr(found, 'info', None), 'length', 0) or 0
+    if length > 0:
+        tags['seconds'] = int(round(length))
+
+    def first(key, frame):
+        # Easy tags where mutagen has them, ID3 frames for formats it has no
+        # easy form of (WAV, AIFF).
+        try:
+            value = found.tags.get(key) or found.tags.get(frame) if found.tags is not None else None
+        except Exception:
+            return ''
+        if value is None:
+            return ''
+        value = getattr(value, 'text', value)
+        return str(value[0] if isinstance(value, (list, tuple)) and value else value if not isinstance(value, (list, tuple)) else '').strip()
+    for key, frame in (('title', 'TIT2'), ('artist', 'TPE1'), ('album', 'TALB')):
+        if first(key, frame):
+            tags[key] = first(key, frame)
+    return tags
 
 
 def public_name(query):
@@ -378,6 +429,58 @@ class Account:
                     complete = False
                 await asyncio.sleep(0.15)
         return {'count': total, 'complete': complete}
+
+    async def message_for(self, chat, message_id):
+        """The message a song lives in, found again from the ids the library kept."""
+        try:
+            peer = await self.client.get_input_entity(int(chat))
+        except ValueError:
+            # The session has not seen this chat since it started; reading the
+            # chat list teaches it the access hash.
+            async for _ in self.client.iter_dialogs(limit=400):
+                pass
+            peer = await self.client.get_input_entity(int(chat))
+        message = await self.guarded(lambda: self.client.get_messages(peer, ids=int(message_id)))
+        if isinstance(message, list):
+            message = message[0] if message else None
+        return message
+
+    async def do_fetch(self, request):
+        """Download one song whole into `directory`, under the name `name`.
+
+        The file is written beside its final name and moved into place only when
+        complete, so a cancelled or failed download never leaves something the
+        player could mistake for a song.
+        """
+        job = request.get('job')
+        name, directory = str(request.get('name') or ''), Path(str(request.get('directory') or ''))
+        if not re.fullmatch(r'[A-Za-z0-9_]{1,64}', name) or not directory.is_dir():
+            raise Rejected('Nowhere to keep the song.')
+        message = await self.message_for(request['chatId'], request['messageId'])
+        song = song_from(message) if message is not None else None
+        if song is None:
+            raise Rejected('This song is no longer in the chat.')
+        limit = int(request.get('limit') or MAX_FETCH)
+        if song['size'] > limit:
+            raise Rejected('This file is %d MB; Musix plays Telegram songs up to %d MB.' % (song['size'] // 1048576, limit // 1048576))
+        target = directory / (name + audio_extension(song['fileName'], song['mime']))
+        part = directory / (name + '.part')
+        document = message.media.document
+
+        def progress(received, total):
+            self.emit({'event': 'progress', 'job': job, 'received': int(received), 'total': int(total or song['size'])})
+
+        async def download():
+            with open(part, 'wb') as out:
+                await self.client.download_file(document, out, file_size=song['size'] or None, progress_callback=progress)
+        try:
+            await self.guarded(download, job)
+            if part.stat().st_size == 0 or (song['size'] and part.stat().st_size != song['size']):
+                raise Rejected('Telegram sent an incomplete file. Try again.')
+            os.replace(part, target)
+        finally:
+            part.unlink(missing_ok=True)
+        return {'file': str(target), 'size': target.stat().st_size, 'tags': read_tags(target)}
 
     def require(self, *states):
         if self.state not in states:

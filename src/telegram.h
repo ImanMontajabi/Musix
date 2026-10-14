@@ -14,8 +14,16 @@
 // (Saved Messages, a joined chat, a forum topic, a public channel), asks the
 // helper to list their songs a page at a time, and hands each finished list to
 // whoever owns the library (songsReady). The helper is up only while a dialog is
-// open or a request is running; a refresh started from anywhere brings it up,
-// waits for the session, and lets it go when the work is done.
+// open or a request is running (and for a while after a song was downloaded);
+// a refresh started from anywhere brings it up, waits for the session, and lets
+// it go when the work is done.
+//
+// Playing a song is a whole-file download: the helper finds the message again
+// from the chat and message ids the library kept, writes the file into a small
+// cache of recent songs, and reads its tags once it is whole. The player then
+// opens an ordinary file, so seeking, gapless and crossfade behave as they do
+// for a local one. The cache is bounded by song count and by size; a song that
+// is playing or about to play is never evicted.
 //
 // The API id and hash come from the build (telegram-api.local.cmake or
 // -DMUSIX_TELEGRAM_API_ID/HASH), or from the environment of a checkout. They
@@ -49,6 +57,8 @@ class Telegram : public QObject {
   Q_PROPERTY(bool listing READ listing NOTIFY listChanged)
   Q_PROPERTY(QString listError READ listError NOTIFY listChanged)
   Q_PROPERTY(bool syncing READ syncing NOTIFY sourcesChanged)
+  // The song being downloaded to play: {id, received, total}, empty when none is.
+  Q_PROPERTY(QVariantMap download READ download NOTIFY downloadChanged)
 public:
   // `directory` holds the session; `restore` reads who was signed in last time.
   explicit Telegram(const QString &directory, QObject *parent = nullptr);
@@ -74,9 +84,15 @@ public:
   bool listing() const { return m_listing > 0; }
   QString listError() const { return m_listError; }
   bool syncing() const { return !m_jobs.isEmpty() || !m_afterReady.isEmpty(); }
+  QVariantMap download() const { return m_download; }
 
-  // Dialog opened: bring the helper up. Dialog closed: let it go, since no
-  // other part of the app needs the connection yet.
+  // Largest song that is downloaded, and how much of the cache is kept.
+  static constexpr qint64 MaxSongBytes = 200LL * 1024 * 1024;
+  static constexpr int CacheSongs = 12;
+  static constexpr qint64 CacheBytes = 1024LL * 1024 * 1024;
+
+  // Dialog opened: bring the helper up. Dialog closed: let it go, unless a
+  // sync or a download still wants it.
   Q_INVOKABLE void open();
   Q_INVOKABLE void close();
   Q_INVOKABLE void retry();
@@ -100,6 +116,23 @@ public:
   Q_INVOKABLE void refreshAll();
   Q_INVOKABLE void cancelSync(const QString &key);
   Q_INVOKABLE bool hasSource(const QString &chatId, const QString &topicId = {}) const;
+  // Playing. `done` gets {file, tags, cached} or an error; a cached song answers
+  // at once, without the helper. A second fetch of a song already coming
+  // replaces the first one's `done` instead of downloading it twice.
+  using Fetched = std::function<void(const QVariantMap &data, const QString &error)>;
+  void setCacheDirectory(const QString &directory);
+  void setLinger(int milliseconds) { m_linger.setInterval(milliseconds); }
+  void setCacheLimits(int songs, qint64 bytes) { m_cacheSongs = songs; m_cacheBytes = bytes; }
+  QString cached(const QString &songId) const;
+  void fetch(const QVariantMap &song, Fetched done);
+  // The same download for a song that will be wanted soon; nobody waits for it.
+  void prefetch(const QVariantMap &song);
+  void cancelFetch(const QString &songId);
+  bool fetching(const QString &songId) const;
+  // Songs the cache must not evict now: the one playing and the one next.
+  void keep(const QStringList &songIds) { m_keep = songIds; }
+  void clearAudio();
+  void clearCache();
   // The playlist id the library keeps a source's songs under.
   Q_INVOKABLE static QString playlistId(const QString &key) { return "telegram:" + key; }
 signals:
@@ -112,7 +145,26 @@ signals:
   // it already has instead of replacing that.
   void songsReady(const QString &key, const QString &title, const QVariantList &songs, bool complete);
   void sourceRemoved(const QString &key);
+  void downloadChanged();
+  // The file said more about a song than the sync knew: its length, artist or
+  // title. `changes` holds only the fields to set.
+  void songLearned(const QString &songId, const QVariantMap &changes);
 private:
+  struct Fetch {
+    QVariantMap song;
+    Fetched done;
+    bool started = false;
+    qint64 received = 0, total = 0;
+  };
+  void startFetch(int job);
+  void finishFetch(int job, const QJsonObject &reply);
+  void failFetches(bool startedToo, const QString &message);
+  void evict(const QString &alsoKeep);
+  void learn(const QVariantMap &song, const QJsonObject &tags);
+  void loadTags();
+  void saveTags() const;
+  void setDownload();
+  void releaseSoon();
   struct Job {
     QString key;
     QVariantList songs;
@@ -129,7 +181,7 @@ private:
   void loadSources();
   void saveSources() const;
   QVariantMap songRow(const QVariantMap &source, const QJsonObject &song) const;
-  bool wanted() const { return m_holders > 0 || !m_jobs.isEmpty() || !m_afterReady.isEmpty(); }
+  bool wanted() const { return m_holders > 0 || !m_jobs.isEmpty() || !m_afterReady.isEmpty() || !m_fetches.isEmpty() || m_linger.isActive(); }
   void stopProcess();
   void releaseIfIdle();
   void start();
@@ -143,7 +195,14 @@ private:
   qint64 m_apiId = 0;
   QProcess *m_process = nullptr;
   QByteArray m_buffer;
-  QTimer m_startTimeout, m_restart;
+  QTimer m_startTimeout, m_restart, m_linger;
+  QString m_cacheDirectory;
+  int m_cacheSongs = CacheSongs;
+  qint64 m_cacheBytes = CacheBytes;
+  QStringList m_keep;
+  QHash<int, Fetch> m_fetches;
+  QHash<QString, QVariantMap> m_tags;
+  QVariantMap m_download;
   int m_pending = 0, m_nextId = 1, m_crashes = 0, m_holders = 0, m_listing = 0, m_nextJob = 1;
   QString m_userId, m_listError;
   QVariantList m_sources, m_chats, m_topics;
