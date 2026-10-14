@@ -7,6 +7,8 @@ its time, so it can be cancelled), crash (dies once after the first state, then 
 import json, os, sys, threading, time
 from pathlib import Path
 
+os.umask(0o077)  # like the real helper: what it writes is the owner's alone
+
 directory = Path(os.environ['MUSIX_TELEGRAM_DIR'])
 mode = os.environ.get('FIXTURE_MODE', '')
 (directory / 'seen-env.json').write_text(json.dumps({k: os.environ.get(k, '') for k in
@@ -36,12 +38,33 @@ DIALOGS = [dict(chatId=4242, title='Saved Messages', kind='saved', username=''),
 TOPICS = {-1003: [dict(topicId=11, title='Jazz'), dict(topicId=12, title='Rock')]}
 COUNTS = {(4242, 0): 3, (-1001, 0): 250, (-1002, 0): 4, (-1003, 0): 3, (-1003, 11): 2, (-1003, 12): 1, (-100777, 0): 5}
 
+def png(r, g, b):
+    import struct, zlib
+    def chunk(kind, body):
+        return struct.pack('>I', len(body)) + kind + body + struct.pack('>I', zlib.crc32(kind + body) & 0xffffffff)
+    row = b'\x00' + bytes((r, g, b)) * 8
+    return (b'\x89PNG\r\n\x1a\n' + chunk(b'IHDR', struct.pack('>IIBBBBB', 8, 8, 8, 2, 0, 0, 0))
+            + chunk(b'IDAT', zlib.compress(row * 8)) + chunk(b'IEND', b''))
+
+def art(request):
+    """A thumbnail for message 1000 and 1002 of any chat (1001 has none); a photo for every chat but -1002."""
+    out, name = Path(request['directory']), request['name']
+    with open(directory / 'art.log', 'a') as log:
+        log.write('%s %s %s\n' % (request['kind'], request['chatId'], request.get('messageId', '')))
+    if request['kind'] == 'thumb' and int(request['messageId']) not in (1000, 1002):
+        return dict(file='')
+    if request['kind'] == 'photo' and int(request['chatId']) == -1002:
+        return dict(file='')
+    target = out / (name + '.png')
+    target.write_bytes(png(200, 40, 40) if request['kind'] == 'photo' else png(40, 40, 200))
+    return dict(file=str(target))
+
 def song_row(chat, index):
     """Saved Messages' third song is a plain document: no duration, no artist, its file name for a title."""
     if chat == 4242 and index == 2:
-        return dict(messageId=1002, title='Plain', artist='', seconds=0, mime='audio/x-wav', size=16044, date=1700000002, fileName='Plain.wav')
+        return dict(messageId=1002, title='Plain', artist='', seconds=0, mime='audio/x-wav', size=16044, date=1700000002, fileName='Plain.wav', thumb=True)
     return dict(messageId=1000 + index, title='Song %d' % index, artist='Artist', seconds=180, mime='audio/mpeg',
-                size=4000000, date=1700000000 + index, fileName='s.mp3')
+                size=4000000, date=1700000000 + index, fileName='s.mp3', thumb=chat in (4242, -100777))
 
 def sync(request, replies):
     job, chat, topic = request['job'], int(request['chatId']), int(request.get('topicId') or 0)
@@ -96,8 +119,12 @@ def fetch(request, replies):
     part.write_bytes(data)
     emit(event='progress', job=job, received=len(data), total=len(data))
     part.replace(target)
-    replies.put(dict(reply, ok=True, result=dict(file=str(target), size=len(data),
-                                                 tags=dict(seconds=WAV_SECONDS, title='Tagged %d' % message, artist='Tag Artist'))))
+    result = dict(file=str(target), size=len(data), tags=dict(seconds=WAV_SECONDS, title='Tagged %d' % message, artist='Tag Artist'))
+    if request.get('artDirectory') and message == 1003:   # only message 1003 has a picture inside
+        inside = Path(request['artDirectory']) / (request['artName'] + '.png')
+        inside.write_bytes(png(40, 200, 40))
+        result['art'] = str(inside)
+    replies.put(dict(reply, ok=True, result=result))
 
 import queue
 cancelled = set()
@@ -130,6 +157,8 @@ for line in sys.stdin:
         worker = threading.Thread(target={'sync': sync, 'fetch': fetch}[cmd], args=(request, replies), daemon=True)
         workers.append(worker); worker.start()
         continue
+    elif cmd == 'art':
+        reply['result'] = art(request)
     elif cmd == 'cancel':
         cancelled.add(request['job'])
     elif cmd == 'phone':

@@ -5488,6 +5488,31 @@ void runTelegramTests(Backend *b, QQuickWindow *w) {
   c.check(settledSource("-1001") && settledSource("4242"), "Refresh all syncs them again");
   c.check(playlist("telegram:-1001").value("count").toInt() == 250, "replacing, not adding to, the songs");
 
+  // --- Cover art -------------------------------------------------------------
+  c.check(c.until([&] { return !account->artPending(); }, 30000), "the pictures have come down");
+  const auto coverOf = [&](const QString &id) {
+    for (const auto &v : b->playlists()) if (v.toMap().value("id") == id) return v.toMap().value("customCover").toString();
+    return QString();
+  };
+  c.check(coverOf("telegram:-1001").contains("/c") && coverOf("telegram:-1001").contains("cover.png"), "a channel's photo is its playlist's cover");
+  c.check(!coverOf("telegram:4242").isEmpty(), "Saved Messages has a cover too");
+  c.check(coverOf("telegram:-1002").isEmpty(), "a chat with no photo keeps the ordinary look");
+  {
+    const QUrl cover(coverOf("telegram:-1001"));
+    c.check(cover.isLocalFile() && QFileInfo(cover.toLocalFile()).isFile() && !QImage(cover.toLocalFile()).isNull(), "and it is a picture the app can draw");
+  }
+  b->openPlaylist("telegram:4242");
+  c.check(c.until([&] { return b->results()->count() == 3; }), "Saved Messages opens");
+  c.check(c.until([&] { return !b->results()->get(0).value("art").toString().isEmpty(); }, 10000), "a song with a thumbnail shows it");
+  c.check(b->results()->get(1).value("art").toString().isEmpty() && !b->results()->get(2).value("art").toString().isEmpty(),
+          "a song without one has none, and the next one has");
+  c.check(c.until([&] { return b->cover() == coverOf("telegram:4242"); }, 5000), "the open playlist wears its cover");
+  c.shot("15-cover-art");
+  QMetaObject::invokeMethod(w, "chooseLibrary", Q_ARG(QVariant, QVariant("playlists")));
+  QTest::qWait(600);
+  c.shot("16-playlists-with-covers");
+  b->openPlaylist("telegram:4242");
+
   // --- Playing -------------------------------------------------------------
   // Saved Messages holds two ordinary songs and a plain document that tells
   // nothing about itself; message 1001 is slow to download, so it can be skipped.
@@ -5568,8 +5593,20 @@ void runTelegramTests(Backend *b, QQuickWindow *w) {
           "leaving no file of it behind");
   c.check(b->error().isEmpty(), "with no error shown");
 
-  // Removing a source takes its playlist with it.
+  // A song's own picture, from inside its file: the public channel's fourth song has one.
+  b->openPlaylist("telegram:-100777");
+  c.check(c.until([&] { return b->results()->count() == 5; }), "the public channel's playlist opens");
+  b->playResults(3);
+  c.check(c.until([&] { return b->playing() && b->current().value("id").toString() == b->results()->get(3).value("id").toString(); }, 20000), "its fourth song plays");
+  c.check(c.until([&] { return b->current().value("art").toString().contains("/cn100777/") ; }, 10000), "the picture inside the file becomes the song's art");
+  c.check(c.until([&] { return b->results()->get(3).value("art").toString().contains("/cn100777/"); }, 5000), "in the playlist too");
+  c.shot("17-embedded-art");
+
+  // Removing a source takes its playlist, and its pictures, with it.
+  const QUrl savedCover(account->coverUrl("4242"));
+  c.check(savedCover.isLocalFile() && QFileInfo(savedCover.toLocalFile()).isFile(), "Saved Messages' cover is on disk");
   account->removeSource("4242");
+  c.check(!QFileInfo(savedCover.toLocalFile()).exists() && !QDir(QFileInfo(savedCover.toLocalFile()).absolutePath()).exists(), "removing a source removes its pictures");
   c.check(playlist("telegram:4242").isEmpty() && account->sources().size() == 3, "removing a source removes its playlist");
   c.click("telegramSourcesClose");
   c.check(c.until([&] { return account->state() == "closed"; }, 20000), "closing the dialog lets the helper go, once the last song has had its moment");
@@ -5584,6 +5621,14 @@ void runTelegramTests(Backend *b, QQuickWindow *w) {
   c.click("telegramPrimary");
   c.check(c.until([&] { return account->state() == "wait-phone"; }), "Log out returns to the phone number");
   c.check(!account->signedIn(), "and forgets the account");
+  c.check(coverOf("telegram:-1001").isEmpty(), "signing out takes the playlists' covers away");
+  {
+    b->openPlaylist("telegram:-100777");
+    c.check(c.until([&] { return b->results()->count() == 5; }), "the playlists themselves stay");
+    bool any = false;
+    for (int i = 0; i < b->results()->count(); ++i) any = any || !b->results()->get(i).value("art").toString().isEmpty();
+    c.check(!any, "but their songs no longer point at pictures that are gone");
+  }
   c.click("telegramClose");
   c.finish();
 }

@@ -662,6 +662,124 @@ class Fetching(Case):
         self.assertEqual(telegram.audio_extension('', 'audio/x-weird'), '.audio')
 
 
+JPEG = b'\xff\xd8\xff\xe0' + b'\0' * 64
+
+
+class Pictures(Fetching):
+    """Cover art: a song's thumbnail, the picture inside a file, and a chat's photo."""
+    def art(self, a, **extra):
+        return run(a.handle(dict({'cmd': 'art', 'kind': 'thumb', 'chatId': -1001, 'messageId': 7, 'name': 'tg_abc',
+                                  'directory': str(self.audio), 'job': 5}, **extra)))
+
+    def with_media(self, a, data):
+        calls = []
+
+        async def download_media(message, file=None, thumb=None):
+            calls.append((file, thumb)); return data
+        a.client.download_media = download_media
+        return calls
+
+    def test_a_document_that_has_thumbnails_says_so(self):
+        doc = Document('audio/mpeg', [DocumentAttributeFilename('a.mp3')]); doc.thumbs = [object()]
+        self.assertTrue(telegram.song_from(Message(1, doc))['thumb'])
+        self.assertFalse(telegram.song_from(music(2))['thumb'])
+
+    def test_the_kind_of_an_image_comes_from_its_bytes(self):
+        self.assertEqual(telegram.image_type(JPEG), '.jpg')
+        self.assertEqual(telegram.image_type(b'\x89PNG\r\n\x1a\n' + b'0' * 9), '.png')
+        self.assertEqual(telegram.image_type(b'RIFF\0\0\0\0WEBPVP8 '), '.webp')
+        self.assertEqual(telegram.image_type(b'<html>'), '')
+        self.assertEqual(telegram.image_type(b''), '')
+
+    def test_a_thumbnail_is_saved_under_the_songs_name_as_the_largest_one(self):
+        a = self.ready({7: self.sized_unknown()})
+        calls = self.with_media(a, JPEG)
+        result = self.art(a)
+        self.assertEqual(Path(result['file']), self.audio / 'tg_abc.jpg')
+        self.assertEqual((self.audio / 'tg_abc.jpg').read_bytes(), JPEG)
+        self.assertEqual(calls, [(bytes, -1)])
+
+    def test_a_song_without_a_thumbnail_or_with_junk_has_no_picture_and_that_is_not_an_error(self):
+        a = self.ready({7: self.sized_unknown()})
+        for data in (None, b'<html>not an image', JPEG + b'\0' * (telegram.MAX_ART + 1)):
+            self.with_media(a, data)
+            self.assertEqual(self.art(a), {'file': ''})
+        self.assertEqual(list(self.audio.iterdir()), [])
+
+    def test_a_new_picture_replaces_the_old_one_of_another_type(self):
+        a = self.ready({7: self.sized_unknown()})
+        (self.audio / 'tg_abc.png').write_bytes(b'old')
+        self.with_media(a, JPEG)
+        self.art(a)
+        self.assertEqual(sorted(p.name for p in self.audio.iterdir()), ['tg_abc.jpg'])
+
+    def test_saved_messages_gets_a_drawn_cover_and_other_chats_their_photo(self):
+        a = self.ready({})
+        saved = self.art(a, kind='photo', chatId=Me.id)
+        self.assertEqual(telegram.image_type((self.audio / 'tg_abc.png').read_bytes()), '.png')
+        self.assertEqual(Path(saved['file']), self.audio / 'tg_abc.png')
+
+        async def photo(entity, file=None, download_big=None):
+            self.photo_args = (entity, file, download_big); return JPEG
+
+        async def entity(chat): return 'peer'
+        a.client.download_profile_photo, a.client.get_input_entity = photo, entity
+        result = self.art(a, kind='photo', chatId=-1001, name='cover')
+        self.assertEqual(Path(result['file']), self.audio / 'cover.jpg')
+        self.assertEqual(self.photo_args, ('peer', bytes, False))   # the small one: it is drawn small
+
+    def test_a_chat_without_a_photo_has_no_cover(self):
+        a = self.ready({})
+
+        async def photo(entity, file=None, download_big=None): return None
+
+        async def entity(chat): return 'peer'
+        a.client.download_profile_photo, a.client.get_input_entity = photo, entity
+        self.assertEqual(self.art(a, kind='photo', chatId=-1001), {'file': ''})
+
+    def test_an_unknown_kind_or_a_bad_name_is_refused(self):
+        a = self.ready({})
+        with self.assertRaises(telegram.Rejected):
+            self.art(a, kind='video')
+        with self.assertRaises(telegram.Rejected):
+            self.art(a, name='../x')
+
+    @unittest.skipUnless(importlib.util.find_spec('mutagen'), 'mutagen is in the project runtime, not the system Python')
+    def test_the_picture_inside_a_file_is_kept_beside_the_download(self):
+        from mutagen.id3 import APIC
+        from mutagen.wave import WAVE
+        source = self.dir / 'tagged.wav'
+        source.write_bytes(self.wav('x'))
+        tagged = WAVE(str(source)); tagged.add_tags()
+        tagged.tags.add(APIC(encoding=3, mime='image/jpeg', type=0, desc='', data=b'\xff\xd8\xff' + b'a' * 20))
+        tagged.tags.add(APIC(encoding=3, mime='image/jpeg', type=3, desc='', data=JPEG))
+        tagged.save()
+        doc = Document('audio/x-wav', [DocumentAttributeFilename('Tagged.wav')], size=0)
+        doc.payload = source.read_bytes()
+        a = self.ready({7: Message(7, doc)})
+        art = self.dir / 'art'; art.mkdir()
+        result = self.fetch(a, artDirectory=str(art), artName='tg_abc')
+        self.assertEqual(Path(result['art']), art / 'tg_abc.jpg')
+        self.assertEqual((art / 'tg_abc.jpg').read_bytes(), JPEG)   # the front cover, not the first picture
+
+    @unittest.skipUnless(importlib.util.find_spec('mutagen'), 'mutagen is in the project runtime, not the system Python')
+    def test_a_picture_too_big_or_not_a_picture_is_ignored(self):
+        from mutagen.id3 import APIC
+        from mutagen.wave import WAVE
+        for data in (JPEG + b'\0' * (telegram.MAX_ART + 1), b'not an image'):
+            source = self.dir / 'tagged.wav'
+            source.write_bytes(self.wav('x'))
+            tagged = WAVE(str(source)); tagged.add_tags()
+            tagged.tags.add(APIC(encoding=3, mime='image/jpeg', type=3, desc='', data=data)); tagged.save()
+            self.assertIsNone(telegram.embedded_cover(source))
+        self.assertIsNone(telegram.embedded_cover(self.dir / 'missing.mp3'))
+
+    def test_no_art_directory_means_no_extraction(self):
+        doc = Document('audio/mpeg', [DocumentAttributeFilename('a.mp3')], size=0); doc.payload = b'x'
+        a = self.ready({7: Message(7, doc)})
+        self.assertNotIn('art', self.fetch(a))
+
+
 async def _done(value):
     return value
 

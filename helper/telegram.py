@@ -12,7 +12,7 @@ written here.
 
 Requests   {"id": 1, "cmd": "phone", "phone": "+49 151 2345678"}
            cmd: status | phone | code | password | back | logout
-                dialogs | topics | resolve | sync | fetch | cancel   (signed in only)
+                dialogs | topics | resolve | sync | fetch | art | cancel   (signed in only)
 Replies    {"id": 1, "ok": true[, "result": {...}]}   or   {"id": 1, "ok": false, "error": "..."}
 Events     {"event": "state", "state": "...", ...}
            {"event": "songs", "job": n, "songs": [...]}   one batch of a sync
@@ -42,6 +42,9 @@ MAX_SONGS = 20000
 # Telegram is where people keep lossless albums, so the cap is far above what a
 # streamed song needs. Past it the song is refused rather than half downloaded.
 MAX_FETCH = 200 * 1024 * 1024
+# The picture a Telegram song or chat shows. The app's image loader refuses a
+# file over 2 MB, so a bigger cover is not worth keeping.
+MAX_ART = 1800 * 1024
 MIME_EXTENSIONS = {'audio/mpeg': '.mp3', 'audio/mp3': '.mp3', 'audio/flac': '.flac', 'audio/x-flac': '.flac',
                    'audio/mp4': '.m4a', 'audio/x-m4a': '.m4a', 'audio/aac': '.aac', 'audio/ogg': '.ogg',
                    'application/ogg': '.ogg', 'audio/opus': '.opus', 'audio/wav': '.wav', 'audio/x-wav': '.wav',
@@ -51,7 +54,7 @@ MIME_EXTENSIONS = {'audio/mpeg': '.mp3', 'audio/mp3': '.mp3', 'audio/flac': '.fl
 # come back. Telethon would sleep silently for anything under a minute.
 FLOOD_LIMIT = 180
 AUDIO_EXTENSIONS = ('.mp3', '.flac', '.m4a', '.ogg', '.opus', '.wav', '.aac', '.wma', '.alac', '.aiff', '.ape')
-DATA_COMMANDS = ('dialogs', 'topics', 'resolve', 'sync', 'fetch')
+DATA_COMMANDS = ('dialogs', 'topics', 'resolve', 'sync', 'fetch', 'art')
 
 
 class Rejected(Exception):
@@ -154,6 +157,7 @@ def song_from(message):
         'size': int(getattr(document, 'size', 0) or 0),
         'date': int(date.timestamp()) if date else 0,
         'fileName': name,
+        'thumb': bool(getattr(document, 'thumbs', None)),
     }
 
 
@@ -198,6 +202,81 @@ def read_tags(path):
         if first(key, frame):
             tags[key] = first(key, frame)
     return tags
+
+
+def image_type(data):
+    """'.jpg', '.png' or '.webp' for bytes that really are one of those, else ''."""
+    if data[:3] == b'\xff\xd8\xff':
+        return '.jpg'
+    if data[:8] == b'\x89PNG\r\n\x1a\n':
+        return '.png'
+    if data[:4] == b'RIFF' and data[8:12] == b'WEBP':
+        return '.webp'
+    return ''
+
+
+def embedded_cover(path):
+    """The picture inside an audio file as (bytes, extension), or None."""
+    try:
+        import base64
+        import mutagen
+        found = mutagen.File(str(path))
+        if found is None:
+            return None
+        candidates = []
+        if getattr(found, 'pictures', None):                      # FLAC
+            candidates += [(p.type, p.data) for p in found.pictures]
+        tags = getattr(found, 'tags', None)
+        if tags is not None:
+            if hasattr(tags, 'getall'):                           # ID3: MP3, WAV, AIFF
+                candidates += [(frame.type, frame.data) for frame in tags.getall('APIC')]
+            try:
+                candidates += [(3, bytes(cover)) for cover in tags.get('covr', [])]   # MP4
+            except Exception:
+                pass
+            try:
+                from mutagen.flac import Picture
+                for block in tags.get('metadata_block_picture', []) or []:  # Ogg, Opus
+                    picture = Picture(base64.b64decode(block))
+                    candidates.append((picture.type, picture.data))
+            except Exception:
+                pass
+        # The front cover, else whatever comes first.
+        candidates.sort(key=lambda c: 0 if c[0] == 3 else 1)
+        for _, data in candidates:
+            if 0 < len(data) <= MAX_ART and image_type(data):
+                return data, image_type(data)
+    except Exception:
+        return None
+    return None
+
+
+def png_bytes(width, height, pixel):
+    """A PNG written by hand, so the helper needs no imaging library."""
+    import struct
+    import zlib
+    rows = b''.join(b'\x00' + b''.join(bytes(pixel(x, y)) for x in range(width)) for y in range(height))
+
+    def chunk(kind, body):
+        block = kind + body
+        return struct.pack('>I', len(body)) + block + struct.pack('>I', zlib.crc32(block) & 0xffffffff)
+    return (b'\x89PNG\r\n\x1a\n' + chunk(b'IHDR', struct.pack('>IIBBBBB', width, height, 8, 2, 0, 0, 0))
+            + chunk(b'IDAT', zlib.compress(rows, 9)) + chunk(b'IEND', b''))
+
+
+def saved_messages_cover():
+    """Saved Messages has no photo; a bookmark on a calm blue stands for it."""
+    size, ground, ink = 256, (58, 79, 128), (238, 241, 250)
+
+    def inside(x, y):   # the bookmark, in a 256 square: a bar whose foot is notched
+        if not (84 <= x <= 172 and 52 <= y <= 204):
+            return False
+        return y <= 204 - 40 + abs(x - 128) * 40 / 44 if y > 164 else True
+
+    def pixel(x, y):
+        hits = sum(inside(x + dx / 2, y + dy / 2) for dx in (0, 1) for dy in (0, 1))
+        return tuple((ground[i] * (4 - hits) + ink[i] * hits) // 4 for i in range(3))
+    return png_bytes(size, size, pixel)
 
 
 def public_name(query):
@@ -480,7 +559,62 @@ class Account:
             os.replace(part, target)
         finally:
             part.unlink(missing_ok=True)
-        return {'file': str(target), 'size': target.stat().st_size, 'tags': read_tags(target)}
+        result = {'file': str(target), 'size': target.stat().st_size, 'tags': read_tags(target)}
+        art = str(request.get('artDirectory') or '')
+        if art and re.fullmatch(r'[A-Za-z0-9_]{1,64}', str(request.get('artName') or '')) and Path(art).is_dir():
+            cover = embedded_cover(target)
+            if cover:
+                found = Path(art) / (request['artName'] + cover[1])
+                self.write_file(found, cover[0])
+                result['art'] = str(found)
+        return result
+
+    @staticmethod
+    def write_file(target, data):
+        part = target.with_name(target.name + '.part')
+        try:
+            part.write_bytes(data)
+            os.replace(part, target)
+        finally:
+            part.unlink(missing_ok=True)
+
+    async def do_art(self, request):
+        """One picture: a song's thumbnail, or a chat's photo (Saved Messages gets a drawn one).
+
+        `file` in the answer is empty when Telegram has none; that is not an error.
+        """
+        directory, name = Path(str(request.get('directory') or '')), str(request.get('name') or '')
+        if not re.fullmatch(r'[A-Za-z0-9_]{1,64}', name) or not directory.is_dir():
+            raise Rejected('Nowhere to keep the picture.')
+        kind = request.get('kind')
+        if kind == 'thumb':
+            message = await self.message_for(request['chatId'], request['messageId'])
+            data = None
+            if message is not None and song_from(message) is not None:
+                data = await self.guarded(lambda: self.client.download_media(message, file=bytes, thumb=-1), request.get('job'))
+        elif kind == 'photo':
+            me = await self.guarded(self.client.get_me)
+            if int(request['chatId']) == me.id:
+                data = saved_messages_cover()
+            else:
+                try:
+                    entity = await self.client.get_input_entity(int(request['chatId']))
+                except ValueError:
+                    async for _ in self.client.iter_dialogs(limit=400):
+                        pass
+                    entity = await self.client.get_input_entity(int(request['chatId']))
+                data = await self.guarded(lambda: self.client.download_profile_photo(entity, file=bytes, download_big=False), request.get('job'))
+        else:
+            raise Rejected('Unknown picture.')
+        extension = image_type(data) if isinstance(data, (bytes, bytearray)) else ''
+        if not extension or len(data) > MAX_ART:
+            return {'file': ''}
+        target = directory / (name + extension)
+        for stale in directory.glob(name + '.*'):
+            if stale != target and stale.suffix != '.part':
+                stale.unlink(missing_ok=True)
+        self.write_file(target, bytes(data))
+        return {'file': str(target)}
 
     def require(self, *states):
         if self.state not in states:

@@ -50,7 +50,10 @@ Backend::Backend(QObject *parent) : QObject(parent) {
   connect(&m_telegram,&Telegram::songsReady,this,&Backend::telegramSongs);
   connect(&m_telegram,&Telegram::sourceRemoved,this,&Backend::telegramRemoved);
   connect(&m_telegram,&Telegram::songLearned,this,&Backend::telegramLearned);
+  connect(&m_telegram,&Telegram::coverReady,this,&Backend::telegramCover);
+  connect(&m_telegram,&Telegram::artCleared,this,&Backend::telegramArtCleared);
   m_telegram.setCacheDirectory(Profile::location(QStandardPaths::CacheLocation)+"/telegram-audio");
+  m_telegram.setArtDirectory(Profile::location(QStandardPaths::CacheLocation)+"/telegram-art");
   // Both decks report everything; only the one being heard is listened to.
   const auto eachDeck=[this](const std::function<void(QMediaPlayer *)> &wire){wire(&m_deckA);wire(&m_deckB);};
   m_userVolume=qBound(0.0,m_settings.value("volume",0.65).toDouble(),1.0);
@@ -1360,6 +1363,7 @@ void Backend::clearCache() {
   QDir(p).removeRecursively();
   m_streams.clear();
   m_telegram.clearAudio();
+  m_telegram.clearArt();
   m_analysis.clearCache();
   emit artworkCacheCleared();
   emit toast("Cache cleared");
@@ -1579,16 +1583,56 @@ void Backend::telegramSongs(const QString &key, const QString &title, const QVar
         if (!seen.contains(itemId(old))) tracks.append(old);
     }
     p["tracks"] = tracks;
+    applyTelegramCover(p, key);
     m_playlists[i] = p;
-    if (m_libraryId == id && m_page == "local") m_results.assign(tracks);
+    if (m_libraryId == id && m_page == "local") {m_results.assign(tracks);m_cover=p.value("customCover").toString();emit catalogChanged();}
     emit libraryChanged();
     m_saveTimer.start();
     return;
   }
-  m_playlists.append(QVariantMap{{"id", id}, {"title", title.left(120)}, {"tracks", songs},
-                                 {"source", "telegram"}, {"telegramKey", key}});
+  QVariantMap created{{"id", id}, {"title", title.left(120)}, {"tracks", songs}, {"source", "telegram"}, {"telegramKey", key}};
+  applyTelegramCover(created, key);
+  m_playlists.append(created);
   emit libraryChanged();
   m_saveTimer.start();
+}
+// The chat's photo is the playlist's cover, unless the person chose one of their own.
+void Backend::applyTelegramCover(QVariantMap &playlist, const QString &key) {
+  if (!playlist.value("customCover").toString().isEmpty() && !playlist.value("telegramCover").toBool()) return;
+  const auto url = m_telegram.coverUrl(key.section('/', 0, 0));
+  if (url.isEmpty()) return;
+  playlist["customCover"] = url;
+  playlist["telegramCover"] = true;
+}
+void Backend::telegramCover(const QString &chatId, const QString &url) {
+  bool changed = false;
+  for (auto &v : m_playlists) {
+    auto p = v.toMap();
+    if (p.value("source") != "telegram" || p.value("telegramKey").toString().section('/', 0, 0) != chatId) continue;
+    if (!p.value("customCover").toString().isEmpty() && !p.value("telegramCover").toBool()) continue;
+    p["customCover"] = url;
+    p["telegramCover"] = true;
+    v = p;
+    changed = true;
+    if (m_page == "local" && m_libraryId == p.value("id").toString()) {m_cover = url;emit catalogChanged();}
+  }
+  if (changed) {emit libraryChanged();m_saveTimer.start();}
+}
+// The pictures were deleted: what named them forgets them.
+void Backend::telegramArtCleared() {
+  auto strip = [](QVariant row) {auto map = row.toMap();if (map.value("source") == "telegram") map.remove("art");return QVariant(map);};
+  auto queue = m_queue.rows;for (auto &row : queue) row = strip(row);
+  if (queue != m_queue.rows) {m_queue.reconcile(queue);emit trackChanged();}
+  for (auto &v : m_playlists) {
+    auto p = v.toMap();
+    if (p.value("source") != "telegram") continue;
+    auto tracks = p.value("tracks").toList();for (auto &t : tracks) t = strip(t);
+    p["tracks"] = tracks;
+    if (p.value("telegramCover").toBool()) {p.remove("customCover");p.remove("telegramCover");}
+    v = p;
+    if (m_page == "local" && m_libraryId == p.value("id").toString()) {m_results.assign(tracks);m_cover.clear();emit catalogChanged();}
+  }
+  emit libraryChanged();m_saveTimer.start();
 }
 void Backend::cancelTelegramFetch() {
   if(m_telegramFetchId.isEmpty())return;

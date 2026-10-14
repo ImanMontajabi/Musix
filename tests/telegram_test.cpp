@@ -39,7 +39,7 @@ private slots:
     qputenv("MUSIX_TELEGRAM_API_ID", "12345");
     qputenv("MUSIX_TELEGRAM_API_HASH", "abcdef");
   }
-  void init() { clean(); QDir(cache()).removeRecursively(); }
+  void init() { clean(); QDir(cache()).removeRecursively(); QDir(art()).removeRecursively(); QFile::remove(storage.path() + "/telegram/art.log"); }
 
   void withoutCredentialsThereIsNothingToStart() {
     qputenv("MUSIX_TELEGRAM_API_ID", "0");
@@ -219,6 +219,18 @@ private slots:
     return QTest::qWaitFor([&] { return got.done; }, 15000);
   }
   QString cache() const { return storage.path() + "/cache"; }
+  QString art() const { return storage.path() + "/art"; }
+  QString artFolder(const QString &name) const { return art() + "/" + name; }
+  bool artIdle(Telegram &t) { return QTest::qWaitFor([&] { return !t.artPending() && !t.syncing(); }, 15000); }
+  int artRequests() const {
+    QFile log(storage.path() + "/telegram/art.log");
+    return log.open(QIODevice::ReadOnly) ? log.readAll().split('\n').size() - 1 : 0;
+  }
+  static QStringList files(const QString &folder) { return QDir(folder).entryList(QDir::Files, QDir::Name); }
+  static bool ownerOnly(const QString &path) {
+    const auto mode = QFileInfo(path).permissions();
+    return !(mode & (QFileDevice::ReadGroup | QFileDevice::WriteGroup | QFileDevice::ExeGroup | QFileDevice::ReadOther | QFileDevice::WriteOther | QFileDevice::ExeOther));
+  }
   int fetchesLogged() const {
     QFile log(storage.path() + "/telegram/fetches.log");
     return log.open(QIODevice::ReadOnly) ? log.readAll().split('\n').size() - 1 : 0;
@@ -568,6 +580,198 @@ private slots:
     t->logout();
     QVERIFY(QDir(cache()).entryList(QDir::Files).isEmpty());
     QVERIFY(!QFile::exists(storage.path() + "/telegram/tags.json"));
+    QVERIFY(reach(*t, "wait-phone")); // the helper has handled it, so it can't reach into the next test's folder
+  }
+  // --- Cover art -----------------------------------------------------------
+  void aSourceBringsItsChatsPhotoAndItsSongsThumbnails() {
+    signIn();
+    auto t = make();
+    t->setArtDirectory(art());
+    QSignalSpy cover(t.get(), &Telegram::coverReady), learned(t.get(), &Telegram::songLearned);
+    t->addSource("4242", "Saved Messages", "saved", "");
+    QVERIFY(settled(*t, "4242"));
+    QVERIFY(artIdle(*t));
+    // The chat's cover, once.
+    QCOMPARE(cover.count(), 1);
+    QCOMPARE(cover.first().at(0).toString(), QString("4242"));
+    const QUrl url(cover.first().at(1).toString());
+    QVERIFY(url.isLocalFile() && QFileInfo(url.toLocalFile()).isFile());
+    QCOMPARE(t->coverUrl("4242"), url.toString());
+    // Thumbnails for the two songs that have one, none for the third.
+    int thumbs = 0;
+    for (const auto &entry : learned) thumbs += entry.at(1).toMap().contains("art");
+    QCOMPARE(thumbs, 2);
+    QCOMPARE(files(artFolder("c4242")).size(), 3);
+    // Only the owner can read any of it.
+    QVERIFY(ownerOnly(art()));
+    QVERIFY(ownerOnly(artFolder("c4242")));
+    for (const auto &name : files(artFolder("c4242"))) QVERIFY2(ownerOnly(artFolder("c4242") + "/" + name), qPrintable(name));
+  }
+  void aChatWithoutAPhotoHasNoCover() {
+    signIn();
+    auto t = make();
+    t->setArtDirectory(art());
+    QSignalSpy cover(t.get(), &Telegram::coverReady);
+    t->addSource("-1002", "Friends", "group", "");
+    QVERIFY(settled(*t, "-1002"));
+    QVERIFY(artIdle(*t));
+    QCOMPARE(cover.count(), 0);
+    QVERIFY(t->coverUrl("-1002").isEmpty());
+  }
+  void aRefreshKeepsWhatItAlreadyHasAndGivesItToTheRows() {
+    signIn();
+    auto t = make();
+    t->setArtDirectory(art());
+    QSignalSpy ready(t.get(), &Telegram::songsReady);
+    t->addSource("4242", "Saved Messages", "saved", "");
+    QVERIFY(settled(*t, "4242"));
+    QVERIFY(artIdle(*t));
+    const int asked = artRequests();
+    QVERIFY(asked >= 3);
+    t->refresh("4242");
+    QVERIFY(QTest::qWaitFor([&] { return ready.count() == 2; }, 15000));
+    QVERIFY(artIdle(*t));
+    const auto rows = ready.at(1).at(2).toList();
+    QVERIFY(rows.first().toMap().value("art").toString().contains("c4242"));   // a picture already on disk is on the row
+    QVERIFY(rows.at(1).toMap().value("art").toString().isEmpty());             // and the song with none is still without
+    QCOMPARE(artRequests(), asked);                                           // nothing was asked for twice
+  }
+  void theArtIsBoundedOldestFirstButTheCoverStays() {
+    signIn();
+    auto t = make();
+    t->setArtDirectory(art());
+    t->setArtLimits(1, 1024 * 1024);
+    t->addSource("4242", "Saved Messages", "saved", "");
+    QVERIFY(settled(*t, "4242"));
+    QVERIFY(artIdle(*t));
+    const auto kept = files(artFolder("c4242"));
+    QCOMPARE(kept.size(), 2); // one picture and the cover
+    QVERIFY(kept.contains("cover.png"));
+  }
+  void removingTheLastSourceOfAChatRemovesItsPictures() {
+    signIn();
+    auto t = make();
+    t->setArtDirectory(art());
+    t->addSource("4242", "Saved Messages", "saved", "");
+    QVERIFY(settled(*t, "4242"));
+    QVERIFY(artIdle(*t));
+    QVERIFY(QDir(artFolder("c4242")).exists());
+    t->removeSource("4242");
+    QVERIFY(!QDir(artFolder("c4242")).exists());
+  }
+  void aForumsTopicsShareItsPicturesUntilTheLastIsRemoved() {
+    signIn();
+    auto t = make();
+    t->setArtDirectory(art());
+    t->addSource("-1003", "Forum", "forum", "", "11", "Jazz");
+    t->addSource("-1003", "Forum", "forum", "", "12", "Rock");
+    QVERIFY(settled(*t, "-1003/11") && settled(*t, "-1003/12"));
+    QVERIFY(artIdle(*t));
+    QVERIFY(QDir(artFolder("cn1003")).exists());
+    t->removeSource("-1003/11");
+    QVERIFY(QDir(artFolder("cn1003")).exists());
+    t->removeSource("-1003/12");
+    QVERIFY(!QDir(artFolder("cn1003")).exists());
+  }
+  void clearingTheArtDeletesItAndSaysSo() {
+    signIn();
+    auto t = make();
+    t->setArtDirectory(art());
+    QSignalSpy cleared(t.get(), &Telegram::artCleared);
+    t->addSource("4242", "Saved Messages", "saved", "");
+    QVERIFY(settled(*t, "4242"));
+    QVERIFY(artIdle(*t));
+    t->clearArt();
+    QCOMPARE(cleared.count(), 1);
+    QVERIFY(QDir(art()).entryList(QDir::Dirs | QDir::NoDotAndDotDot).isEmpty());
+    QVERIFY(t->coverUrl("4242").isEmpty());
+  }
+  void signingOutDeletesTheArtToo() {
+    signIn();
+    auto t = make();
+    t->setArtDirectory(art());
+    QSignalSpy cleared(t.get(), &Telegram::artCleared);
+    t->open(); // the sign-in dialog, which is where Log out is
+    t->addSource("4242", "Saved Messages", "saved", "");
+    QVERIFY(settled(*t, "4242"));
+    QVERIFY(artIdle(*t));
+    t->logout();
+    QVERIFY(reach(*t, "wait-phone"));
+    QVERIFY(cleared.count() >= 1);
+    QVERIFY(QDir(art()).entryList(QDir::Dirs | QDir::NoDotAndDotDot).isEmpty());
+  }
+  void thePictureInsideADownloadedFileBecomesTheSongsArt() {
+    signIn();
+    auto t = make();
+    t->setArtDirectory(art());
+    t->setCacheDirectory(cache());
+    QSignalSpy learned(t.get(), &Telegram::songLearned);
+    auto inside = song("tg_inside", 1003);
+    inside["remoteId"] = "-100777:1003";
+    inside["telegramChat"] = "-100777";
+    inside["telegramMessage"] = "1003";
+    inside["thumb"] = true;
+    Got got;
+    QVERIFY(fetched(*t, inside, got));
+    QVERIFY2(got.error.isEmpty(), qPrintable(got.error));
+    QVERIFY(artIdle(*t));
+    QVERIFY(QFile::exists(artFolder("cn100777") + "/tg_inside.png"));
+    int arts = 0;
+    for (const auto &entry : learned) arts += entry.at(1).toMap().value("art").toString().contains("tg_inside.png");
+    QCOMPARE(arts, 1);
+    QVERIFY(ownerOnly(artFolder("cn100777") + "/tg_inside.png"));
+  }
+  void withNoPictureInsideTheMessagesThumbnailIsAskedFor() {
+    signIn();
+    auto t = make();
+    t->setArtDirectory(art());
+    t->setCacheDirectory(cache());
+    QSignalSpy learned(t.get(), &Telegram::songLearned);
+    t->addSource("4242", "Saved Messages", "saved", ""); // a picture is only kept for a chat that is still a source
+    QVERIFY(settled(*t, "4242"));
+    QVERIFY(artIdle(*t));
+    learned.clear();
+    auto plain = song("tg_thumb", 1002);
+    plain["remoteId"] = "4242:1002";
+    plain["telegramChat"] = "4242";
+    plain["telegramMessage"] = "1002";
+    plain["thumb"] = true;
+    Got got;
+    QVERIFY(fetched(*t, plain, got));
+    QVERIFY(artIdle(*t));
+    QVERIFY(QFile::exists(artFolder("c4242") + "/tg_thumb.png"));
+    bool art = false;
+    for (const auto &entry : learned) art = art || entry.at(1).toMap().contains("art");
+    QVERIFY(art);
+  }
+  void aSongWhosePictureIsAlreadyThereIsNotAskedForAgain() {
+    signIn();
+    auto t = make();
+    t->setArtDirectory(art());
+    t->setCacheDirectory(cache());
+    QDir().mkpath(artFolder("c4242"));
+    QFile have(artFolder("c4242") + "/tg_have.jpg");
+    QVERIFY(have.open(QIODevice::WriteOnly));
+    have.write("x");
+    have.close();
+    auto owned = song("tg_have", 1002);
+    owned["remoteId"] = "4242:1002";
+    owned["telegramChat"] = "4242";
+    owned["telegramMessage"] = "1002";
+    owned["thumb"] = true;
+    Got got;
+    QVERIFY(fetched(*t, owned, got));
+    QTest::qWait(300);
+    QCOMPARE(artRequests(), 0);
+  }
+  void halfPicturesFromAnInterruptedRunAreRemoved() {
+    QDir().mkpath(artFolder("c4242"));
+    QFile half(artFolder("c4242") + "/tg_x.png.part");
+    QVERIFY(half.open(QIODevice::WriteOnly));
+    half.close();
+    auto t = make();
+    t->setArtDirectory(art());
+    QVERIFY(!QFile::exists(half.fileName()));
   }
   void aRefreshWithoutASessionSaysToSignInAndLetsTheHelperGo() {
     // No account.json: the helper starts signed out.

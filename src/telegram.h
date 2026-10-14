@@ -33,6 +33,7 @@
 #include <QJsonObject>
 #include <QObject>
 #include <QProcess>
+#include <QSet>
 #include <QTimer>
 #include <QVariantList>
 #include <QVariantMap>
@@ -133,6 +134,17 @@ public:
   void keep(const QStringList &songIds) { m_keep = songIds; }
   void clearAudio();
   void clearCache();
+  // Cover art. Songs get their thumbnail (or, once downloaded, the picture inside
+  // the file); a source's chat gets its profile photo, and Saved Messages a drawn
+  // cover. Pictures live in one folder per chat so that removing the last source
+  // of a chat removes its pictures, and are bounded in number and size.
+  void setArtDirectory(const QString &directory);
+  void setArtLimits(int files, qint64 bytes) { m_artFiles = files; m_artBytes = bytes; }
+  // The file:// URL of a chat's cover, or empty until it has come down.
+  QString coverUrl(const QString &chatId) const;
+  void clearArt();
+  // Pictures still being asked for.
+  bool artPending() const { return m_artBusy || !m_artQueue.isEmpty(); }
   // The playlist id the library keeps a source's songs under.
   Q_INVOKABLE static QString playlistId(const QString &key) { return "telegram:" + key; }
 signals:
@@ -149,6 +161,10 @@ signals:
   // The file said more about a song than the sync knew: its length, artist or
   // title. `changes` holds only the fields to set.
   void songLearned(const QString &songId, const QVariantMap &changes);
+  void coverReady(const QString &chatId, const QString &url);
+  // Every picture was deleted (signing out, or Clear cache): rows still naming
+  // one should forget it.
+  void artCleared();
 private:
   struct Fetch {
     QVariantMap song;
@@ -156,6 +172,17 @@ private:
     bool started = false;
     qint64 received = 0, total = 0;
   };
+  struct ArtTask {
+    QString kind, chatId, messageId, name; // kind: thumb | photo
+  };
+  QString chatFolder(const QString &chatId) const;
+  QString artFile(const QString &chatId, const QString &name) const;
+  static QString artUrl(const QString &path);
+  void ensureFolder(const QString &path) const;
+  void queueArt(const ArtTask &task, bool first = false);
+  void queueSourceArt(const QString &chatId);
+  void pumpArt();
+  void evictArt();
   void startFetch(int job);
   void finishFetch(int job, const QJsonObject &reply);
   void failFetches(bool startedToo, const QString &message);
@@ -181,7 +208,7 @@ private:
   void loadSources();
   void saveSources() const;
   QVariantMap songRow(const QVariantMap &source, const QJsonObject &song) const;
-  bool wanted() const { return m_holders > 0 || !m_jobs.isEmpty() || !m_afterReady.isEmpty() || !m_fetches.isEmpty() || m_linger.isActive(); }
+  bool wanted() const { return m_holders > 0 || !m_jobs.isEmpty() || !m_afterReady.isEmpty() || !m_fetches.isEmpty() || m_artBusy || !m_artQueue.isEmpty() || m_linger.isActive(); }
   void stopProcess();
   void releaseIfIdle();
   void start();
@@ -200,6 +227,12 @@ private:
   int m_cacheSongs = CacheSongs;
   qint64 m_cacheBytes = CacheBytes;
   QStringList m_keep;
+  QString m_artDirectory;
+  int m_artFiles = 2000;
+  qint64 m_artBytes = 64LL * 1024 * 1024;
+  QList<ArtTask> m_artQueue;
+  QSet<QString> m_artFailed;
+  bool m_artBusy = false;
   QHash<int, Fetch> m_fetches;
   QHash<QString, QVariantMap> m_tags;
   QVariantMap m_download;

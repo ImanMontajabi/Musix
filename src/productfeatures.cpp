@@ -249,7 +249,7 @@ bool Backend::setPlaylistCover(const QString &id,const QString &preview,double x
   const auto path=dir+'/'+QString::fromLatin1(QCryptographicHash::hash(id.toUtf8(),QCryptographicHash::Sha256).toHex())+".jpg";
   QSaveFile out(path);if(!out.open(QIODevice::WriteOnly)||!image.save(&out,"JPEG",85)||!out.commit())return false;
   QUrl cover=QUrl::fromLocalFile(path);cover.setQuery(QUuid::createUuid().toString(QUuid::WithoutBraces));
-  auto p=m_playlists[index].toMap();p["customCover"]=cover.toString();m_playlists[index]=p;
+  auto p=m_playlists[index].toMap();p["customCover"]=cover.toString();p.remove("telegramCover");m_playlists[index]=p;
   if(m_page=="local" && m_libraryId==id){m_cover=cover.toString();emit catalogChanged();}
   emit libraryChanged();m_saveTimer.start();return true;
 }
