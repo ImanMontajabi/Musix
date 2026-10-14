@@ -30,6 +30,7 @@
 /helper/*
 !/helper/catalog.py
 !/helper/online_artwork.py
+!/helper/telegram.py
 !/helper/requirements.txt
 /scripts/*
 !/scripts/*.sh

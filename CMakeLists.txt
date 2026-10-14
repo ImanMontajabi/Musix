@@ -43,9 +43,27 @@ if(SUNG_DBUS)
 endif()
 find_package(Qt6 6.8 REQUIRED COMPONENTS ${SUNG_QT_COMPONENTS})
 qt_policy(SET QTP0004 NEW)
+# The API id and hash that identify this app to Telegram. They are not the
+# person's secrets, but they are the maintainer's: they stay out of the
+# repository, in an untracked telegram-api.local.cmake that sets both, or in
+# -DMUSIX_TELEGRAM_API_ID/-DMUSIX_TELEGRAM_API_HASH, or in the environment. A
+# build with neither gets a dialog that says so instead of a login.
+include("${CMAKE_SOURCE_DIR}/telegram-api.local.cmake" OPTIONAL)
+foreach(name MUSIX_TELEGRAM_API_ID MUSIX_TELEGRAM_API_HASH)
+ if(NOT ${name} AND DEFINED ENV{${name}})
+  set(${name} "$ENV{${name}}")
+ endif()
+endforeach()
+if(MUSIX_TELEGRAM_API_ID AND MUSIX_TELEGRAM_API_HASH)
+ set_source_files_properties(src/telegram.cpp PROPERTIES COMPILE_DEFINITIONS
+  "MUSIX_TELEGRAM_API_ID=${MUSIX_TELEGRAM_API_ID};MUSIX_TELEGRAM_API_HASH=\"${MUSIX_TELEGRAM_API_HASH}\"")
+ message(STATUS "Telegram API credentials: present")
+else()
+ message(STATUS "Telegram API credentials: none, so signing in to Telegram is off in this build")
+endif()
 # The backend every executable shares. mpris.cpp is deliberately absent: only
 # the app exposes MPRIS, and only where there is a bus to expose it on.
-set(SUNG_BACKEND_SOURCES src/scrobbler.cpp src/scrobbler.h src/m3color.cpp src/m3color.h src/m3shape.cpp src/m3shape.h src/musicserver.cpp src/musicserver.h src/jellyfin.cpp src/jellyfin.h src/backendserver.cpp src/subsonic.cpp src/subsonic.h src/backend.cpp src/productfeatures.cpp src/presentationfeatures.cpp src/followfeatures.cpp src/runtimeenv.cpp src/outputlatency.cpp src/outputlatency.h src/audioanalysis.cpp src/audioanalysis.h src/audiolevels.h src/backend.h src/collectionview.h src/rowselection.h src/playbacknotifier.cpp src/playbacknotifier.h)
+set(SUNG_BACKEND_SOURCES src/scrobbler.cpp src/scrobbler.h src/telegram.cpp src/telegram.h src/m3color.cpp src/m3color.h src/m3shape.cpp src/m3shape.h src/musicserver.cpp src/musicserver.h src/jellyfin.cpp src/jellyfin.h src/backendserver.cpp src/subsonic.cpp src/subsonic.h src/backend.cpp src/productfeatures.cpp src/presentationfeatures.cpp src/followfeatures.cpp src/runtimeenv.cpp src/outputlatency.cpp src/outputlatency.h src/audioanalysis.cpp src/audioanalysis.h src/audiolevels.h src/backend.h src/collectionview.h src/rowselection.h src/playbacknotifier.cpp src/playbacknotifier.h)
 set(SUNG_BACKEND_LIBS Qt6::Core Qt6::Gui Qt6::Multimedia Qt6::Network)
 if(APPLE)
  # Only for reading the output device's latency.
@@ -123,7 +141,7 @@ set_source_files_properties(qml/FileDialogs.qml PROPERTIES QT_QML_SKIP_CACHEGEN 
 set_source_files_properties(qml/Theme.qml qml/Keymap.qml qml/AccentPalettes.qml PROPERTIES QT_QML_SINGLETON_TYPE TRUE)
 set_target_properties(musix PROPERTIES QT_QMLCACHEGEN_ARGUMENTS "--only-bytecode")
 qt_add_qml_module(musix URI SungUi VERSION 1.0 NO_PLUGIN NO_RESOURCE_TARGET_PATH RESOURCE_PREFIX "/"
- QML_FILES qml/Visualizer.qml qml/AccentPalettes.qml qml/UpdateDialog.qml qml/Keymap.qml qml/MDockedToolbar.qml qml/MCheckbox.qml qml/MRadioButton.qml qml/MExposedDropdown.qml qml/MCard.qml qml/MNavigationDrawer.qml qml/MBottomSheet.qml qml/MShape.qml qml/MRichTooltip.qml qml/MTooltip.qml qml/MDragHandle.qml qml/MWavyProgress.qml qml/MAppBarRow.qml qml/MElevation.qml qml/MBadge.qml qml/MNavigationBar.qml qml/MPullToRefresh.qml qml/MCarousel.qml qml/MFloatingToolbar.qml qml/MFabMenu.qml qml/MSplitButton.qml qml/PlaylistVersions.qml qml/ListeningStats.qml qml/SingAlong.qml qml/ArtistHero.qml qml/NavigationTransition.qml qml/MSettingRow.qml qml/Onboarding.qml qml/AmbientBackdrop.qml qml/ImmersiveCoverflow.qml qml/AccentPicker.qml qml/PlaybackHud.qml qml/VolumeControl.qml qml/ViewLayoutDialog.qml qml/HomeEditor.qml qml/OutputPicker.qml qml/ListeningSessions.qml qml/PlaylistCoverDialog.qml qml/CommandPalette.qml qml/ArtworkControls.qml qml/MatchText.qml qml/PlayingIndicator.qml qml/TrackPresentation.qml qml/PlaylistCover.qml qml/CatalogSkeleton.qml qml/SmartPlaylistDialog.qml qml/TrackDetailsDialog.qml qml/ShortcutHelp.qml qml/MScrollBar.qml qml/MTextField.qml qml/MSearchField.qml qml/MSegmentedControl.qml qml/ServerConnection.qml qml/ServerToolbar.qml qml/MChip.qml qml/LibraryTabs.qml qml/MLoadingIndicator.qml qml/TrackList.qml qml/SelectionBar.qml qml/FileDialogs.qml qml/SettingSlider.qml qml/LyricsView.qml qml/ImmersivePlayer.qml qml/MiniPlayer.qml qml/MMenu.qml qml/MMenuItem.qml qml/MMediaControls.qml qml/MDivider.qml qml/MDialog.qml qml/MSwitch.qml qml/Main.qml qml/Theme.qml qml/Icon.qml qml/MButton.qml qml/MNavigationItem.qml qml/SungText.qml qml/ArtworkViewer.qml qml/PlaybackGlyph.qml qml/Artwork.qml qml/TrackRow.qml qml/ArtCard.qml qml/SeekBar.qml)
+ QML_FILES qml/Visualizer.qml qml/TelegramConnection.qml qml/AccentPalettes.qml qml/UpdateDialog.qml qml/Keymap.qml qml/MDockedToolbar.qml qml/MCheckbox.qml qml/MRadioButton.qml qml/MExposedDropdown.qml qml/MCard.qml qml/MNavigationDrawer.qml qml/MBottomSheet.qml qml/MShape.qml qml/MRichTooltip.qml qml/MTooltip.qml qml/MDragHandle.qml qml/MWavyProgress.qml qml/MAppBarRow.qml qml/MElevation.qml qml/MBadge.qml qml/MNavigationBar.qml qml/MPullToRefresh.qml qml/MCarousel.qml qml/MFloatingToolbar.qml qml/MFabMenu.qml qml/MSplitButton.qml qml/PlaylistVersions.qml qml/ListeningStats.qml qml/SingAlong.qml qml/ArtistHero.qml qml/NavigationTransition.qml qml/MSettingRow.qml qml/Onboarding.qml qml/AmbientBackdrop.qml qml/ImmersiveCoverflow.qml qml/AccentPicker.qml qml/PlaybackHud.qml qml/VolumeControl.qml qml/ViewLayoutDialog.qml qml/HomeEditor.qml qml/OutputPicker.qml qml/ListeningSessions.qml qml/PlaylistCoverDialog.qml qml/CommandPalette.qml qml/ArtworkControls.qml qml/MatchText.qml qml/PlayingIndicator.qml qml/TrackPresentation.qml qml/PlaylistCover.qml qml/CatalogSkeleton.qml qml/SmartPlaylistDialog.qml qml/TrackDetailsDialog.qml qml/ShortcutHelp.qml qml/MScrollBar.qml qml/MTextField.qml qml/MSearchField.qml qml/MSegmentedControl.qml qml/ServerConnection.qml qml/ServerToolbar.qml qml/MChip.qml qml/LibraryTabs.qml qml/MLoadingIndicator.qml qml/TrackList.qml qml/SelectionBar.qml qml/FileDialogs.qml qml/SettingSlider.qml qml/LyricsView.qml qml/ImmersivePlayer.qml qml/MiniPlayer.qml qml/MMenu.qml qml/MMenuItem.qml qml/MMediaControls.qml qml/MDivider.qml qml/MDialog.qml qml/MSwitch.qml qml/Main.qml qml/Theme.qml qml/Icon.qml qml/MButton.qml qml/MNavigationItem.qml qml/SungText.qml qml/ArtworkViewer.qml qml/PlaybackGlyph.qml qml/Artwork.qml qml/TrackRow.qml qml/ArtCard.qml qml/SeekBar.qml)
 file(GLOB icons CONFIGURE_DEPENDS RELATIVE "${CMAKE_CURRENT_SOURCE_DIR}" assets/icons/*.svg)
 # Shaders are compiled to .qsb at build time. ShaderTools is only the
 # compiler: nothing of it is linked into the app or shipped in the bundle.
@@ -175,6 +193,10 @@ if(BUILD_TESTING)
  target_include_directories(musix-update-tests PRIVATE src)
  target_link_libraries(musix-update-tests PRIVATE Qt6::Core Qt6::Gui Qt6::Network Qt6::Test)
  add_test(NAME updates COMMAND musix-update-tests)
+ qt_add_executable(musix-telegram-tests tests/telegram_test.cpp src/telegram.cpp src/telegram.h)
+ target_include_directories(musix-telegram-tests PRIVATE src)
+ target_link_libraries(musix-telegram-tests PRIVATE Qt6::Core Qt6::Test)
+ add_test(NAME telegram COMMAND musix-telegram-tests)
  qt_add_executable(musix-m3color-tests tests/m3color_test.cpp src/m3color.cpp src/m3color.h src/m3shape.cpp src/m3shape.h)
  target_include_directories(musix-m3color-tests PRIVATE src)
  target_link_libraries(musix-m3color-tests PRIVATE Qt6::Core Qt6::Gui Qt6::Test)

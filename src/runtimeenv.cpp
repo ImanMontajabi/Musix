@@ -74,6 +74,13 @@ QString Backend::helperScript() const {
   return beside;
 }
 
+// The Telegram helper sits beside the catalogue helper wherever that is, so a
+// checkout, a bundle and SUNG_HELPER all find it the same way.
+QString Backend::telegramScript() const {
+  const QFileInfo catalogue(helperScript());
+  return catalogue.dir().filePath("telegram.py");
+}
+
 QString Backend::ffmpegDirectory() const {
   if (const auto chosen = qEnvironmentVariable("SUNG_FFMPEG_DIR");
       !chosen.isEmpty())

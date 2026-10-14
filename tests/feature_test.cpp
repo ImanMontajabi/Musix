@@ -5308,3 +5308,105 @@ void runMaterialScaleTests(Backend *b, QQuickWindow *w) {
   c.shot("08-restored");
   c.finish();
 }
+
+// Signing in to Telegram through the dialog, against the stand-in helper
+// (tests/telegram_fixture.py, installed as telegram.py beside the catalogue
+// fixture by verify.py): each step Telegram waits for is the step the dialog
+// shows, a refusal says so and stays, and the account is shown once signed in.
+void runTelegramTests(Backend *b, QQuickWindow *w) {
+  Check c{b, w, qEnvironmentVariable("SUNG_TEST_OUTPUT")};
+  QWindowSystemInterface::handleFocusWindowChanged(w);
+  w->resize(1200, 800);
+  QTest::qWait(500);
+  b->setTheme("dark");
+  b->setMotion(true);
+  auto account = b->telegram();
+  c.check(account->available(), "this run has Telegram credentials to start the helper with");
+  auto root = [&] { return w->contentItem(); };
+  auto text = [&](const char *name) { auto i = shownItem(root(), name); return i ? i->property("text").toString() : QString(); };
+
+  c.dialog("settingsDialog");
+  c.evaluate("settingsDialog.category=3");
+  QTest::qWait(400);
+  c.check(shownItem(root(), "telegramButton"), "Settings lists Telegram under Connections");
+  c.shot("01-settings");
+  c.click("telegramButton");
+  auto dialog = w->findChild<QObject *>("telegramDialog");
+  c.check(dialog && c.until([&] { return dialog->property("visible").toBool(); }), "the Telegram dialog opens");
+  c.check(c.until([&] { return account->state() == "wait-phone"; }), "the helper starts and waits for a phone number");
+  QTest::qWait(400);
+  c.check(shownItem(root(), "telegramPhone"), "the phone number is the first thing asked for");
+  c.check(!shownItem(root(), "telegramCode") && !shownItem(root(), "telegramPassword"), "and nothing else is asked for yet");
+  auto primary = shownItem(root(), "telegramPrimary");
+  c.check(primary && !primary->isEnabled(), "Next waits until a number is typed");
+  c.shot("02-phone");
+
+  auto phone = shownItem(root(), "telegramPhone");
+  if (phone) phone->setProperty("text", "+1 555 0100");
+  QTest::qWait(100);
+  c.click("telegramPrimary");
+  c.check(c.until([&] { return !text("telegramError").isEmpty(); }), "a number Telegram refuses is explained");
+  c.check(account->state() == "wait-phone", "and the dialog stays on the phone number");
+  c.shot("03-phone-refused");
+
+  if (phone) phone->setProperty("text", "+49 151 2345678");
+  QTest::qWait(100);
+  c.click("telegramPrimary");
+  c.check(c.until([&] { return account->state() == "wait-code"; }), "a good number moves on to the code");
+  QTest::qWait(400);
+  c.check(shownItem(root(), "telegramCode") && !shownItem(root(), "telegramPhone"), "the code field replaces the phone field");
+  c.check(text("telegramPrompt").contains("Telegram app"), "and says where the code was sent");
+  c.check(text("telegramError").isEmpty(), "with the last step's error gone");
+  c.shot("04-code");
+
+  auto code = shownItem(root(), "telegramCode");
+  if (code) code->setProperty("text", "00000");
+  QTest::qWait(100);
+  c.click("telegramPrimary");
+  c.check(c.until([&] { return !text("telegramError").isEmpty(); }), "a wrong code is refused");
+  c.check(account->state() == "wait-code", "and the dialog stays on the code");
+
+  c.click("telegramBack");
+  c.check(c.until([&] { return account->state() == "wait-phone"; }), "Change number goes back to the phone number");
+  phone = shownItem(root(), "telegramPhone");
+  if (phone) phone->setProperty("text", "+49 151 99");
+  QTest::qWait(100);
+  c.click("telegramPrimary");
+  c.check(c.until([&] { return account->state() == "wait-code"; }), "a number with two-step verification still asks for the code");
+  code = shownItem(root(), "telegramCode");
+  if (code) code->setProperty("text", "12345");
+  QTest::qWait(100);
+  c.click("telegramPrimary");
+  c.check(c.until([&] { return account->state() == "wait-password"; }), "then asks for the password");
+  QTest::qWait(400);
+  c.check(shownItem(root(), "telegramPassword"), "in a password field");
+  c.check(text("telegramPrompt").contains("first pet"), "showing Telegram's hint");
+  c.shot("05-password");
+  auto password = shownItem(root(), "telegramPassword");
+  if (password) password->setProperty("text", "secret");
+  QTest::qWait(100);
+  c.click("telegramPrimary");
+  c.check(c.until([&] { return account->state() == "ready"; }), "the password signs in");
+  QTest::qWait(400);
+  c.check(text("telegramPrompt").contains("Ada Lovelace") && text("telegramPrompt").contains("@ada"), "the dialog names the account");
+  c.check(account->signedIn(), "and the app knows it is signed in");
+  c.shot("06-ready");
+
+  c.click("telegramClose");
+  c.check(c.until([&] { return account->state() == "closed"; }), "closing the dialog lets the helper go");
+  c.check(account->signedIn(), "while the account stays known");
+
+  c.dialog("settingsDialog");
+  c.evaluate("settingsDialog.category=3");
+  QTest::qWait(400);
+  c.check(text("telegramButton").contains("Ada Lovelace"), "the Settings row names the account");
+  c.shot("07-settings-signed-in");
+  c.click("telegramButton");
+  c.check(c.until([&] { return account->state() == "ready"; }), "reopening finds the session still signed in");
+  QTest::qWait(300);
+  c.click("telegramPrimary");
+  c.check(c.until([&] { return account->state() == "wait-phone"; }), "Log out returns to the phone number");
+  c.check(!account->signedIn(), "and forgets the account");
+  c.click("telegramClose");
+  c.finish();
+}

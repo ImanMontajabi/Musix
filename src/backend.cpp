@@ -44,7 +44,9 @@ static std::shared_ptr<QTemporaryDir> audioDirectory() {
 static QString itemId(const QVariant &v) {
   return v.toMap().value("id").toString();
 }
+QString Backend::telegramDirectory() { return Profile::location(QStandardPaths::AppDataLocation)+"/telegram"; }
 Backend::Backend(QObject *parent) : QObject(parent) {
+  m_telegram.setLauncher([this]{return pythonExecutable();},[this]{return telegramScript();});
   // Both decks report everything; only the one being heard is listened to.
   const auto eachDeck=[this](const std::function<void(QMediaPlayer *)> &wire){wire(&m_deckA);wire(&m_deckB);};
   m_userVolume=qBound(0.0,m_settings.value("volume",0.65).toDouble(),1.0);

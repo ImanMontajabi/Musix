@@ -17,3 +17,10 @@ requests==2.34.2
 urllib3==2.8.0
 websockets==17.1
 yt-dlp-ejs==0.8.0
+# Telegram sign-in and audio (helper/telegram.py). cryptg is Telethon's fast
+# AES; without it downloads fall back to pure-Python pyaes and crawl.
+telethon==1.45.0
+cryptg==0.6.0
+pyaes==1.6.1
+pyasn1==0.6.4
+rsa==4.9.1

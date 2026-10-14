@@ -1982,6 +1982,7 @@ ApplicationWindow {
         }
     }
     ServerConnection { id: serverConnection }
+    TelegramConnection { id: telegramConnection }
     MDialog {
         id: settingsDialog; objectName: "settingsDialog"; width: fitWidth(880); height: fitHeight(740); modal: true; title: "Settings"
         palette.windowText: Theme.text; palette.buttonText: Theme.text; palette.text: Theme.text
@@ -2180,11 +2181,12 @@ ApplicationWindow {
                 ColumnLayout {
                     id: settingsGroup3; objectName:"settingsGroup3"
                     Layout.fillWidth:true;Layout.minimumWidth:0; spacing:Theme.space12
-                    property bool hasMatches: settingsDialog.matches("Music server library") || settingsDialog.matches("YouTube cookies import replace remove sign in") || settingsDialog.matches("YouTube streaming quality standard data saver bitrate")
+                    property bool hasMatches: settingsDialog.matches("Music server library") || settingsDialog.matches("Telegram account sign in phone channels") || settingsDialog.matches("YouTube cookies import replace remove sign in") || settingsDialog.matches("YouTube streaming quality standard data saver bitrate")
                     visible: settingsDialog.searchQuery.trim() ? hasMatches : settingsDialog.category===3
                     SungText {heading: true;text:"Connections";font.pixelSize:Theme.titleLarge;font.weight:Font.Medium;Layout.bottomMargin:Theme.space8}
                     ColumnLayout {id:options3;objectName:"settingsRows3";Layout.fillWidth:true;Layout.minimumWidth:0;spacing:Theme.space12
                 MSettingRow {opens:true;objectName:"musicServerButton";text:"Music server";visible:settingsDialog.matches("Music server library");onClicked:{window.openFromSettings(serverConnection)}}
+                MSettingRow {opens:true;objectName:"telegramButton";text:app.telegram.signedIn?"Telegram · "+app.telegram.name:"Telegram";visible:settingsDialog.matches("Telegram account sign in phone channels");onClicked:{window.openFromSettings(telegramConnection)}}
                 SungText { visible: settingsDialog.matches("YouTube cookies import replace remove sign in") || settingsDialog.matches("YouTube streaming quality standard data saver bitrate"); text: "YouTube"; font.pixelSize: Theme.labelLarge; font.weight: Font.Medium; color: Theme.muted; Layout.topMargin: Theme.space12 }
                 SungText { visible: settingsDialog.matches("YouTube streaming quality standard data saver bitrate"); text: "Streaming quality"; font.pixelSize: Theme.bodyLarge; font.weight: Font.Medium }
                 MSegmentedControl {Layout.fillWidth:true;Layout.minimumWidth:0;

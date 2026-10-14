@@ -18,6 +18,7 @@
 #include "collectionview.h"
 #include "playbacknotifier.h"
 #include "musicserver.h"
+#include "telegram.h"
 #include "scrobbler.h"
 #include <QElapsedTimer>
 #include <QFileSystemWatcher>
@@ -80,6 +81,7 @@ signals:
 class Backend : public QObject {
   Q_OBJECT
   Q_PROPERTY(MusicServer *server READ server CONSTANT)
+  Q_PROPERTY(Telegram *telegram READ telegram CONSTANT)
   Q_PROPERTY(bool serverPlaylistEditable READ serverPlaylistEditable NOTIFY catalogChanged)
   Q_PROPERTY(QVariantMap serverRequest READ serverRequest NOTIFY catalogChanged)
   Q_PROPERTY(bool importingLocal READ importingLocal NOTIFY localImportChanged)
@@ -253,6 +255,7 @@ public:
   QVariantList playlistRows(const QVariantMap &playlist) const;
   QVariantList audioLevels() const {return m_audioLevels;}
   MusicServer *server() {return &m_server;}
+  Telegram *telegram() {return &m_telegram;}
   QString serverArtwork() const {return m_serverArtwork;}
   bool serverPlaylistEditable() const {return m_page=="server" && m_request.value("mode")=="playlist" && m_request.value("editable").toBool();}
   QVariantMap serverRequest() const {return m_page=="server"?m_request:QVariantMap{};}
@@ -682,6 +685,8 @@ private:
   void serverBrowseRequest(QVariantMap request,bool push=true,bool append=false);
   void setupServer();
   MusicServer m_server;
+  static QString telegramDirectory();
+  Telegram m_telegram{telegramDirectory()};
   QString m_serverArtwork;
   std::shared_ptr<QTemporaryDir> m_serverArtDirectory;
   QTimer m_serverListenTimer;
@@ -701,6 +706,7 @@ private:
   // export. The runtime is copied out of the read-only bundle so that the
   // resolver inside it can be updated without breaking the signature.
   QString helperScript() const;
+  QString telegramScript() const;
   QString pythonExecutable() const;
   QString ffmpegDirectory() const;
   QString writableRuntime() const;

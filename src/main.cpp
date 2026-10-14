@@ -295,6 +295,7 @@ int main(int argc, char **argv) {
   if(args.contains("--material-emphasis-test")){QTimer::singleShot(0,&app,[&]{runMaterialEmphasisTests(&backend,window);});return app.exec();}
   if(args.contains("--material-anatomy-test")){QTimer::singleShot(0,&app,[&]{runMaterialAnatomyTests(&backend,window);});return app.exec();}
   if(args.contains("--material-controls-test")){QTimer::singleShot(0,&app,[&]{runMaterialControlsTests(&backend,window);});return app.exec();}
+  if(args.contains("--telegram-test")){QTimer::singleShot(0,&app,[&]{runTelegramTests(&backend,window);});return app.exec();}
   if(args.contains("--material-scale-test")){QTimer::singleShot(0,&app,[&]{runMaterialScaleTests(&backend,window);});return app.exec();}
   if(args.contains("--material-grain-test")){QTimer::singleShot(0,&app,[&]{runMaterialGrainTests(&backend,window);});return app.exec();}
   if(args.contains("--material-scheme-test")){QTimer::singleShot(0,&app,[&]{runMaterialSchemeTests(&backend,window);});return app.exec();}
