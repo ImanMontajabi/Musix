@@ -8,6 +8,7 @@ import QtQuick.Layouts
 MDialog {
     id: dialog
     objectName: "telegramDialog"
+    signal sourcesRequested()
     anchors.centerIn: parent; width: Math.min(440, parent.width-48)
     title: "Telegram"; modal: true; standardButtons: Dialog.NoButton
     readonly property string step: app.telegram.state
@@ -82,6 +83,10 @@ MDialog {
             MButton {
                 objectName: "telegramBack"; text: "Change number"; visible: dialog.step==="wait-code" || dialog.step==="wait-password"
                 enabled: !app.telegram.busy; onClicked: app.telegram.back()
+            }
+            MButton {
+                objectName: "telegramChooseMusic"; text: "Choose music…"; visible: dialog.step==="ready"
+                onClicked: dialog.sourcesRequested()
             }
             MButton { objectName: "telegramClose"; text: "Close"; ink: Theme.primary; onClicked: dialog.close() }
             MButton {

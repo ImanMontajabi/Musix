@@ -40,7 +40,7 @@ class Sent:
 
 
 class Me:
-    first_name, last_name, username = 'Ada', 'Lovelace', 'ada'
+    first_name, last_name, username, id = 'Ada', 'Lovelace', 'ada', 4242
 
 
 class FakeClient:
@@ -83,12 +83,16 @@ def run(coro):
 
 class Case(unittest.TestCase):
     def setUp(self):
+        from unittest import mock
+        self._emit = mock.patch.object(telegram, 'emit', lambda event: self.events.append(event))
+        self._emit.start()
         self.tmp = tempfile.TemporaryDirectory()
         self.dir = Path(self.tmp.name)
         self.events = []
         self.clients = []
 
     def tearDown(self):
+        self._emit.stop()
         self.tmp.cleanup()
 
     def account(self, **client):
@@ -279,6 +283,222 @@ class Process(unittest.TestCase):
         done = self.start()
         for line in done.stdout.splitlines():
             json.loads(line)
+
+
+# --- Choosing sources and syncing them -------------------------------------
+
+class DocumentAttributeAudio:
+    def __init__(self, title='', performer='', duration=0, voice=False):
+        self.title, self.performer, self.duration, self.voice = title, performer, duration, voice
+
+
+class DocumentAttributeFilename:
+    def __init__(self, file_name): self.file_name = file_name
+
+
+class Document:
+    def __init__(self, mime='audio/mpeg', attributes=(), size=1000):
+        self.mime_type, self.attributes, self.size = mime, list(attributes), size
+
+
+class Media:
+    def __init__(self, document): self.document = document
+
+
+class Message:
+    def __init__(self, id, document=None, date=None):
+        self.id, self.media, self.date = id, Media(document) if document else None, date
+
+
+def music(id, title='T', artist='A', seconds=100):
+    return Message(id, Document('audio/mpeg', [DocumentAttributeAudio(title, artist, seconds), DocumentAttributeFilename('x.mp3')]))
+
+
+class Channel:
+    broadcast = True; forum = False; username = 'chan'
+class Megagroup:
+    pass
+Megagroup.__name__ = 'Channel'
+class User:
+    pass
+
+
+class Dialog:
+    def __init__(self, id, name, entity): self.id, self.name, self.entity = id, name, entity
+
+
+class FloodWaitError(Exception):
+    def __init__(self, seconds): self.seconds = seconds
+
+
+class Songs(Case):
+    def ready(self):
+        a = self.account(authorised=True); run(a.start()); self.events.clear(); return a
+
+    def test_audio_is_a_song_but_a_voice_note_is_not(self):
+        self.assertEqual(telegram.song_from(music(7, 'Song', 'Band', 200))['artist'], 'Band')
+        self.assertEqual(telegram.song_from(music(7, 'Song', 'Band', 200))['seconds'], 200)
+        self.assertIsNone(telegram.song_from(Message(1, Document('audio/ogg', [DocumentAttributeAudio(voice=True)]))))
+        self.assertIsNone(telegram.song_from(Message(2)))
+        self.assertIsNone(telegram.song_from(Message(3, Document('application/pdf', [DocumentAttributeFilename('a.pdf')]))))
+
+    def test_a_document_is_a_song_by_its_type_or_its_name(self):
+        by_mime = telegram.song_from(Message(4, Document('audio/flac', [DocumentAttributeFilename('Some Song.flac')])))
+        self.assertEqual(by_mime['title'], 'Some Song')
+        by_name = telegram.song_from(Message(5, Document('application/octet-stream', [DocumentAttributeFilename('Other.MP3')])))
+        self.assertEqual(by_name['title'], 'Other')
+
+    def test_public_names_come_from_at_names_and_links(self):
+        for text in ('@some_channel', 'some_channel', 'https://t.me/some_channel', 't.me/s/some_channel', 'https://t.me/some_channel/123'):
+            self.assertEqual(telegram.public_name(text), 'some_channel', text)
+        for bad in ('', '@a', 'two words', 'https://t.me/+AbCdEf', 'https://t.me/joinchat/AbCd'):
+            with self.assertRaises(telegram.Rejected, msg=bad):
+                telegram.public_name(bad)
+
+    def test_the_chat_list_has_saved_messages_then_channels_groups_and_forums_but_no_people(self):
+        a = self.ready()
+        forum = Megagroup(); forum.broadcast, forum.forum, forum.username = False, True, ''
+        group = Megagroup(); group.broadcast, group.forum, group.username = False, False, ''
+        a.client.iter_dialogs = lambda limit=None: self._aiter([Dialog(-1001, 'News', Channel()), Dialog(-1002, 'Friends', group),
+                                                                  Dialog(-1003, 'Forum', forum), Dialog(55, 'Bob', User())])
+        found = run(a.handle({'cmd': 'dialogs'}))['dialogs']
+        self.assertEqual([(d['title'], d['kind']) for d in found],
+                         [('Saved Messages', 'saved'), ('News', 'channel'), ('Friends', 'group'), ('Forum', 'forum')])
+        self.assertEqual(found[0]['chatId'], 4242)  # Saved Messages is the account's own chat
+
+    @staticmethod
+    def _aiter(items):
+        async def gen():
+            for item in items:
+                yield item
+        return gen()
+
+    def sync(self, account, pages, request=None, **extra):
+        calls = []
+
+        async def page(peer, kind, offset, topic):
+            calls.append((kind, offset, topic))
+            queue = pages.get(kind, [])
+            return queue.pop(0) if queue else []
+        account.page = page
+        account.client.get_input_entity = lambda chat: _done('peer')
+        result = run(account.handle(dict({'cmd': 'sync', 'chatId': 5, 'job': 1}, **(request or {}))))
+        return result, calls
+
+    def songs(self):
+        return [s for e in self.events if e.get('event') == 'songs' for s in e['songs']]
+
+    def test_a_sync_pages_through_music_then_documents_and_sends_each_song_once(self):
+        a = self.ready()
+        doc = Message(2, Document('audio/flac', [DocumentAttributeFilename('Doc.flac')]))
+        result, calls = self.sync(a, {'music': [[music(9), music(8)], [music(7)]],
+                                      'document': [[music(8), doc, Message(1, Document('application/pdf'))]]})
+        self.assertEqual(result, {'count': 4, 'complete': True})
+        self.assertEqual([s['messageId'] for s in self.songs()], [9, 8, 7, 2])
+        self.assertEqual(calls, [('music', 0, 0), ('music', 8, 0), ('music', 7, 0), ('document', 0, 0), ('document', 1, 0)])
+
+    def test_a_topic_is_searched_by_its_own_id(self):
+        a = self.ready()
+        _, calls = self.sync(a, {'music': [[music(3)]]}, {'topicId': 77})
+        self.assertEqual({c[2] for c in calls}, {77})
+
+    def test_a_short_flood_wait_is_waited_out_and_reported(self):
+        a = self.ready()
+        slept = []
+
+        async def fast(seconds): slept.append(seconds)
+        attempts = []
+
+        async def page(peer, kind, offset, topic):
+            if kind == 'document':
+                return []
+            attempts.append(1)
+            if len(attempts) == 1:
+                raise FloodWaitError(30)
+            return [music(4)] if len(attempts) == 2 else []
+        a.page = page
+        a.client.get_input_entity = lambda chat: _done('peer')
+        from unittest import mock
+        with mock.patch.object(telegram.asyncio, 'sleep', fast):
+            result = run(a.handle({'cmd': 'sync', 'chatId': 5, 'job': 1}))
+        self.assertEqual(result['count'], 1)
+        waits = [e['seconds'] for e in self.events if e.get('event') == 'wait']
+        self.assertEqual(waits, [30, 0])
+        self.assertIn(31, slept)
+
+    def test_a_long_flood_wait_ends_the_sync_but_keeps_what_arrived(self):
+        a = self.ready()
+        calls = []
+
+        async def page(peer, kind, offset, topic):
+            calls.append(1)
+            if len(calls) == 1:
+                return [music(6), music(5)]
+            raise FloodWaitError(7200)
+        a.page = page
+        a.client.get_input_entity = lambda chat: _done('peer')
+        with self.assertRaises(telegram.Rejected) as caught:
+            run(a.handle({'cmd': 'sync', 'chatId': 5, 'job': 1}))
+        self.assertIn('2 hours', str(caught.exception))
+        self.assertEqual([s['messageId'] for s in self.songs()], [6, 5])
+
+    def test_data_requests_need_a_signed_in_account(self):
+        a = self.account(); run(a.start())
+        for cmd in ('dialogs', 'topics', 'resolve', 'sync'):
+            with self.assertRaises(telegram.Rejected, msg=cmd):
+                run(a.handle({'cmd': cmd, 'chatId': 1, 'query': '@abcd'}))
+
+    def test_a_public_channel_is_found_by_link(self):
+        a = self.ready()
+        entity = Channel(); entity.id, entity.title = 123456, 'Public Music'
+        asked = []
+
+        async def get_entity(name): asked.append(name); return entity
+        a.client.get_entity = get_entity
+        found = run(a.handle({'cmd': 'resolve', 'query': 'https://t.me/public_music'}))['chat']
+        self.assertEqual(asked, ['public_music'])
+        self.assertEqual(found, {'chatId': -100123456, 'title': 'Public Music', 'kind': 'channel', 'username': 'chan'})
+
+    def test_a_person_is_not_a_channel(self):
+        a = self.ready()
+        a.client.get_entity = lambda name: _done(User())
+        with self.assertRaises(telegram.Rejected) as caught:
+            run(a.handle({'cmd': 'resolve', 'query': '@someone'}))
+        self.assertIn('person or a bot', str(caught.exception))
+
+    def test_an_unknown_channel_says_so(self):
+        a = self.ready()
+
+        async def missing(name): raise type('UsernameNotOccupiedError', (Exception,), {})()
+        a.client.get_entity = missing
+        with self.assertRaises(telegram.Rejected) as caught:
+            run(a.handle({'cmd': 'resolve', 'query': 't.me/nothere'}))
+        self.assertIn('@nothere', str(caught.exception))
+
+    def test_a_running_sync_can_be_cancelled(self):
+        a = self.ready()
+
+        async def scenario():
+            started = asyncio.Event()
+
+            async def page(peer, kind, offset, topic):
+                started.set()
+                await asyncio.sleep(30)
+            a.page = page
+            a.client.get_input_entity = lambda chat: _done('peer')
+            task = asyncio.create_task(telegram.answer(a, {'id': 9, 'cmd': 'sync', 'chatId': 5, 'job': 4}))
+            await started.wait()
+            await telegram.answer(a, {'id': 10, 'cmd': 'cancel', 'job': 4})
+            await task
+        run(scenario())
+        replies = {e['id']: e for e in self.events if 'id' in e}
+        self.assertFalse(replies[9]['ok'])
+        self.assertEqual(replies[9]['error'], 'Cancelled.')
+        self.assertTrue(replies[10]['ok'])
+
+
+async def _done(value):
+    return value
 
 
 if __name__ == '__main__':

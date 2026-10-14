@@ -47,6 +47,8 @@ static QString itemId(const QVariant &v) {
 QString Backend::telegramDirectory() { return Profile::location(QStandardPaths::AppDataLocation)+"/telegram"; }
 Backend::Backend(QObject *parent) : QObject(parent) {
   m_telegram.setLauncher([this]{return pythonExecutable();},[this]{return telegramScript();});
+  connect(&m_telegram,&Telegram::songsReady,this,&Backend::telegramSongs);
+  connect(&m_telegram,&Telegram::sourceRemoved,this,&Backend::telegramRemoved);
   // Both decks report everything; only the one being heard is listened to.
   const auto eachDeck=[this](const std::function<void(QMediaPlayer *)> &wire){wire(&m_deckA);wire(&m_deckB);};
   m_userVolume=qBound(0.0,m_settings.value("volume",0.65).toDouble(),1.0);
@@ -571,8 +573,11 @@ void Backend::playResults(int index) {
   invalidateUndo("queue");
   const auto target = m_results.get(index);
   auto items = playable(m_results.rows);
-  if (items.isEmpty())
+  if (items.isEmpty()) {
+    // Listed and synced, not playable yet: say so rather than do nothing.
+    if (target.value("source") == "telegram") emit toast("Playing Telegram songs isn’t available yet.");
     return;
+  }
   int actual = 0;
   for (int i = 0; i < items.size(); ++i)
     if (itemId(items[i]) == target.value("id").toString()) {
@@ -615,8 +620,10 @@ void Backend::playCover(const QVariantMap &item) {
   request("coverplay",{{"op",kind},{"id",m_coverPlayId},{"limit",5000}},[finish](const QVariantMap &data){finish(data.value("items").toList(),data.value("ok").toBool()?QString():data.value("error","Could not load this collection.").toString());});
 }
 void Backend::playItem(const QVariantMap &item) {
-  if (playable({item}).isEmpty())
+  if (playable({item}).isEmpty()) {
+    if (item.value("source") == "telegram") emit toast("Playing Telegram songs isn’t available yet.");
     return;
+  }
   invalidateUndo("queue");
   m_queue.reconcile(queueWithOrigin({item},"manual"));
   playAt(0);
@@ -1540,6 +1547,45 @@ QString Backend::createPlaylist(const QString &name) {
   emit libraryChanged();
   m_saveTimer.start();
   return id;
+}
+// Each Telegram source keeps its songs in a playlist of its own under a fixed id,
+// so a refresh replaces the songs and leaves a rename, a cover or a pin alone. A
+// sync that stopped early adds what it found to what was already there.
+void Backend::telegramSongs(const QString &key, const QString &title, const QVariantList &songs, bool complete) {
+  const auto id = Telegram::playlistId(key);
+  for (int i = 0; i < m_playlists.size(); ++i) {
+    auto p = m_playlists[i].toMap();
+    if (p.value("id") != id) continue;
+    QVariantList tracks = songs;
+    if (!complete) {
+      QSet<QString> seen;
+      for (const auto &s : songs) seen.insert(itemId(s));
+      for (const auto &old : p.value("tracks").toList())
+        if (!seen.contains(itemId(old))) tracks.append(old);
+    }
+    p["tracks"] = tracks;
+    m_playlists[i] = p;
+    if (m_libraryId == id && m_page == "local") m_results.assign(tracks);
+    emit libraryChanged();
+    m_saveTimer.start();
+    return;
+  }
+  m_playlists.append(QVariantMap{{"id", id}, {"title", title.left(120)}, {"tracks", songs},
+                                 {"source", "telegram"}, {"telegramKey", key}});
+  emit libraryChanged();
+  m_saveTimer.start();
+}
+void Backend::telegramRemoved(const QString &key) {
+  const auto id = Telegram::playlistId(key);
+  for (int i = 0; i < m_playlists.size(); ++i)
+    if (m_playlists[i].toMap().value("id") == id) {
+      m_playlistVersions.remove(id);
+      m_playlists.removeAt(i);
+      if (m_libraryId == id) library();
+      emit libraryChanged();
+      m_saveTimer.start();
+      return;
+    }
 }
 void Backend::openPlaylist(const QString &id) {
   for (const auto &v : m_playlists) {

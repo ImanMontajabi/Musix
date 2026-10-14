@@ -1,7 +1,10 @@
 #include "telegram.h"
 #include <QCoreApplication>
+#include <QCryptographicHash>
+#include <QDateTime>
 #include <QDir>
 #include <QFile>
+#include <QJsonArray>
 #include <QJsonDocument>
 #include <QProcessEnvironment>
 #include <csignal>
@@ -13,6 +16,17 @@
 #ifndef MUSIX_TELEGRAM_API_HASH
 #define MUSIX_TELEGRAM_API_HASH ""
 #endif
+
+// Chat ids are 13 digits and survive a double exactly; this keeps them whole
+// and as text, the way the rest of the app sees them.
+static QString idText(const QJsonValue &value) {
+  if (value.isString()) return value.toString();
+  return QString::number(qint64(value.toDouble()));
+}
+
+static QString sourceKey(const QString &chatId, const QString &topicId) {
+  return topicId.isEmpty() || topicId == "0" ? chatId : chatId + "/" + topicId;
+}
 
 Telegram::Telegram(const QString &directory, QObject *parent)
     : QObject(parent), m_directory(directory) {
@@ -27,15 +41,17 @@ Telegram::Telegram(const QString &directory, QObject *parent)
   m_startTimeout.setInterval(25000);
   connect(&m_startTimeout, &QTimer::timeout, this, [this] {
     if (m_state != "starting") return;
-    stop();
+    stopProcess();
+    failWaiting("Telegram didn’t respond. Try again.");
     set("error", "Telegram didn’t respond. Try again.");
   });
   m_restart.setSingleShot(true);
-  connect(&m_restart, &QTimer::timeout, this, [this] { if (m_wanted) start(); });
+  connect(&m_restart, &QTimer::timeout, this, [this] { if (wanted()) start(); });
   restoreAccount();
+  loadSources();
 }
 
-Telegram::~Telegram() { stop(); }
+Telegram::~Telegram() { stopProcess(); }
 
 void Telegram::setLauncher(std::function<QString()> python, std::function<QString()> script) {
   m_python = std::move(python);
@@ -48,6 +64,8 @@ void Telegram::restoreAccount() {
   const auto account = QJsonDocument::fromJson(file.readAll()).object();
   m_name = account.value("name").toString();
   m_username = account.value("username").toString();
+  m_userId = account.contains("userId") ? idText(account.value("userId")) : QString();
+  if (m_userId == "0") m_userId.clear();
 }
 
 void Telegram::set(const QString &state, const QString &error) {
@@ -56,8 +74,10 @@ void Telegram::set(const QString &state, const QString &error) {
   emit changed();
 }
 
+// --- Process -------------------------------------------------------------
+
 void Telegram::open() {
-  m_wanted = true;
+  ++m_holders;
   m_crashes = 0;
   if (!available()) {
     set("no-credentials");
@@ -67,14 +87,27 @@ void Telegram::open() {
 }
 
 void Telegram::close() {
-  stop();
+  if (m_holders > 0) --m_holders;
+  releaseIfIdle();
+}
+
+// The helper goes when nothing wants it: no dialog is open, no request is
+// running, nothing is waiting for the session.
+void Telegram::releaseIfIdle() {
+  if (wanted()) return;
+  stopProcess();
   m_pending = 0;
   set("closed");
 }
 
 void Telegram::retry() {
-  stop();
-  open();
+  stopProcess();
+  m_crashes = 0;
+  if (!available()) {
+    set("no-credentials");
+    return;
+  }
+  start();
 }
 
 void Telegram::start() {
@@ -82,6 +115,7 @@ void Telegram::start() {
   const auto python = m_python ? m_python() : QString();
   const auto script = m_script ? m_script() : QString();
   if (python.isEmpty() || script.isEmpty()) {
+    failWaiting("Telegram support can’t start: the helper wasn’t found.");
     set("error", "Telegram support can’t start: the helper wasn’t found.");
     return;
   }
@@ -104,6 +138,7 @@ void Telegram::start() {
     if (error != QProcess::FailedToStart || process != m_process) return;
     m_process = nullptr;
     process->deleteLater();
+    failWaiting("Telegram support can’t start. Run scripts/setup.sh.");
     set("error", "Telegram support can’t start. Run scripts/setup.sh.");
   });
   connect(process, qOverload<int, QProcess::ExitStatus>(&QProcess::finished), this,
@@ -113,7 +148,16 @@ void Telegram::start() {
             process->deleteLater();
             m_buffer.clear();
             m_pending = 0;
-            if (code == 2 && m_state != "starting") return; // said why, and asked for no restart
+            m_callbacks.clear();
+            const bool listed = m_listing > 0;
+            m_listing = 0;
+            abandonJobs("Telegram stopped. Refresh to try again.");
+            if (listed) m_listError = "Telegram stopped. Try again.";
+            emit listChanged();
+            if (code == 2 && m_state != "starting") {
+              failWaiting(m_error);
+              return; // said why, and asked for no restart
+            }
             exited();
           });
   m_process = process;
@@ -124,8 +168,12 @@ void Telegram::start() {
 }
 
 void Telegram::exited() {
-  if (!m_wanted) return;
+  if (!wanted()) {
+    releaseIfIdle();
+    return;
+  }
   if (++m_crashes > 3) {
+    failWaiting("Telegram stopped unexpectedly. Try again.");
     set("error", "Telegram stopped unexpectedly. Try again.");
     return;
   }
@@ -133,12 +181,12 @@ void Telegram::exited() {
   m_restart.start(500 * m_crashes);
 }
 
-void Telegram::stop() {
-  m_wanted = false;
+void Telegram::stopProcess() {
   m_startTimeout.stop();
   m_restart.stop();
   auto process = m_process;
   m_process = nullptr;
+  m_callbacks.clear();
   if (!process) return;
   process->disconnect(this);
   // Let it finish on its own once its input ends, even if this object is gone.
@@ -154,6 +202,8 @@ void Telegram::stop() {
     process->kill();
   });
 }
+
+// --- Sign-in -------------------------------------------------------------
 
 void Telegram::send(const QString &command, const QJsonObject &fields) {
   if (!m_process || m_process->state() != QProcess::Running) return;
@@ -172,6 +222,304 @@ void Telegram::submitPassword(const QString &password) { send("password", {{"pas
 void Telegram::back() { send("back"); }
 void Telegram::logout() { send("logout"); }
 
+// --- Requests that carry an answer ----------------------------------------
+
+void Telegram::send(const QString &command, const QJsonObject &fields, Callback done) {
+  if (!m_process || m_process->state() != QProcess::Running) {
+    if (done) done({{"ok", false}, {"error", "Telegram isn’t running."}});
+    return;
+  }
+  auto request = fields;
+  const int id = m_nextId++;
+  request.insert("id", id);
+  request.insert("cmd", command);
+  if (done) m_callbacks.insert(id, std::move(done));
+  m_process->write(QJsonDocument(request).toJson(QJsonDocument::Compact) + '\n');
+}
+
+// Work that needs the account runs when the session is up: at once if it is,
+// otherwise after the helper has started and found it signed in.
+void Telegram::whenReady(std::function<void()> action) {
+  if (m_state == "ready") {
+    action();
+    return;
+  }
+  m_afterReady.append(std::move(action));
+  emit sourcesChanged();
+  if (!available()) {
+    failWaiting("This build has no Telegram credentials.");
+    return;
+  }
+  start();
+}
+
+void Telegram::failWaiting(const QString &message) {
+  const bool had = !m_afterReady.isEmpty() || m_listing > 0;
+  m_afterReady.clear();
+  m_listing = 0;
+  const auto reason = message.isEmpty() ? QStringLiteral("Sign in to Telegram first.") : message;
+  for (auto &source : m_sources) {
+    auto map = source.toMap();
+    if (map.value("status") != "queued") continue;
+    map["status"] = "error";
+    map["message"] = reason;
+    source = map;
+  }
+  if (had) m_listError = reason;
+  emit sourcesChanged();
+  emit listChanged();
+  if (!wanted() && m_state != "no-credentials" && m_state != "error" && m_state != "offline") releaseIfIdle();
+}
+
+// --- Sources -------------------------------------------------------------
+
+void Telegram::loadSources() {
+  QFile file(m_directory + "/sources.json");
+  if (!file.open(QIODevice::ReadOnly)) return;
+  for (const auto &value : QJsonDocument::fromJson(file.readAll()).array()) {
+    auto source = value.toObject().toVariantMap();
+    if (source.value("key").toString().isEmpty()) continue;
+    source["status"] = "";
+    source["message"] = "";
+    m_sources.append(source);
+  }
+}
+
+void Telegram::saveSources() const {
+  QDir().mkpath(m_directory);
+  QJsonArray array;
+  for (const auto &source : m_sources) {
+    auto map = source.toMap();
+    map.remove("status");
+    map.remove("message");
+    array.append(QJsonObject::fromVariantMap(map));
+  }
+  QFile file(m_directory + "/sources.json");
+  if (file.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
+    file.write(QJsonDocument(array).toJson(QJsonDocument::Compact));
+    file.setPermissions(QFileDevice::ReadOwner | QFileDevice::WriteOwner);
+  }
+}
+
+QVariantMap Telegram::sourceFor(const QString &key) const {
+  for (const auto &source : m_sources)
+    if (source.toMap().value("key") == key) return source.toMap();
+  return {};
+}
+
+void Telegram::setSource(const QString &key, const QVariantMap &changes) {
+  for (auto &source : m_sources) {
+    auto map = source.toMap();
+    if (map.value("key") != key) continue;
+    for (auto it = changes.begin(); it != changes.end(); ++it) map[it.key()] = it.value();
+    source = map;
+    break;
+  }
+  emit sourcesChanged();
+}
+
+bool Telegram::hasSource(const QString &chatId, const QString &topicId) const {
+  return !sourceFor(sourceKey(chatId, topicId)).isEmpty();
+}
+
+void Telegram::addSource(const QString &chatId, const QString &title, const QString &kind, const QString &username,
+                         const QString &topicId, const QString &topicTitle) {
+  const auto key = sourceKey(chatId, topicId);
+  if (chatId.isEmpty() || hasSource(chatId, topicId)) return;
+  const bool topic = !topicId.isEmpty() && topicId != "0";
+  m_sources.append(QVariantMap{{"key", key}, {"chatId", chatId}, {"topicId", topic ? topicId : QString("0")},
+                               {"title", topic ? title + " › " + topicTitle : title}, {"chatTitle", title},
+                               {"kind", topic ? QString("topic") : kind}, {"username", username}, {"count", 0},
+                               {"syncedAt", qint64(0)}, {"status", ""}, {"message", ""}});
+  saveSources();
+  emit sourcesChanged();
+  refresh(key);
+}
+
+void Telegram::removeSource(const QString &key) {
+  for (auto it = m_jobs.begin(); it != m_jobs.end(); ++it)
+    if (it->key == key) send("cancel", {{"job", it.key()}}, {});
+  for (int i = 0; i < m_sources.size(); ++i)
+    if (m_sources[i].toMap().value("key") == key) {
+      m_sources.removeAt(i);
+      saveSources();
+      emit sourcesChanged();
+      emit sourceRemoved(key);
+      break;
+    }
+}
+
+void Telegram::refresh(const QString &key) {
+  const auto source = sourceFor(key);
+  const auto status = source.value("status").toString();
+  if (source.isEmpty() || status == "queued" || status == "syncing" || status == "waiting") return;
+  setSource(key, {{"status", "queued"}, {"message", ""}});
+  whenReady([this, key] { startSync(key); });
+}
+
+void Telegram::refreshAll() {
+  for (const auto &source : m_sources) refresh(source.toMap().value("key").toString());
+}
+
+void Telegram::cancelSync(const QString &key) {
+  for (auto it = m_jobs.begin(); it != m_jobs.end(); ++it)
+    if (it->key == key) send("cancel", {{"job", it.key()}}, {});
+  // A refresh still waiting for the session is dropped; the action that was
+  // queued for it finds no source in the "queued" state and does nothing.
+  if (sourceFor(key).value("status") == "queued") setSource(key, {{"status", ""}, {"message", ""}});
+}
+
+QVariantMap Telegram::songRow(const QVariantMap &source, const QJsonObject &song) const {
+  const auto chat = source.value("chatId").toString();
+  const auto message = idText(song.value("messageId"));
+  const auto identity = "telegram:" + m_userId;
+  const auto hash = QCryptographicHash::hash((identity + "\n" + chat + ":" + message).toUtf8(), QCryptographicHash::Sha1).toHex();
+  QVariantMap row{{"id", "tg_" + QString::fromLatin1(hash.left(24))},
+                  {"source", "telegram"},
+                  {"server", identity},
+                  {"remoteId", chat + ":" + message},
+                  {"kind", "song"},
+                  {"title", song.value("title").toString()},
+                  {"artist", song.value("artist").toString()},
+                  {"album", source.value("chatTitle", source.value("title")).toString()},
+                  {"seconds", song.value("seconds").toInt()},
+                  {"mime", song.value("mime").toString()},
+                  {"size", qint64(song.value("size").toDouble())},
+                  {"added", qint64(song.value("date").toDouble())},
+                  {"telegramChat", chat},
+                  {"telegramMessage", message}};
+  if (const auto topic = source.value("topicId").toString(); !topic.isEmpty() && topic != "0") row["telegramTopic"] = topic;
+  return row;
+}
+
+void Telegram::startSync(const QString &key) {
+  const auto source = sourceFor(key);
+  if (source.isEmpty() || source.value("status") != "queued") return;
+  const int job = m_nextJob++;
+  m_jobs.insert(job, Job{key, {}});
+  setSource(key, {{"status", "syncing"}, {"message", ""}, {"count", 0}});
+  send("sync", {{"chatId", source.value("chatId").toString()}, {"topicId", source.value("topicId").toString()}, {"job", job}},
+       [this, job](const QJsonObject &reply) { finishJob(job, reply); });
+}
+
+void Telegram::finishJob(int job, const QJsonObject &reply) {
+  if (!m_jobs.contains(job)) return;
+  const auto finished = m_jobs.take(job);
+  const auto source = sourceFor(finished.key);
+  const bool ok = reply.value("ok").toBool();
+  const auto result = reply.value("result").toObject();
+  const bool complete = ok && result.value("complete").toBool(true);
+  const auto problem = reply.value("error").toString();
+  const bool cancelled = !ok && problem == "Cancelled.";
+  if (!source.isEmpty()) {
+    // What arrived is kept even if the sync did not finish; the owner decides
+    // how to merge it.
+    if (ok || !finished.songs.isEmpty())
+      emit songsReady(finished.key, source.value("title").toString(), finished.songs, complete);
+    QVariantMap changes{{"status", ok || cancelled ? "" : "error"}, {"count", finished.songs.size()}};
+    if (ok) changes["syncedAt"] = QDateTime::currentSecsSinceEpoch();
+    changes["message"] = ok ? (complete ? QString() : QString("Stopped after %1 songs; refresh for the rest.").arg(finished.songs.size()))
+                            : cancelled ? QStringLiteral("Cancelled.") : problem;
+    setSource(finished.key, changes);
+    saveSources();
+  }
+  releaseIfIdle();
+}
+
+void Telegram::abandonJobs(const QString &message) {
+  auto jobs = std::move(m_jobs);
+  m_jobs.clear();
+  for (auto it = jobs.begin(); it != jobs.end(); ++it) {
+    const auto source = sourceFor(it->key);
+    if (source.isEmpty()) continue;
+    if (!it->songs.isEmpty()) emit songsReady(it->key, source.value("title").toString(), it->songs, false);
+    setSource(it->key, {{"status", "error"}, {"message", message}, {"count", it->songs.size()}});
+  }
+}
+
+// --- Lists to choose from -------------------------------------------------
+
+void Telegram::loadChats() {
+  m_listError.clear();
+  ++m_listing;
+  emit listChanged();
+  whenReady([this] {
+    send("dialogs", {}, [this](const QJsonObject &reply) {
+      if (m_listing > 0) --m_listing;
+      if (reply.value("ok").toBool()) {
+        m_chats.clear();
+        for (const auto &value : reply.value("result").toObject().value("dialogs").toArray()) {
+          auto chat = value.toObject().toVariantMap();
+          chat["chatId"] = idText(value.toObject().value("chatId"));
+          m_chats.append(chat);
+        }
+      } else {
+        m_listError = reply.value("error").toString();
+      }
+      emit listChanged();
+      releaseIfIdle();
+    });
+  });
+}
+
+void Telegram::loadTopics(const QString &chatId) {
+  m_listError.clear();
+  m_topics.clear();
+  ++m_listing;
+  emit listChanged();
+  whenReady([this, chatId] {
+    send("topics", {{"chatId", chatId}}, [this](const QJsonObject &reply) {
+      if (m_listing > 0) --m_listing;
+      if (reply.value("ok").toBool()) {
+        m_topics.clear();
+        for (const auto &value : reply.value("result").toObject().value("topics").toArray()) {
+          auto topic = value.toObject().toVariantMap();
+          topic["topicId"] = idText(value.toObject().value("topicId"));
+          m_topics.append(topic);
+        }
+      } else {
+        m_listError = reply.value("error").toString();
+      }
+      emit listChanged();
+      releaseIfIdle();
+    });
+  });
+}
+
+void Telegram::clearTopics() {
+  m_topics.clear();
+  emit listChanged();
+}
+
+void Telegram::search(const QString &query) {
+  m_listError.clear();
+  m_found.clear();
+  ++m_listing;
+  emit listChanged();
+  whenReady([this, query] {
+    send("resolve", {{"query", query}}, [this](const QJsonObject &reply) {
+      if (m_listing > 0) --m_listing;
+      if (reply.value("ok").toBool()) {
+        const auto chat = reply.value("result").toObject().value("chat").toObject();
+        m_found = chat.toVariantMap();
+        m_found["chatId"] = idText(chat.value("chatId"));
+      } else {
+        m_listError = reply.value("error").toString();
+      }
+      emit listChanged();
+      releaseIfIdle();
+    });
+  });
+}
+
+void Telegram::clearFound() {
+  m_found.clear();
+  m_listError.clear();
+  emit listChanged();
+}
+
+// --- Output from the helper -----------------------------------------------
+
 void Telegram::readOutput() {
   if (!m_process) return;
   m_buffer += m_process->readAllStandardOutput();
@@ -186,12 +534,34 @@ void Telegram::readOutput() {
 
 void Telegram::handle(const QJsonObject &message) {
   if (message.contains("id")) {
+    auto callback = m_callbacks.take(message.value("id").toInt());
+    if (callback) {
+      callback(message);
+      return;
+    }
     if (m_pending > 0) --m_pending;
     m_error = message.value("ok").toBool() ? QString() : message.value("error").toString();
     emit changed();
     return;
   }
-  if (message.value("event").toString() != "state") return;
+  const auto event = message.value("event").toString();
+  if (event == "songs" || event == "progress" || event == "wait") {
+    const int job = message.value("job").toInt();
+    if (!m_jobs.contains(job)) return;
+    auto &entry = m_jobs[job];
+    const auto source = sourceFor(entry.key);
+    if (event == "songs") {
+      for (const auto &song : message.value("songs").toArray()) entry.songs.append(songRow(source, song.toObject()));
+      setSource(entry.key, {{"count", entry.songs.size()}});
+    } else if (event == "wait") {
+      const int seconds = message.value("seconds").toInt();
+      setSource(entry.key, seconds > 0
+        ? QVariantMap{{"status", "waiting"}, {"message", QString("Telegram asked for a pause of %1 s; continuing by itself.").arg(seconds)}}
+        : QVariantMap{{"status", "syncing"}, {"message", ""}});
+    }
+    return;
+  }
+  if (event != "state") return;
   m_startTimeout.stop();
   m_crashes = 0;
   const auto state = message.value("state").toString();
@@ -200,10 +570,20 @@ void Telegram::handle(const QJsonObject &message) {
   if (state == "ready") {
     m_name = message.value("name").toString();
     m_username = message.value("username").toString();
+    m_userId = idText(message.value("userId"));
   } else if (state == "wait-phone") {
     // Signed out, whether by asking to or because Telegram ended the session.
     m_name.clear();
     m_username.clear();
+    m_userId.clear();
   }
   set(state, message.value("error").toString());
+  if (state == "ready") {
+    auto actions = std::move(m_afterReady);
+    m_afterReady.clear();
+    for (auto &action : actions) action();
+  } else if (state == "wait-phone" || state == "offline") {
+    if (!m_afterReady.isEmpty() || m_listing > 0)
+      failWaiting(state == "offline" ? message.value("error").toString() : QStringLiteral("Sign in to Telegram first."));
+  }
 }

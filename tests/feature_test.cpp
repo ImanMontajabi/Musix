@@ -5404,6 +5404,111 @@ void runTelegramTests(Backend *b, QQuickWindow *w) {
   c.click("telegramButton");
   c.check(c.until([&] { return account->state() == "ready"; }), "reopening finds the session still signed in");
   QTest::qWait(300);
+
+  // --- Choosing music --------------------------------------------------------
+  c.click("telegramChooseMusic");
+  auto sources = w->findChild<QObject *>("telegramSourcesDialog");
+  c.check(sources && c.until([&] { return sources->property("visible").toBool(); }), "Choose music opens the sources dialog");
+  c.check(c.until([&] { return !w->findChild<QObject *>("telegramDialog")->property("visible").toBool(); }), "and the sign-in dialog gives way");
+  c.check(account->state() == "ready", "without letting the helper go in between");
+  c.check(sources->property("mode").toString() == "chats", "with nothing chosen yet it opens on the account's chats");
+  c.check(c.until([&] { return shownItem(root(), "telegramChat_4242") && shownItem(root(), "telegramChat_-1001") && shownItem(root(), "telegramChat_-1003"); }),
+          "Saved Messages, a channel and a forum are listed");
+  c.check(c.until([&] { return !account->listing(); }), "once Telegram has answered");
+  c.shot("08-chats");
+  auto press = [&](const QString &row, const char *signal) {
+    auto item = shownItem(root(), row);
+    c.check(item, "find " + row);
+    if (item) QMetaObject::invokeMethod(item, signal);
+    QTest::qWait(100);
+  };
+  auto settledSource = [&](const QString &key) {
+    return c.until([&] {
+      for (const auto &v : account->sources())
+        if (v.toMap().value("key") == key) {
+          const auto status = v.toMap().value("status").toString();
+          return status != "queued" && status != "syncing" && status != "waiting";
+        }
+      return false;
+    }, 20000);
+  };
+  auto playlist = [&](const QString &id) {
+    for (const auto &v : b->playlists()) if (v.toMap().value("id") == id) return v.toMap();
+    return QVariantMap();
+  };
+  press("telegramChat_4242", "add");
+  press("telegramChat_-1001", "add");
+  c.check(settledSource("4242") && settledSource("-1001"), "both sources finish syncing");
+  const auto saved = playlist("telegram:4242"), news = playlist("telegram:-1001");
+  c.check(saved.value("count").toInt() == 3 && news.value("count").toInt() == 250, "each became a playlist holding its songs");
+  c.check(news.value("title").toString() == "News" && news.value("source").toString() == "telegram", "named for the chat and marked as Telegram's");
+  b->openPlaylist("telegram:-1001");
+  c.check(c.until([&] { return b->results()->count() == 250; }), "the playlist opens with its songs");
+  const auto firstSong = b->results()->count() ? b->results()->get(0) : QVariantMap();
+  c.check(firstSong.value("source").toString() == "telegram" && firstSong.value("remoteId").toString() == "-1001:1000",
+          "its songs carry source telegram and a remoteId of chat:message");
+  c.check(c.evaluate("telegramSources.added('4242')").toBool(), "an added chat shows as added");
+  c.shot("09-added");
+
+  // A forum's topics, one by one.
+  press("telegramChat_-1003", "topics");
+  c.check(c.until([&] { return shownItem(root(), "telegramTopic_11") && shownItem(root(), "telegramTopic_12") && shownItem(root(), "telegramTopic_0"); }),
+          "a forum shows its topics, and the whole forum first");
+  c.shot("10-topics");
+  press("telegramTopic_11", "add");
+  c.check(settledSource("-1003/11"), "a topic syncs on its own");
+  c.check(playlist("telegram:-1003/11").value("count").toInt() == 2 && playlist("telegram:-1003/11").value("title").toString() == "Forum › Jazz",
+          "into a playlist named for the forum and the topic");
+  c.evaluate("telegramSources.forum=null");
+
+  // A public channel by link.
+  c.evaluate("telegramSources.choose('search')");
+  QTest::qWait(300);
+  auto query = shownItem(root(), "telegramQuery");
+  if (query) query->setProperty("text", "https://t.me/public_music");
+  QTest::qWait(100);
+  c.click("telegramFind");
+  c.check(c.until([&] { return shownItem(root(), "telegramFound"); }), "a public channel is found by its link");
+  press("telegramFound", "add");
+  c.check(settledSource("-100777") && playlist("telegram:-100777").value("count").toInt() == 5, "and added like any other");
+  if (query) query->setProperty("text", "@nobody");
+  QTest::qWait(100);
+  c.click("telegramFind");
+  c.check(c.until([&] { return !text("telegramSearchStatus").isEmpty() && !shownItem(root(), "telegramFound"); }), "an unknown channel is explained");
+  c.shot("11-search");
+
+  // What is chosen, with its state.
+  c.evaluate("telegramSources.choose('yours')");
+  QTest::qWait(400);
+  c.check(shownItem(root(), "telegramSource_4242") && shownItem(root(), "telegramSource_-1003/11") && shownItem(root(), "telegramSource_-100777"),
+          "the chosen sources are listed");
+  c.check(account->sources().size() == 4, "four of them");
+  c.shot("12-chosen");
+  c.click("telegramRefreshAll");
+  c.check(settledSource("-1001") && settledSource("4242"), "Refresh all syncs them again");
+  c.check(playlist("telegram:-1001").value("count").toInt() == 250, "replacing, not adding to, the songs");
+
+  // Telegram songs are listed but cannot be played yet; that says so.
+  QStringList toasts;
+  QObject::connect(b, &Backend::toast, b, [&](const QString &message) { toasts << message; });
+  b->openPlaylist("telegram:4242");
+  c.check(c.until([&] { return b->results()->count() == 3; }), "a Telegram playlist opens like any other");
+  b->playResults(0);
+  c.check(toasts.join("|").contains("Telegram songs"), "playing one says that is not available yet");
+
+  // Removing a source takes its playlist with it.
+  account->removeSource("4242");
+  c.check(playlist("telegram:4242").isEmpty() && account->sources().size() == 3, "removing a source removes its playlist");
+  c.click("telegramSourcesClose");
+  c.check(c.until([&] { return account->state() == "closed"; }), "closing the dialog lets the helper go");
+
+  // Back to the account dialog to sign out.
+  c.dialog("settingsDialog");
+  c.evaluate("settingsDialog.category=3");
+  QTest::qWait(400);
+  c.click("telegramButton");
+  c.check(c.until([&] { return account->state() == "ready"; }), "the account dialog is still signed in");
+  QTest::qWait(300);
   c.click("telegramPrimary");
   c.check(c.until([&] { return account->state() == "wait-phone"; }), "Log out returns to the phone number");
   c.check(!account->signedIn(), "and forgets the account");

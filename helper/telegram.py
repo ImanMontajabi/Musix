@@ -12,9 +12,16 @@ written here.
 
 Requests   {"id": 1, "cmd": "phone", "phone": "+49 151 2345678"}
            cmd: status | phone | code | password | back | logout
-Replies    {"id": 1, "ok": true}   or   {"id": 1, "ok": false, "error": "..."}
+                dialogs | topics | resolve | sync | cancel   (signed in only)
+Replies    {"id": 1, "ok": true[, "result": {...}]}   or   {"id": 1, "ok": false, "error": "..."}
 Events     {"event": "state", "state": "...", ...}
+           {"event": "songs", "job": n, "songs": [...]}   one batch of a sync
+           {"event": "progress", "job": n, "scanned": n}
+           {"event": "wait", "job": n, "seconds": n}      Telegram asked for a pause; 0 when over
 States     starting, offline, wait-phone, wait-code, wait-password, ready
+
+Data requests run beside each other (a sync of a big channel must not stop the
+chat list from loading); the sign-in steps run one at a time, in order.
 
 The session is a file in MUSIX_TELEGRAM_DIR, readable by its owner only: it is
 as good as a password for the account, so it is not copied anywhere else.
@@ -29,6 +36,14 @@ from pathlib import Path
 
 ACCOUNT_FILE = 'account.json'
 SESSION_NAME = 'session'
+BATCH = 100
+MAX_SONGS = 20000
+# A pause Telegram asks for (FLOOD_WAIT) is waited out when it is short, with
+# the person told; a longer one ends the request and the person is told when to
+# come back. Telethon would sleep silently for anything under a minute.
+FLOOD_LIMIT = 180
+AUDIO_EXTENSIONS = ('.mp3', '.flac', '.m4a', '.ogg', '.opus', '.wav', '.aac', '.wma', '.alac', '.aiff', '.ape')
+DATA_COMMANDS = ('dialogs', 'topics', 'resolve', 'sync')
 
 
 class Rejected(Exception):
@@ -102,6 +117,70 @@ def code_kind(sent):
             'SentCodeTypeFlashCall': 'call'}.get(kind, 'other')
 
 
+def attribute(document, name):
+    for found in getattr(document, 'attributes', None) or []:
+        if type(found).__name__ == name:
+            return found
+    return None
+
+
+def song_from(message):
+    """A song row for a message that carries audio, or None. Voice notes are not songs."""
+    document = getattr(getattr(message, 'media', None), 'document', None)
+    if document is None:
+        return None
+    audio = attribute(document, 'DocumentAttributeAudio')
+    if audio is not None and getattr(audio, 'voice', False):
+        return None
+    name = getattr(attribute(document, 'DocumentAttributeFilename'), 'file_name', '') or ''
+    mime = getattr(document, 'mime_type', '') or ''
+    if audio is None and not (mime.startswith('audio/') or mime == 'application/ogg' or name.lower().endswith(AUDIO_EXTENSIONS)):
+        return None
+    date = getattr(message, 'date', None)
+    return {
+        'messageId': message.id,
+        'title': (getattr(audio, 'title', '') or Path(name).stem or '').strip() or 'Untitled',
+        'artist': (getattr(audio, 'performer', '') or '').strip(),
+        'seconds': int(getattr(audio, 'duration', 0) or 0),
+        'mime': mime,
+        'size': int(getattr(document, 'size', 0) or 0),
+        'date': int(date.timestamp()) if date else 0,
+        'fileName': name,
+    }
+
+
+def public_name(query):
+    """The username in @name, a bare name, or a t.me link; invite links are not public."""
+    text = str(query or '').strip()
+    if re.search(r't(?:elegram)?\.me/(?:\+|joinchat/)', text, re.I) or text.startswith('+'):
+        raise Rejected('That’s an invite link. Join the chat in Telegram, then pick it from your chats.')
+    found = re.search(r't(?:elegram)?\.me/(?:s/)?([A-Za-z][A-Za-z0-9_]{3,})', text, re.I)
+    if found:
+        return found.group(1)
+    text = text.lstrip('@')
+    if re.fullmatch(r'[A-Za-z][A-Za-z0-9_]{3,}', text):
+        return text
+    raise Rejected('Enter a channel as @name or a t.me link.')
+
+
+def marked_id(entity):
+    """The id a chat goes by everywhere else: channels and supergroups are -100…, small groups -…"""
+    if type(entity).__name__ == 'Channel':
+        return int('-100%d' % entity.id)
+    return -int(entity.id)
+
+
+def chat_kind(entity):
+    name = type(entity).__name__
+    if name == 'Channel':
+        if getattr(entity, 'broadcast', False):
+            return 'channel'
+        return 'forum' if getattr(entity, 'forum', False) else 'group'
+    if name == 'Chat':
+        return 'group'
+    return ''
+
+
 class Account:
     def __init__(self, make_client, directory, emit):
         self.make_client = make_client
@@ -115,6 +194,7 @@ class Account:
         self.state = 'starting'
         self.extra = {}
         self.me = {}
+        self.jobs = {}
 
     def set_state(self, state, **extra):
         self.state = state
@@ -139,6 +219,11 @@ class Account:
     async def start(self):
         self.client = self.make_client()
         try:
+            # Pauses are handled here, where the person can be told (guarded).
+            self.client.flood_sleep_threshold = 0
+        except Exception:
+            pass
+        try:
             await self.client.connect()
         except Exception as error:
             self.set_state('offline', error=describe(error))
@@ -156,7 +241,8 @@ class Account:
     async def ready(self):
         me = await self.client.get_me()
         name = ' '.join(part for part in (getattr(me, 'first_name', ''), getattr(me, 'last_name', '')) if part)
-        self.me = {'name': name or getattr(me, 'username', '') or 'Telegram', 'username': getattr(me, 'username', '') or ''}
+        self.me = {'name': name or getattr(me, 'username', '') or 'Telegram', 'username': getattr(me, 'username', '') or '',
+                   'userId': getattr(me, 'id', 0) or 0}
         (self.directory / ACCOUNT_FILE).write_text(json.dumps(self.me, ensure_ascii=False))
         self.set_state('ready')
 
@@ -175,8 +261,123 @@ class Account:
             self.set_state('wait-phone')
         elif cmd == 'logout':
             await self.logout()
+        elif cmd == 'cancel':
+            task = self.jobs.get(request.get('job'))
+            if task is not None:
+                task.cancel()
+        elif cmd in DATA_COMMANDS:
+            self.require('ready')
+            return await getattr(self, 'do_' + cmd)(request)
         else:
             raise Rejected('Unknown request.')
+        return None
+
+    async def guarded(self, call, job=None):
+        """Run a request, waiting out a short FLOOD_WAIT and reporting it."""
+        for attempt in range(6):
+            try:
+                return await call()
+            except Exception as error:
+                if type(error).__name__ not in ('FloodWaitError', 'SlowModeWaitError', 'FloodError'):
+                    raise
+                seconds = int(getattr(error, 'seconds', 0) or 0)
+                if seconds > FLOOD_LIMIT or attempt == 5:
+                    raise Rejected('Telegram asks to wait %s before more requests. Try again then.' % wait_text(seconds))
+                self.emit({'event': 'wait', 'job': job, 'seconds': seconds})
+                await asyncio.sleep(seconds + 1)
+                self.emit({'event': 'wait', 'job': job, 'seconds': 0})
+
+    async def do_dialogs(self, request):
+        me = await self.guarded(self.client.get_me)
+        rows = [{'chatId': me.id, 'title': 'Saved Messages', 'kind': 'saved', 'username': ''}]
+
+        async def collect():
+            found = []
+            async for dialog in self.client.iter_dialogs(limit=400):
+                kind = chat_kind(dialog.entity)
+                if kind:
+                    found.append({'chatId': dialog.id, 'title': dialog.name or 'Untitled', 'kind': kind,
+                                  'username': getattr(dialog.entity, 'username', '') or ''})
+            return found
+        return {'dialogs': rows + await self.guarded(collect)}
+
+    async def do_topics(self, request):
+        from telethon.tl import functions
+        peer = await self.client.get_input_entity(int(request['chatId']))
+        topics, offset_date, offset_id, offset_topic = [], None, 0, 0
+        while len(topics) < 500:
+            result = await self.guarded(lambda: self.client(functions.messages.GetForumTopicsRequest(
+                peer=peer, offset_date=offset_date, offset_id=offset_id, offset_topic=offset_topic, limit=100)))
+            batch = [t for t in result.topics if type(t).__name__ == 'ForumTopic']
+            topics += [{'topicId': t.id, 'title': t.title} for t in batch]
+            if len(result.topics) < 100 or not batch:
+                break
+            last = batch[-1]
+            top = {m.id: m for m in result.messages}.get(last.top_message)
+            if top is None:
+                break
+            offset_date, offset_id, offset_topic = top.date, last.top_message, last.id
+        return {'topics': topics}
+
+    async def do_resolve(self, request):
+        name = public_name(request.get('query'))
+        try:
+            entity = await self.guarded(lambda: self.client.get_entity(name))
+        except Rejected:
+            raise
+        except Exception as error:
+            if type(error).__name__ in ('UsernameNotOccupiedError', 'UsernameInvalidError', 'ValueError'):
+                raise Rejected('There is no public channel called @%s.' % name)
+            raise
+        kind = chat_kind(entity)
+        if not kind:
+            raise Rejected('@%s is a person or a bot, not a channel or group.' % name)
+        return {'chat': {'chatId': marked_id(entity), 'title': getattr(entity, 'title', '') or name,
+                         'kind': kind, 'username': getattr(entity, 'username', '') or name}}
+
+    async def page(self, peer, kind, offset, topic):
+        """One page of messages, newest first, from `offset` (a message id) on."""
+        from telethon.tl import functions, types
+        found = types.InputMessagesFilterMusic() if kind == 'music' else types.InputMessagesFilterDocument()
+        result = await self.client(functions.messages.SearchRequest(
+            peer=peer, q='', filter=found, min_date=None, max_date=None, offset_id=offset, add_offset=0,
+            limit=BATCH, max_id=0, min_id=0, hash=0, top_msg_id=topic or None))
+        return list(getattr(result, 'messages', None) or [])
+
+    async def do_sync(self, request):
+        """Every song in a chat, or in one forum topic, sent a page at a time.
+
+        Music-tagged audio first, then documents that are audio by type or
+        name; a song can turn up in both, and is sent once.
+        """
+        job = request.get('job')
+        topic = int(request.get('topicId') or 0)
+        peer = await self.client.get_input_entity(int(request['chatId']))
+        seen, total, scanned, complete = set(), 0, 0, True
+        for kind in ('music', 'document'):
+            offset = 0
+            while complete:
+                messages = await self.guarded(lambda: self.page(peer, kind, offset, topic), job)
+                if not messages:
+                    break
+                scanned += len(messages)
+                songs = []
+                for message in messages:
+                    if message.id in seen:
+                        continue
+                    seen.add(message.id)
+                    song = song_from(message)
+                    if song:
+                        songs.append(song)
+                offset = messages[-1].id
+                total += len(songs)
+                if songs:
+                    self.emit({'event': 'songs', 'job': job, 'songs': songs})
+                self.emit({'event': 'progress', 'job': job, 'scanned': scanned})
+                if total >= MAX_SONGS:
+                    complete = False
+                await asyncio.sleep(0.15)
+        return {'count': total, 'complete': complete}
 
     def require(self, *states):
         if self.state not in states:
@@ -226,6 +427,8 @@ class Account:
         await self.ready()
 
     async def logout(self):
+        for task in list(self.jobs.values()):
+            task.cancel()
         warning = ''
         try:
             if self.client is not None:
@@ -269,21 +472,45 @@ def real_client_factory(directory, api_id, api_hash):
     return make
 
 
+async def answer(account, request):
+    reply = {'id': request.get('id')}
+    job = request.get('job')
+    if job is not None:
+        account.jobs[job] = asyncio.current_task()
+    try:
+        result = await account.handle(request)
+        reply['ok'] = True
+        if result is not None:
+            reply['result'] = result
+    except Rejected as error:
+        reply.update(ok=False, error=str(error))
+    except asyncio.CancelledError:
+        reply.update(ok=False, error='Cancelled.')
+    except Exception as error:
+        reply.update(ok=False, error=describe(error))
+    finally:
+        if job is not None:
+            account.jobs.pop(job, None)
+    emit(reply)
+
+
 async def serve(account, lines):
+    running = set()
     async for line in lines:
         try:
             request = json.loads(line)
         except ValueError:
             continue
-        reply = {'id': request.get('id')}
-        try:
-            await account.handle(request)
-            reply['ok'] = True
-        except Rejected as error:
-            reply.update(ok=False, error=str(error))
-        except Exception as error:
-            reply.update(ok=False, error=describe(error))
-        emit(reply)
+        if request.get('cmd') in DATA_COMMANDS:
+            task = asyncio.create_task(answer(account, request))
+            running.add(task)
+            task.add_done_callback(running.discard)
+        else:
+            await answer(account, request)
+    for task in list(running):
+        task.cancel()
+    if running:
+        await asyncio.gather(*running, return_exceptions=True)
 
 
 async def stdin_lines():

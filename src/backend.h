@@ -707,6 +707,8 @@ private:
   // resolver inside it can be updated without breaking the signature.
   QString helperScript() const;
   QString telegramScript() const;
+  void telegramSongs(const QString &key, const QString &title, const QVariantList &songs, bool complete);
+  void telegramRemoved(const QString &key);
   QString pythonExecutable() const;
   QString ffmpegDirectory() const;
   QString writableRuntime() const;
