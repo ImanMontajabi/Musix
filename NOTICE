@@ -48,6 +48,11 @@ Payload Musix adds deliberately
   CPython 3.11.16           PSF                CPython-PSF.txt
   yt-dlp                    Unlicense          yt-dlp-Unlicense.txt
   ytmusicapi                MIT                ytmusicapi-MIT.txt
+  Telethon                  MIT                Telethon-MIT.txt
+  cryptg                    CC0-1.0            cryptg-CC0.txt
+  pyaes                     MIT                pyaes-MIT.txt
+  rsa                       Apache-2.0         rsa-Apache-2.0.txt
+  pyasn1                    BSD-2-Clause       pyasn1-BSD-2-Clause.txt
   Material Symbols          Apache-2.0         MaterialSymbols-LICENSE.txt
   Catppuccin palette        MIT                Catppuccin-palette-MIT.txt
   Rosé Pine palette         MIT                RosePine-palette-MIT.txt
@@ -142,6 +147,11 @@ under the Python Software Foundation License.
 
 yt-dlp (Unlicense) and ytmusicapi (MIT) are installed into that runtime, and
 the application updates those two packages in place.
+
+Telegram sign-in uses Telethon (MIT) with cryptg (CC0), pyaes (MIT), rsa
+(Apache-2.0) and pyasn1 (BSD-2-Clause), installed into the same runtime and
+pinned in helper/requirements.txt. Musix is an independent client of Telegram's
+public API and is not affiliated with or endorsed by Telegram.
 
 No fonts are bundled. Musix uses an installed Google Sans Flex or Noto Sans font.
 Musix is independent of Google and YouTube.

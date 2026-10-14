@@ -168,7 +168,7 @@ done
 
 resources="$app/Contents/Resources"
 mkdir -p "$resources/helper" "$resources/ffmpeg"
-cp "$root/helper/catalog.py" "$root/helper/online_artwork.py" \
+cp "$root/helper/catalog.py" "$root/helper/online_artwork.py" "$root/helper/telegram.py" \
    "$root/helper/requirements.txt" "$resources/helper/"
 cp "$cache/ffmpeg-out/bin/ffmpeg" "$cache/ffmpeg-out/bin/ffprobe" "$resources/ffmpeg/"
 # cp -a copies into an existing directory rather than over it, which once
@@ -225,6 +225,15 @@ cp "$runtime"/lib/python3.11/site-packages/yt_dlp-*.dist-info/licenses/LICENSE \
    "$licenses/yt-dlp-Unlicense.txt"
 cp "$runtime"/lib/python3.11/site-packages/ytmusicapi-*.dist-info/licenses/LICENSE \
    "$licenses/ytmusicapi-MIT.txt"
+# Telegram sign-in (helper/telegram.py) and what it needs. The texts are the
+# ones the packages themselves ship; a package that moves its file breaks the
+# build here, which is the point.
+site="$runtime/lib/python3.11/site-packages"
+cp "$site"/telethon-*.dist-info/licenses/LICENSE "$licenses/Telethon-MIT.txt"
+cp "$site"/cryptg-*.dist-info/licenses/LICENSE.txt "$licenses/cryptg-CC0.txt"
+cp "$site"/pyaes-*.dist-info/licenses/LICENSE.txt "$licenses/pyaes-MIT.txt"
+cp "$site"/rsa-*.dist-info/LICENSE "$licenses/rsa-Apache-2.0.txt"
+cp "$site"/pyasn1-*.dist-info/licenses/LICENSE.rst "$licenses/pyasn1-BSD-2-Clause.txt"
 
 # What the license set above assumes about the bundle, checked against the
 # bundle. Every framework must be Qt's; no loose library may ride along
