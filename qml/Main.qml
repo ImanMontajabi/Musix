@@ -1986,7 +1986,6 @@ ApplicationWindow {
         id: settingsDialog; objectName: "settingsDialog"; width: fitWidth(880); height: fitHeight(740); modal: true; title: "Settings"
         palette.windowText: Theme.text; palette.buttonText: Theme.text; palette.text: Theme.text
         standardButtons: Dialog.Close
-        scrollSource: contentItem.item ? contentItem.item.scrollFlickable : null
         property bool contentReady: false
         property string searchQuery: ""
         property int category: 0

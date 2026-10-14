@@ -1592,7 +1592,8 @@ void runInterfaceAuditTests(Backend *b, QQuickWindow *w) {
   }
   c.check(paragraphs <= 1, "at most one settings row needs a paragraph of its own");
 
-  // A clipped edge has to read as "more below", and stop saying so at the end.
+  // Settings keeps its footer borderless however far its pane scrolls: no
+  // divider marks content continuing below, as on the short Connections page.
   settings->setProperty("category", 1);
   QTest::qWait(300);
   auto scroll = itemNamed(w->contentItem(), "settingsScroll");
@@ -1601,13 +1602,12 @@ void runInterfaceAuditTests(Backend *b, QQuickWindow *w) {
   if (flick) {
     const auto span = flick->property("contentHeight").toReal() - scroll->height();
     c.check(span > 0, "playback has more rows than fit");
-    flick->setProperty("contentY", 0);
-    QTest::qWait(300);
-    auto divider = itemNamed(w->contentItem(), "dialogScrollDivider");
-    c.check(divider && divider->isVisible(), "a divider marks content continuing below");
-    flick->setProperty("contentY", span);
-    QTest::qWait(300);
-    c.check(divider && !divider->isVisible(), "and goes away at the end of the list");
+    for (auto y : {0.0, span / 2, span}) {
+      flick->setProperty("contentY", y);
+      QTest::qWait(300);
+      auto divider = itemNamed(w->contentItem(), "dialogScrollDivider");
+      c.check(!divider || !divider->isVisible(), "no divider above the settings footer at any scroll position");
+    }
     flick->setProperty("contentY", 0);
     QTest::qWait(200);
   }
