@@ -796,7 +796,9 @@ def real_client_factory(directory, api_id, api_hash):
 
 async def answer(account, request):
     reply = {'id': request.get('id')}
-    job = request.get('job')
+    # Only the work itself is registered under its job number: the request
+    # that cancels it names the same number and must not take its place.
+    job = request.get('job') if request.get('cmd') in DATA_COMMANDS else None
     if job is not None:
         account.jobs[job] = asyncio.current_task()
     try:

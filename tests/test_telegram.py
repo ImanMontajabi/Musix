@@ -610,6 +610,29 @@ class Fetching(Case):
         self.assertEqual(reply['error'], 'Cancelled.')
         self.assertEqual(list(self.audio.glob('tg_abc*')), [])
 
+    def test_cancelling_a_download_through_the_request_loop_stops_it_and_not_the_helper(self):
+        a = self.ready({7: self.sized_unknown()})
+        started, replies = asyncio.Event(), {}
+
+        async def download_file(document, out, file_size=None, progress_callback=None):
+            out.write(b'half'); started.set(); await asyncio.sleep(30)
+        a.client.download_file = download_file
+
+        async def lines():
+            yield (json.dumps({'id': 1, 'cmd': 'fetch', 'chatId': 5, 'messageId': 7, 'job': 4, 'name': 'tg_abc', 'directory': str(self.audio)}) + '\n').encode()
+            await started.wait()
+            yield (json.dumps({'id': 2, 'cmd': 'cancel', 'job': 4}) + '\n').encode()
+            for _ in range(50):                      # the helper must still be there to answer
+                if any(e.get('id') == 1 for e in self.events): break
+                await asyncio.sleep(0.01)
+            yield (json.dumps({'id': 3, 'cmd': 'status'}) + '\n').encode()
+        run(asyncio.wait_for(telegram.serve(a, lines()), 10))
+        by_id = {e['id']: e for e in self.events if 'id' in e and 'ok' in e}
+        self.assertEqual(by_id[1]['error'], 'Cancelled.')
+        self.assertTrue(by_id[2]['ok'])
+        self.assertTrue(by_id[3]['ok'])              # the loop went on after the cancel
+        self.assertEqual(list(self.audio.glob('tg_abc*')), [])
+
     def test_a_flood_wait_during_a_download_is_waited_out_and_the_download_starts_again(self):
         a = self.ready({7: self.sized_unknown()})
         attempts = []
