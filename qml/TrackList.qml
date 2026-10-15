@@ -30,9 +30,24 @@ ListView {
     }
     function rowFolded(row){return foldable && model && !!folded[groupKey(model.get(row))];}
     function toggleGroup(key){const state=Object.assign({},folded);state[key]=!state[key];folded=state;updateExcluded();}
+    // Telegram songs have their pictures fetched as they scroll into view, a
+    // screenful either way so that the next rows are ready when they arrive.
+    function wantArt(){
+        if(!visible || !model || model.count<=0 || height<=0 || !app.telegram.signedIn)return;
+        const first=Math.max(0,indexAt(width/2,contentY+4)),found=indexAt(width/2,contentY+height-4);
+        const last=Math.min(model.count-1,(found<0?first+30:found)+12),rows=[];
+        for(let i=Math.max(0,first-8);i<=last && rows.length<80;++i){const row=model.get(i);if(row && row.source==="telegram")rows.push(row);}
+        if(rows.length)app.telegram.wantArt(rows);
+    }
+    Timer {id:artWatch;interval:250;onTriggered:list.wantArt()}
+    function watchArt(){if(!artWatch.running)artWatch.start();}
+    onContentYChanged:watchArt()
+    onCountChanged:watchArt()
+    onVisibleChanged:watchArt()
+    onHeightChanged:watchArt()
     onGroupFoldersChanged:{folded={};scheduleGroups();}
     onGroupDiscsChanged:{folded={};scheduleGroups();}
-    onModelChanged:{folded={};scheduleGroups();}
+    onModelChanged:{folded={};scheduleGroups();watchArt();}
     Component.onCompleted:{groupReady=true;rebuildGroups();}
     // Type-ahead jump. The buffer collects printable keys until a short pause,
     // so "bl" finds "Blue Hour" rather than every row starting with "b".

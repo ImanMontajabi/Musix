@@ -5504,8 +5504,8 @@ void runTelegramTests(Backend *b, QQuickWindow *w) {
   b->openPlaylist("telegram:4242");
   c.check(c.until([&] { return b->results()->count() == 3; }), "Saved Messages opens");
   c.check(c.until([&] { return !b->results()->get(0).value("art").toString().isEmpty(); }, 10000), "a song with a thumbnail shows it");
-  c.check(b->results()->get(1).value("art").toString().isEmpty() && !b->results()->get(2).value("art").toString().isEmpty(),
-          "a song without one has none, and the next one has");
+  c.check(c.until([&] { return !b->results()->get(2).value("art").toString().isEmpty(); }, 10000), "so does the third, once it has been asked for");
+  c.check(b->results()->get(1).value("art").toString().isEmpty(), "and the song without one has none");
   c.check(c.until([&] { return b->cover() == coverOf("telegram:4242"); }, 5000), "the open playlist wears its cover");
   c.shot("15-cover-art");
   QMetaObject::invokeMethod(w, "chooseLibrary", Q_ARG(QVariant, QVariant("playlists")));

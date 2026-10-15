@@ -143,6 +143,11 @@ public:
   // The file:// URL of a chat's cover, or empty until it has come down.
   QString coverUrl(const QString &chatId) const;
   void clearArt();
+  // The songs on screen. Their pictures are asked for, ahead of anything else
+  // waiting; those that scrolled away before their turn are dropped. A song the
+  // message's thumbnail and the head of its file both have nothing for is
+  // remembered, so scrolling past it again asks nothing.
+  Q_INVOKABLE void wantArt(const QVariantList &rows);
   // Pictures still being asked for.
   bool artPending() const { return m_artBusy || !m_artQueue.isEmpty(); }
   // The playlist id the library keeps a source's songs under.
@@ -190,6 +195,9 @@ private:
   void learn(const QVariantMap &song, const QJsonObject &tags);
   void loadTags();
   void saveTags() const;
+  void rememberNoArt(const QString &id);
+  void loadNoArt();
+  void saveNoArt() const;
   void setDownload();
   void releaseSoon();
   struct Job {
@@ -232,6 +240,9 @@ private:
   qint64 m_artBytes = 64LL * 1024 * 1024;
   QList<ArtTask> m_artQueue;
   QSet<QString> m_artFailed;
+  QSet<QString> m_noArt;
+  QStringList m_noArtOrder;
+  ArtTask m_artRunning;
   bool m_artBusy = false;
   QHash<int, Fetch> m_fetches;
   QHash<QString, QVariantMap> m_tags;

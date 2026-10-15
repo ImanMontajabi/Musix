@@ -520,7 +520,17 @@ class Fetching(Case):
                 if progress_callback: progress_callback(step * 50, 100)
             if getattr(document, 'payload', None) is not None:
                 out.seek(0); out.write(document.payload); out.truncate()
+        a.client.chunks_read = []
+
+        async def iter_download(document, offset=0, request_size=None, limit=None, file_size=None):
+            payload = getattr(document, 'payload', None) or b''
+            for index in range(limit if limit is not None else 1 << 30):
+                chunk = payload[offset + index * request_size:offset + (index + 1) * request_size]
+                if not chunk: return
+                a.client.chunks_read.append(len(chunk))
+                yield chunk
         a.client.get_input_entity, a.client.get_messages, a.client.download_file = entity, get_messages, download_file
+        a.client.iter_download = iter_download
         return a
 
     @staticmethod
@@ -691,8 +701,13 @@ class Pictures(Fetching):
         self.assertEqual(telegram.image_type(b'<html>'), '')
         self.assertEqual(telegram.image_type(b''), '')
 
+    @staticmethod
+    def thumbed():
+        message = Fetching.sized_unknown(); message.media.document.thumbs = [object()]
+        return message
+
     def test_a_thumbnail_is_saved_under_the_songs_name_as_the_largest_one(self):
-        a = self.ready({7: self.sized_unknown()})
+        a = self.ready({7: self.thumbed()})
         calls = self.with_media(a, JPEG)
         result = self.art(a)
         self.assertEqual(Path(result['file']), self.audio / 'tg_abc.jpg')
@@ -707,7 +722,7 @@ class Pictures(Fetching):
         self.assertEqual(list(self.audio.iterdir()), [])
 
     def test_a_new_picture_replaces_the_old_one_of_another_type(self):
-        a = self.ready({7: self.sized_unknown()})
+        a = self.ready({7: self.thumbed()})
         (self.audio / 'tg_abc.png').write_bytes(b'old')
         self.with_media(a, JPEG)
         self.art(a)
@@ -736,6 +751,78 @@ class Pictures(Fetching):
         async def entity(chat): return 'peer'
         a.client.download_profile_photo, a.client.get_input_entity = photo, entity
         self.assertEqual(self.art(a, kind='photo', chatId=-1001), {'file': ''})
+
+    # --- A cover found in the front of the file ---------------------------------
+    def with_payload(self, payload, thumbs=None):
+        doc = Document('audio/mpeg', [DocumentAttributeAudio('T', 'A', 100), DocumentAttributeFilename('x.mp3')], size=len(payload))
+        doc.payload = payload
+        if thumbs: doc.thumbs = thumbs
+        return self.ready({7: Message(7, doc)})
+
+    @staticmethod
+    def id3_with_picture(size):
+        from mutagen.id3 import APIC, ID3, TIT2
+        import tempfile
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / 'x.mp3'
+            path.write_bytes(b'')
+            tag = ID3(); tag.add(TIT2(encoding=3, text='T')); tag.add(APIC(encoding=3, mime='image/jpeg', type=3, desc='', data=JPEG + b'\1' * size))
+            tag.save(str(path))
+            return path.read_bytes()
+
+    def test_the_length_of_the_tags_is_read_off_the_front_of_each_format(self):
+        id3 = b'ID3\x04\x00\x00' + bytes([0, 0, 2, 0x0a]) + b'\0' * 4
+        self.assertEqual(telegram.header_needed(id3), 10 + 2 * 128 + 10)
+        self.assertEqual(telegram.header_needed(id3[:5] + b'\x10' + id3[6:]), 10 + 2 * 128 + 10 + 10)
+        flac = b'fLaC' + bytes([0, 0, 0, 34]) + b'\0' * 34 + bytes([0x86, 0, 1, 0]) + b'\0' * 256
+        self.assertEqual(telegram.header_needed(flac), 4 + 4 + 34 + 4 + 256)
+        self.assertGreater(telegram.header_needed(flac[:60]), 60)       # more is known to be coming
+        mp4 = b'\0\0\0\x10ftypM4A \0\0\0\0' + (1000).to_bytes(4, 'big') + b'moov'
+        self.assertEqual(telegram.header_needed(mp4), 16 + 1000)
+        self.assertEqual(telegram.header_needed(b'\0\0\0\x10ftypM4A \0\0\0\0' + (9000).to_bytes(4, 'big') + b'mdat'), 0)
+        self.assertIsNone(telegram.header_needed(b'OggS' + b'\0' * 30))
+
+    @unittest.skipUnless(importlib.util.find_spec('mutagen'), 'mutagen is in the project runtime, not the system Python')
+    def test_a_cover_in_the_tag_is_found_from_the_front_without_the_rest_of_the_song(self):
+        head = self.id3_with_picture(300 * 1024)
+        a = self.with_payload(head + b'\xff\xfb\x90\0' * 200000)       # a song of several MB behind the tag
+        result = self.art(a)
+        self.assertEqual(Path(result['file']), self.audio / 'tg_abc.jpg')
+        self.assertEqual((self.audio / 'tg_abc.jpg').read_bytes(), JPEG + b'\1' * (300 * 1024))
+        self.assertEqual(len(a.client.chunks_read), -(-len(head) // telegram.HEADER_CHUNK))   # as many requests as the tag is long
+        self.assertLessEqual(sum(a.client.chunks_read), telegram.MAX_HEADER)
+        self.assertEqual(sorted(p.name for p in self.audio.iterdir()), ['tg_abc.jpg'])        # no scratch file left
+
+    @unittest.skipUnless(importlib.util.find_spec('mutagen'), 'mutagen is in the project runtime, not the system Python')
+    def test_a_tag_that_does_not_fit_the_limit_is_not_read_at_all_beyond_the_first_request(self):
+        a = self.with_payload(self.id3_with_picture(telegram.MAX_HEADER) + b'\0' * 4096)
+        self.assertEqual(self.art(a), {'file': ''})
+        self.assertEqual(len(a.client.chunks_read), 1)
+
+    def test_an_mp4_whose_tags_come_after_the_audio_is_not_searched(self):
+        a = self.with_payload(b'\0\0\0\x10ftypM4A \0\0\0\0' + (9000000).to_bytes(4, 'big') + b'mdat' + b'\0' * 200000)
+        self.assertEqual(self.art(a), {'file': ''})
+        self.assertEqual(len(a.client.chunks_read), 1)    # the first request showed it, and nothing more is read
+
+    def test_a_file_with_nothing_in_its_front_has_no_picture_and_that_is_not_an_error(self):
+        a = self.with_payload(b'\xff\xfb\x90\0' * 200000)
+        self.assertEqual(self.art(a), {'file': ''})
+        self.assertEqual(list(self.audio.iterdir()), [])
+
+    @unittest.skipUnless(importlib.util.find_spec('mutagen'), 'mutagen is in the project runtime, not the system Python')
+    def test_a_message_thumbnail_is_enough_and_the_file_is_left_alone(self):
+        a = self.with_payload(self.id3_with_picture(1000), thumbs=[object()])
+        self.with_media(a, JPEG)
+        result = self.art(a)
+        self.assertEqual((self.audio / 'tg_abc.jpg').read_bytes(), JPEG)
+        self.assertEqual(a.client.chunks_read, [])
+        self.assertTrue(result['file'])
+
+    @unittest.skipUnless(importlib.util.find_spec('mutagen'), 'mutagen is in the project runtime, not the system Python')
+    def test_a_thumbnail_that_comes_back_empty_falls_back_to_the_file(self):
+        a = self.with_payload(self.id3_with_picture(1000), thumbs=[object()])
+        self.with_media(a, None)
+        self.assertEqual(Path(self.art(a)['file']), self.audio / 'tg_abc.jpg')
 
     def test_an_unknown_kind_or_a_bad_name_is_refused(self):
         a = self.ready({})

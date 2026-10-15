@@ -583,7 +583,13 @@ private slots:
     QVERIFY(reach(*t, "wait-phone")); // the helper has handled it, so it can't reach into the next test's folder
   }
   // --- Cover art -----------------------------------------------------------
-  void aSourceBringsItsChatsPhotoAndItsSongsThumbnails() {
+  static QVariantList rowsOf(const QSignalSpy &spy, int which = 0) { return spy.at(which).at(2).toList(); }
+  static int artsIn(const QSignalSpy &learned) {
+    int n = 0;
+    for (const auto &entry : learned) n += entry.at(1).toMap().contains("art");
+    return n;
+  }
+  void aSourceBringsItsChatsPhotoAndNothingMoreUntilSongsAreOnScreen() {
     signIn();
     auto t = make();
     t->setArtDirectory(art());
@@ -597,15 +603,84 @@ private slots:
     const QUrl url(cover.first().at(1).toString());
     QVERIFY(url.isLocalFile() && QFileInfo(url.toLocalFile()).isFile());
     QCOMPARE(t->coverUrl("4242"), url.toString());
-    // Thumbnails for the two songs that have one, none for the third.
-    int thumbs = 0;
-    for (const auto &entry : learned) thumbs += entry.at(1).toMap().contains("art");
-    QCOMPARE(thumbs, 2);
+    // A sync does not fetch song pictures: that waits for the list to show them.
+    QCOMPARE(artRequests(), 1);
+    QCOMPARE(artsIn(learned), 0);
+  }
+  void theSongsOnScreenGetTheirThumbnails() {
+    signIn();
+    auto t = make();
+    t->setArtDirectory(art());
+    QSignalSpy ready(t.get(), &Telegram::songsReady), learned(t.get(), &Telegram::songLearned);
+    t->addSource("4242", "Saved Messages", "saved", "");
+    QVERIFY(settled(*t, "4242"));
+    QVERIFY(artIdle(*t));
+    t->wantArt(rowsOf(ready));
+    QVERIFY(artIdle(*t));
+    // Two of the three songs have one.
+    QCOMPARE(artsIn(learned), 2);
     QCOMPARE(files(artFolder("c4242")).size(), 3);
     // Only the owner can read any of it.
     QVERIFY(ownerOnly(art()));
     QVERIFY(ownerOnly(artFolder("c4242")));
     for (const auto &name : files(artFolder("c4242"))) QVERIFY2(ownerOnly(artFolder("c4242") + "/" + name), qPrintable(name));
+  }
+  void rowsThatScrolledAwayBeforeTheirTurnAreDropped() {
+    signIn();
+    auto t = make();
+    t->setArtDirectory(art());
+    QSignalSpy ready(t.get(), &Telegram::songsReady), learned(t.get(), &Telegram::songLearned);
+    t->addSource("4242", "Saved Messages", "saved", "");
+    QVERIFY(settled(*t, "4242"));
+    t->wantArt(rowsOf(ready));
+    t->wantArt({}); // scrolled somewhere with no Telegram songs
+    QVERIFY(artIdle(*t));
+    QVERIFY(artsIn(learned) <= 1); // at most the one already on its way
+    QVERIFY(artRequests() <= 2);
+  }
+  void aSongWithNoPictureIsNotAskedAboutAgainEvenAfterARestart() {
+    signIn();
+    QVariantList rows;
+    int asked = 0;
+    {
+      auto t = make();
+      t->setArtDirectory(art());
+      QSignalSpy ready(t.get(), &Telegram::songsReady);
+      t->addSource("4242", "Saved Messages", "saved", "");
+      QVERIFY(settled(*t, "4242"));
+      rows = rowsOf(ready);
+      t->wantArt(rows);
+      QVERIFY(artIdle(*t));
+      asked = artRequests();
+      QCOMPARE(asked, 4); // the cover and three songs
+      t->wantArt(rows);   // the list scrolls past again
+      QVERIFY(artIdle(*t));
+      QVERIFY(ownerOnly(storage.path() + "/telegram/noart.json"));
+    }
+    auto again = make();
+    again->setArtDirectory(art());
+    QSignalSpy learned(again.get(), &Telegram::songLearned);
+    again->wantArt(rows);
+    QVERIFY(artIdle(*again));
+    QCOMPARE(artRequests(), asked);   // the one with none is remembered, the others are on disk
+    QCOMPARE(artsIn(learned), 2);     // and the rows are told about those
+    again->clearArt();
+    again->wantArt(rows);
+    QVERIFY(artIdle(*again));
+    QVERIFY(artRequests() > asked);   // clearing the pictures forgets that too
+  }
+  void aPictureThatWasEvictedIsAskedForAgain() {
+    signIn();
+    auto t = make();
+    t->setArtDirectory(art());
+    QSignalSpy ready(t.get(), &Telegram::songsReady), learned(t.get(), &Telegram::songLearned);
+    t->addSource("4242", "Saved Messages", "saved", "");
+    QVERIFY(settled(*t, "4242"));
+    auto row = rowsOf(ready).first().toMap();
+    row["art"] = "file:///nowhere/at/all.png";
+    t->wantArt({row});
+    QVERIFY(artIdle(*t));
+    QCOMPARE(artsIn(learned), 1);
   }
   void aChatWithoutAPhotoHasNoCover() {
     signIn();
@@ -625,15 +700,18 @@ private slots:
     QSignalSpy ready(t.get(), &Telegram::songsReady);
     t->addSource("4242", "Saved Messages", "saved", "");
     QVERIFY(settled(*t, "4242"));
+    t->wantArt(rowsOf(ready));
     QVERIFY(artIdle(*t));
     const int asked = artRequests();
     QVERIFY(asked >= 3);
     t->refresh("4242");
     QVERIFY(QTest::qWaitFor([&] { return ready.count() == 2; }, 15000));
     QVERIFY(artIdle(*t));
-    const auto rows = ready.at(1).at(2).toList();
+    const auto rows = rowsOf(ready, 1);
     QVERIFY(rows.first().toMap().value("art").toString().contains("c4242"));   // a picture already on disk is on the row
     QVERIFY(rows.at(1).toMap().value("art").toString().isEmpty());             // and the song with none is still without
+    t->wantArt(rows);
+    QVERIFY(artIdle(*t));
     QCOMPARE(artRequests(), asked);                                           // nothing was asked for twice
   }
   void theArtIsBoundedOldestFirstButTheCoverStays() {
@@ -641,8 +719,10 @@ private slots:
     auto t = make();
     t->setArtDirectory(art());
     t->setArtLimits(1, 1024 * 1024);
+    QSignalSpy ready(t.get(), &Telegram::songsReady);
     t->addSource("4242", "Saved Messages", "saved", "");
     QVERIFY(settled(*t, "4242"));
+    t->wantArt(rowsOf(ready));
     QVERIFY(artIdle(*t));
     const auto kept = files(artFolder("c4242"));
     QCOMPARE(kept.size(), 2); // one picture and the cover

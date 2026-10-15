@@ -45,6 +45,10 @@ MAX_FETCH = 200 * 1024 * 1024
 # The picture a Telegram song or chat shows. The app's image loader refuses a
 # file over 2 MB, so a bigger cover is not worth keeping.
 MAX_ART = 1800 * 1024
+# How much of the front of a file is read to find a cover inside it, and the
+# size of each request for it (Telegram wants multiples of 4 KB).
+MAX_HEADER = 512 * 1024
+HEADER_CHUNK = 128 * 1024
 MIME_EXTENSIONS = {'audio/mpeg': '.mp3', 'audio/mp3': '.mp3', 'audio/flac': '.flac', 'audio/x-flac': '.flac',
                    'audio/mp4': '.m4a', 'audio/x-m4a': '.m4a', 'audio/aac': '.aac', 'audio/ogg': '.ogg',
                    'application/ogg': '.ogg', 'audio/opus': '.opus', 'audio/wav': '.wav', 'audio/x-wav': '.wav',
@@ -220,10 +224,17 @@ def embedded_cover(path):
     try:
         import base64
         import mutagen
-        found = mutagen.File(str(path))
-        if found is None:
-            return None
+        try:
+            found = mutagen.File(str(path))
+        except Exception:
+            found = None
         candidates = []
+        if found is None:
+            # The front of an MP3 has its tag but no audio frames to recognise.
+            from mutagen.id3 import ID3
+            found = ID3(str(path))
+            candidates += [(frame.type, frame.data) for frame in found.getall('APIC')]
+            found = None
         if getattr(found, 'pictures', None):                      # FLAC
             candidates += [(p.type, p.data) for p in found.pictures]
         tags = getattr(found, 'tags', None)
@@ -248,6 +259,41 @@ def embedded_cover(path):
                 return data, image_type(data)
     except Exception:
         return None
+    return None
+
+
+def header_needed(head):
+    """How many bytes from the start of a file hold all of its tags, as far as `head` shows.
+
+    A lower bound that the caller raises as it reads on: an ID3 tag says its
+    size at once, FLAC's blocks are walked one by one, and an MP4 has its tags
+    in `moov`, which may come after the audio, in which case nothing in the
+    front is worth reading (0). None means the format puts them in the first
+    request, or is not one this knows how to measure.
+    """
+    if head[:3] == b'ID3' and len(head) >= 10:
+        size = ((head[6] & 0x7f) << 21) | ((head[7] & 0x7f) << 14) | ((head[8] & 0x7f) << 7) | (head[9] & 0x7f)
+        return 10 + size + (10 if head[5] & 0x10 else 0)
+    if head[:4] == b'fLaC':
+        position = 4
+        while position + 4 <= len(head):
+            last, length = head[position] & 0x80, int.from_bytes(head[position + 1:position + 4], 'big')
+            position += 4 + length
+            if last:
+                return position
+        return position + 4
+    if head[4:8] == b'ftyp':
+        position = 0
+        while position + 8 <= len(head):
+            size, kind = int.from_bytes(head[position:position + 4], 'big'), head[position + 4:position + 8]
+            if size < 8:
+                return None
+            if kind == b'moov':
+                return position + size
+            if kind == b'mdat':
+                return 0
+            position += size
+        return position + 8
     return None
 
 
@@ -578,6 +624,40 @@ class Account:
         finally:
             part.unlink(missing_ok=True)
 
+    async def header_cover(self, document, size, directory, name, job):
+        """The picture in the front of a file, found without downloading the song.
+
+        Reads as much of the start as its tags take (at most MAX_HEADER), writes
+        it beside the pictures under a throwaway name and lets mutagen look.
+        """
+        head = b''
+        stream = self.client.iter_download(document, offset=0, request_size=HEADER_CHUNK, limit=MAX_HEADER // HEADER_CHUNK, file_size=size or None)
+
+        async def read():
+            nonlocal head
+            try:
+                async for chunk in stream:
+                    head += bytes(chunk)
+                    needed = header_needed(head)
+                    if needed is None or needed <= len(head) or needed > MAX_HEADER or len(head) >= MAX_HEADER:
+                        break
+            finally:
+                close = getattr(stream, 'aclose', None)
+                if close is not None:
+                    await close()
+        await self.guarded(read, job)
+        needed = header_needed(head)
+        # A tag longer than what is read would be cut off mid-picture.
+        if not head or needed == 0 or (needed is not None and needed > len(head)):
+            return None
+        scratch = directory / (name + '.head')
+        try:
+            scratch.write_bytes(head)
+            found = embedded_cover(scratch)
+        finally:
+            scratch.unlink(missing_ok=True)
+        return found[0] if found else None
+
     async def do_art(self, request):
         """One picture: a song's thumbnail, or a chat's photo (Saved Messages gets a drawn one).
 
@@ -590,8 +670,13 @@ class Account:
         if kind == 'thumb':
             message = await self.message_for(request['chatId'], request['messageId'])
             data = None
-            if message is not None and song_from(message) is not None:
-                data = await self.guarded(lambda: self.client.download_media(message, file=bytes, thumb=-1), request.get('job'))
+            song = song_from(message) if message is not None else None
+            if song is not None:
+                if song['thumb']:
+                    data = await self.guarded(lambda: self.client.download_media(message, file=bytes, thumb=-1), request.get('job'))
+                # Most audio files carry no thumbnail, only a cover in their tags.
+                if not (isinstance(data, (bytes, bytearray)) and image_type(data)):
+                    data = await self.header_cover(message.media.document, song['size'], directory, name, request.get('job'))
         elif kind == 'photo':
             me = await self.guarded(self.client.get_me)
             if int(request['chatId']) == me.id:

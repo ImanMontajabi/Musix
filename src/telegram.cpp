@@ -60,6 +60,7 @@ Telegram::Telegram(const QString &directory, QObject *parent)
   restoreAccount();
   loadSources();
   loadTags();
+  loadNoArt();
 }
 
 Telegram::~Telegram() { stopProcess(); }
@@ -450,16 +451,9 @@ void Telegram::finishJob(int job, const QJsonObject &reply) {
       emit songsReady(finished.key, source.value("title").toString(), finished.songs, complete);
     if (ok || !finished.songs.isEmpty()) {
       const auto chat = source.value("chatId").toString();
-      // Newest first, a bounded number per refresh, so a big channel does not
-      // turn one refresh into thousands of requests; the next refresh goes on.
+      // Song pictures wait for the list to show them (wantArt); the chat's
+      // own cover is the one thing a sync asks for.
       queueSourceArt(chat);
-      int queued = 0;
-      for (const auto &row : finished.songs) {
-        const auto song = row.toMap();
-        if (!song.value("thumb").toBool() || !song.value("art").toString().isEmpty() || queued >= 200) continue;
-        queueArt({"thumb", chat, song.value("telegramMessage").toString(), song.value("id").toString()});
-        ++queued;
-      }
     }
     QVariantMap changes{{"status", ok || cancelled ? "" : "error"}, {"count", finished.songs.size()}};
     if (ok) changes["syncedAt"] = QDateTime::currentSecsSinceEpoch();
@@ -924,12 +918,56 @@ void Telegram::queueSourceArt(const QString &chatId) {
 void Telegram::queueArt(const ArtTask &task, bool first) {
   if (m_artDirectory.isEmpty()) return;
   const auto identity = task.chatId + "/" + task.name;
-  if (m_artFailed.contains(identity)) return;
+  if (m_artFailed.contains(identity) || (m_artBusy && m_artRunning.chatId == task.chatId && m_artRunning.name == task.name)) return;
   for (const auto &queued : m_artQueue)
     if (queued.chatId == task.chatId && queued.name == task.name) return;
   if (first) m_artQueue.prepend(task);
   else m_artQueue.append(task);
   pumpArt();
+}
+
+void Telegram::wantArt(const QVariantList &rows) {
+  if (m_artDirectory.isEmpty() || !signedIn()) return;
+  QList<ArtTask> wanted;
+  for (const auto &value : rows) {
+    const auto row = value.toMap();
+    const auto id = row.value("id").toString(), chat = row.value("telegramChat").toString(), message = row.value("telegramMessage").toString();
+    if (row.value("source") != "telegram" || id.isEmpty() || chat.isEmpty() || message.isEmpty() || m_noArt.contains(id)) continue;
+    // A picture evicted since the row learned of it is wanted again; one on
+    // disk that the row does not show yet is simply handed over.
+    if (const auto art = QUrl(row.value("art").toString()); art.isLocalFile() && QFileInfo::exists(art.toLocalFile())) continue;
+    if (const auto have = artFile(chat, id); !have.isEmpty()) {
+      emit songLearned(id, {{"art", artUrl(have)}});
+      continue;
+    }
+    wanted.append({"thumb", chat, message, id});
+  }
+  // What was waiting for its turn and is no longer on screen is let go.
+  m_artQueue.erase(std::remove_if(m_artQueue.begin(), m_artQueue.end(), [](const ArtTask &t) { return t.kind == "thumb"; }), m_artQueue.end());
+  for (const auto &task : wanted) queueArt(task);
+}
+
+void Telegram::rememberNoArt(const QString &id) {
+  if (m_noArt.contains(id)) return;
+  m_noArt.insert(id);
+  m_noArtOrder.append(id);
+  while (m_noArtOrder.size() > 20000) m_noArt.remove(m_noArtOrder.takeFirst());
+  saveNoArt();
+}
+
+void Telegram::loadNoArt() {
+  QFile file(m_directory + "/noart.json");
+  if (!file.open(QIODevice::ReadOnly)) return;
+  for (const auto &id : QJsonDocument::fromJson(file.readAll()).array())
+    if (m_noArt.size() < 20000 && !m_noArt.contains(id.toString())) { m_noArt.insert(id.toString()); m_noArtOrder.append(id.toString()); }
+}
+
+void Telegram::saveNoArt() const {
+  QDir().mkpath(m_directory);
+  QSaveFile file(m_directory + "/noart.json");
+  if (!file.open(QIODevice::WriteOnly)) return;
+  file.write(QJsonDocument(QJsonArray::fromStringList(m_noArtOrder)).toJson(QJsonDocument::Compact));
+  if (file.commit()) QFile::setPermissions(m_directory + "/noart.json", QFileDevice::ReadOwner | QFileDevice::WriteOwner);
 }
 
 // One picture at a time: they are small, and Telegram's limits are on how many
@@ -938,6 +976,7 @@ void Telegram::pumpArt() {
   if (m_artBusy || m_artQueue.isEmpty()) return;
   m_artBusy = true;
   const auto task = m_artQueue.takeFirst();
+  m_artRunning = task;
   whenReady([this, task] {
     ensureFolder(chatFolder(task.chatId));
     send("art", {{"kind", task.kind}, {"chatId", task.chatId}, {"messageId", task.messageId}, {"name", task.name},
@@ -950,6 +989,8 @@ void Telegram::pumpArt() {
            if (!known) { // the source was removed while this was coming down
              if (file.isFile()) QFile::remove(file.absoluteFilePath());
              QDir().rmdir(chatFolder(task.chatId));
+           } else if (reply.value("ok").toBool() && task.kind == "thumb" && file.filePath().isEmpty()) {
+             rememberNoArt(task.name); // Telegram and the file both have none: not worth asking again
            } else if (!reply.value("ok").toBool() || !file.isFile() || file.canonicalPath() != QFileInfo(chatFolder(task.chatId)).canonicalFilePath()) {
              m_artFailed.insert(task.chatId + "/" + task.name);
            } else if (task.kind == "photo") {
@@ -988,6 +1029,11 @@ void Telegram::evictArt() {
 void Telegram::clearArt() {
   m_artQueue.clear();
   m_artFailed.clear();
+  if (!m_noArt.isEmpty()) {
+    m_noArt.clear();
+    m_noArtOrder.clear();
+    QFile::remove(m_directory + "/noart.json");
+  }
   if (m_artDirectory.isEmpty()) return;
   for (const auto &chat : QDir(m_artDirectory).entryList(QDir::Dirs | QDir::NoDotAndDotDot)) QDir(m_artDirectory + "/" + chat).removeRecursively();
   emit artCleared();
