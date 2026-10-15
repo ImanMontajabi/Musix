@@ -13,7 +13,7 @@ Item {
     // the artwork keeps its rounded corners and its square.
     property real parallax: 0
     signal menuRequested(var item, var anchor)
-    readonly property bool playableCover: !!(track.videoId || track.localPath || track.serverSong) || ["album","playlist","local","local-album","local-artist"].indexOf(track.kind)>=0
+    readonly property bool playableCover: !!(track.videoId || track.localPath || track.serverSong || track.source==="telegram") || ["album","playlist","local","local-album","local-artist"].indexOf(track.kind)>=0
     readonly property bool loadingCover: !!app.coverPlayId && app.coverPlayId===(track.browseId || track.id || "")
     width: 180; height: width + 68
     Item {

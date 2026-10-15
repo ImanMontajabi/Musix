@@ -79,7 +79,7 @@ ApplicationWindow {
         }
         return "";
     }
-    property bool hasSongCollection: !window.feedShowing && app.results.count>0 && !!(app.results.get(0).videoId || app.results.get(0).localPath || app.results.get(0).serverSong)
+    property bool hasSongCollection: !window.feedShowing && app.results.count>0 && !!(app.results.get(0).videoId || app.results.get(0).localPath || app.results.get(0).serverSong || app.results.get(0).source==="telegram")
     property var bulkView: null
     property var batchItems: []
     property var menuItem: ({})
@@ -1094,7 +1094,7 @@ ApplicationWindow {
                             // An artist's hero owns these actions while it is
                             // open; the row takes them back as it collapses, so
                             // exactly one Play is ever on screen.
-                            visible: tracks.selection.count===0 && app.results.count>0 && !window.feedShowing && !(window.destination==="library" && window.libraryTab==="playlists" && !window.localPlaylist) && !!(app.results.get(0).videoId || app.results.get(0).localPath || app.results.get(0).serverSong) && (!window.artistPage || content.compactHeader)
+                            visible: tracks.selection.count===0 && app.results.count>0 && !window.feedShowing && !(window.destination==="library" && window.libraryTab==="playlists" && !window.localPlaylist) && !!(app.results.get(0).videoId || app.results.get(0).localPath || app.results.get(0).serverSong || app.results.get(0).source==="telegram") && (!window.artistPage || content.compactHeader)
                             Layout.fillWidth: true; spacing: Theme.actionGap
                             MSplitButton {
                                 objectName: "collectionPlay"
@@ -1291,7 +1291,7 @@ ApplicationWindow {
                                 queueMode: false; reorderEnabled: (window.editableLocal || app.serverPlaylistEditable) && app.collection.sortKey==="original" && !app.collection.query
                                 playlistId: window.localPlaylist; dragHub: trackDrag
                                 matchQuery: app.collection.query || (app.page==="search"?app.query:app.page==="server"?(app.serverRequest.query || ""):"")
-                                onActivate: (row,item)=>{if(item.videoId || item.localPath || item.serverSong)app.playCollection(row);else app.open(item);}
+                                onActivate: (row,item)=>{if(item.videoId || item.localPath || item.serverSong || item.source==="telegram")app.playCollection(row);else app.open(item);}
                                 onMenuRequested: (item,index,anchor)=>window.trackMenu(item,index,anchor,false)
                                 onRemoveSelected: {if(app.serverPlaylistEditable)app.removeServerRows(sourceRows());else if(window.localPlaylist)app.removePlaylistRows(window.localPlaylist,sourceRows());}
                                 onAddSelected: window.addBatch(tracks)
@@ -1751,20 +1751,20 @@ ApplicationWindow {
         id: actions; objectName: "trackActions"
         width: 230; padding: Theme.space8
         background: Rectangle { color: Theme.high; radius: Theme.shapeLargeIncreased; border.color: Theme.outlineVariant }
-        MMenuItem { text: "Open"; visible: !(window.menuItem.videoId || window.menuItem.localPath || window.menuItem.serverSong); onTriggered: app.open(window.menuItem) }
-        MMenuItem { objectName: "playKeepQueueAction"; symbol: "play"; text: "Play now, keep queue"; visible: !!(window.menuItem.videoId || window.menuItem.localPath || window.menuItem.serverSong); onTriggered: app.playKeepingQueue(window.menuItem) }
-        MMenuItem { symbol: "next"; text: "Play next"; visible: !!(window.menuItem.videoId || window.menuItem.localPath || window.menuItem.serverSong); onTriggered: app.enqueue(window.menuItem,true) }
-        MMenuItem { symbol: "queue"; text: "Add to queue"; visible: !!(window.menuItem.videoId || window.menuItem.localPath || window.menuItem.serverSong); onTriggered: app.enqueue(window.menuItem) }
+        MMenuItem { text: "Open"; visible: !(window.menuItem.videoId || window.menuItem.localPath || window.menuItem.serverSong || window.menuItem.source==="telegram"); onTriggered: app.open(window.menuItem) }
+        MMenuItem { objectName: "playKeepQueueAction"; symbol: "play"; text: "Play now, keep queue"; visible: !!(window.menuItem.videoId || window.menuItem.localPath || window.menuItem.serverSong || window.menuItem.source==="telegram"); onTriggered: app.playKeepingQueue(window.menuItem) }
+        MMenuItem { symbol: "next"; text: "Play next"; visible: !!(window.menuItem.videoId || window.menuItem.localPath || window.menuItem.serverSong || window.menuItem.source==="telegram"); onTriggered: app.enqueue(window.menuItem,true) }
+        MMenuItem { symbol: "queue"; text: "Add to queue"; visible: !!(window.menuItem.videoId || window.menuItem.localPath || window.menuItem.serverSong || window.menuItem.source==="telegram"); onTriggered: app.enqueue(window.menuItem) }
         MMenuItem { symbol: "radio"; text: "Start radio"; visible: !!window.menuItem.videoId; onTriggered: app.radio(window.menuItem) }
-        MMenuItem { objectName: "trimAction"; symbol: "volume"; text: "Adjust volume\u2026"; visible: !!(window.menuItem.videoId || window.menuItem.localPath || window.menuItem.serverSong); onTriggered: trimDialog.adjust(window.menuItem) }
-        MDivider { visible: !!(window.menuItem.videoId || window.menuItem.localPath || window.menuItem.serverSong); height: visible ? implicitHeight : 0 }
-        MMenuItem { symbol: "heart"; text: app.isLiked(window.menuItem.id || "")?"Remove from liked songs":"Like song"; visible: !!(window.menuItem.videoId || window.menuItem.localPath || window.menuItem.serverSong); onTriggered: app.toggleLike(window.menuItem) }
-        MMenuItem { objectName: "trackDetailsAction"; symbol: "more"; text: "Track details"; visible: !!(window.menuItem.videoId || window.menuItem.localPath || window.menuItem.serverSong); onTriggered: trackDetails.inspect(window.menuItem) }
-        MMenuItem { symbol: "plus"; text: "Add to playlist"; visible: !!(window.menuItem.videoId || window.menuItem.localPath || window.menuItem.serverSong); onTriggered: addPlaylistDialog.open() }
+        MMenuItem { objectName: "trimAction"; symbol: "volume"; text: "Adjust volume\u2026"; visible: !!(window.menuItem.videoId || window.menuItem.localPath || window.menuItem.serverSong || window.menuItem.source==="telegram"); onTriggered: trimDialog.adjust(window.menuItem) }
+        MDivider { visible: !!(window.menuItem.videoId || window.menuItem.localPath || window.menuItem.serverSong || window.menuItem.source==="telegram"); height: visible ? implicitHeight : 0 }
+        MMenuItem { symbol: "heart"; text: app.isLiked(window.menuItem.id || "")?"Remove from liked songs":"Like song"; visible: !!(window.menuItem.videoId || window.menuItem.localPath || window.menuItem.serverSong || window.menuItem.source==="telegram"); onTriggered: app.toggleLike(window.menuItem) }
+        MMenuItem { objectName: "trackDetailsAction"; symbol: "more"; text: "Track details"; visible: !!(window.menuItem.videoId || window.menuItem.localPath || window.menuItem.serverSong || window.menuItem.source==="telegram"); onTriggered: trackDetails.inspect(window.menuItem) }
+        MMenuItem { symbol: "plus"; text: "Add to playlist"; visible: !!(window.menuItem.videoId || window.menuItem.localPath || window.menuItem.serverSong || window.menuItem.source==="telegram"); onTriggered: addPlaylistDialog.open() }
         MMenuItem { symbol: "chevron"; text: "Go to artist"; visible: !!window.menuItem.artistId; onTriggered: app.open(window.relatedItem(window.menuItem,"artist")) }
         MMenuItem { text: "Artwork…"; visible: window.menuItem.id===app.current.id && !!app.current.id; onTriggered: artworkControls.open() }
         MMenuItem { symbol: "disc"; text: "Go to album"; visible: !!window.menuItem.albumId; onTriggered: app.open(window.relatedItem(window.menuItem,"album")) }
-        MMenuItem { text: ["subsonic","jellyfin"].indexOf(window.menuItem.source)>=0?"Copy song details":window.menuItem.localPath?"Copy file path":"Copy link"; onTriggered: app.copyLink(window.menuItem) }
+        MMenuItem { text: ["subsonic","jellyfin","telegram"].indexOf(window.menuItem.source)>=0?"Copy song details":window.menuItem.localPath?"Copy file path":"Copy link"; onTriggered: app.copyLink(window.menuItem) }
         MMenuItem { text: "Add to server playlist"; visible: !!window.menuItem.serverSong; enabled: app.server.connected; onTriggered: {window.batchItems=[];serverAddDialog.open()} }
         MMenuItem { text: "Rate song"; visible: !!window.menuItem.serverSong && app.server.supportsRating; enabled: app.server.connected; onTriggered: serverRatingDialog.open() }
         MMenuItem { text: "Remove from server playlist"; visible: app.serverPlaylistEditable && !window.menuQueue; onTriggered: app.removeServerRows([window.menuIndex]) }

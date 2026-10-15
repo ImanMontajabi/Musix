@@ -5544,10 +5544,14 @@ void runTelegramTests(Backend *b, QQuickWindow *w) {
   c.check(b->results()->get(2).value("title").toString() == "Tagged 1002" && b->results()->get(2).value("artist").toString() == "Tag Artist",
           "keeps the title and artist the file gave");
 
-  // Lyrics and radio.
+  // Choosing a song in the list queues the whole list, so Next and Previous have somewhere to go.
   {
-    b->playResults(2);
-    c.check(c.until([&] { return b->playing() && b->current().value("id") == songId(2); }), "the song is playing");
+    auto tracks = shownItem(root(), "tracksView");
+    c.check(tracks, "the song list is on screen");
+    if (tracks) QMetaObject::invokeMethod(tracks, "activate", Q_ARG(int, 2), Q_ARG(QVariant, QVariant(b->results()->get(2))));
+    c.check(c.until([&] { return b->queue()->count() == 3; }), "clicking a Telegram song queues the playlist, not that song alone");
+    c.check(b->queue()->get(0).value("id") == songId(0) && b->queue()->get(2).value("id") == songId(2) && b->currentIndex() == 2,
+            "in order, at the song that was clicked");
     // Nothing of Telegram's is a YouTube video: lyrics are found by name, and no radio is asked for.
     QFile::remove(requestLog);
     b->fetchLyrics();

@@ -10,7 +10,7 @@ ItemDelegate {
     property var listOwner: null
     property var dragHub: null
     property bool selected: selection ? (selection.revision,selection.contains(selectionIndex)) : false
-    property bool selectable: selection && !!(track.videoId || track.localPath || track.serverSong) && track.available!==false
+    property bool selectable: selection && !!(track.videoId || track.localPath || track.serverSong || track.source==="telegram") && track.available!==false
     property bool keyboardCurrent: activeFocus || (listOwner && listOwner.activeFocus && listOwner.currentIndex===selectionIndex)
     property bool selectionVisible: selectable && (hovered || pointer.containsMouse || keyboardCurrent || selection.count>0)
     property bool motionRaised: false
