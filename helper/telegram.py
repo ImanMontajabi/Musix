@@ -12,7 +12,7 @@ written here.
 
 Requests   {"id": 1, "cmd": "phone", "phone": "+49 151 2345678"}
            cmd: status | phone | code | password | back | logout
-                dialogs | topics | resolve | sync | fetch | art | cancel   (signed in only)
+                dialogs | topics | resolve | sync | fetch | stream | art | cancel   (signed in only)
 Replies    {"id": 1, "ok": true[, "result": {...}]}   or   {"id": 1, "ok": false, "error": "..."}
 Events     {"event": "state", "state": "...", ...}
            {"event": "songs", "job": n, "songs": [...]}   one batch of a sync
@@ -21,6 +21,12 @@ Events     {"event": "state", "state": "...", ...}
            {"event": "wait", "job": n, "seconds": n}      Telegram asked for a pause; 0 when over
 States     starting, offline, wait-phone, wait-code, wait-password, ready
 
+A fetch with "stream": true brings the song down in blocks, in the order the
+player reads them as well as front to back, and a `stream` request naming its
+job answers with a URL on a loopback HTTP server (127.0.0.1, a random port, a
+random token in the path, Range supported) that serves the song from those
+blocks while they arrive. The fetch ends, as any other, when the file is whole.
+
 Data requests run beside each other (a sync of a big channel must not stop the
 chat list from loading); the sign-in steps run one at a time, in order.
 
@@ -28,10 +34,13 @@ The session is a file in MUSIX_TELEGRAM_DIR, readable by its owner only: it is
 as good as a password for the account, so it is not copied anywhere else.
 """
 import asyncio
+import hmac
 import json
+import mimetypes
 import os
 import platform
 import re
+import secrets
 import sys
 from pathlib import Path
 
@@ -49,6 +58,11 @@ MAX_ART = 1800 * 1024
 # size of each request for it (Telegram wants multiples of 4 KB).
 MAX_HEADER = 512 * 1024
 HEADER_CHUNK = 128 * 1024
+# A song comes down in blocks of this size: the most one request can ask for,
+# and a divisor of 1 MiB, which Telegram requires of where a request starts.
+BLOCK = 512 * 1024
+# Blocks kept in flight beside whatever the player is waiting for.
+FILL_AHEAD = 2
 MIME_EXTENSIONS = {'audio/mpeg': '.mp3', 'audio/mp3': '.mp3', 'audio/flac': '.flac', 'audio/x-flac': '.flac',
                    'audio/mp4': '.m4a', 'audio/x-m4a': '.m4a', 'audio/aac': '.aac', 'audio/ogg': '.ogg',
                    'application/ogg': '.ogg', 'audio/opus': '.opus', 'audio/wav': '.wav', 'audio/x-wav': '.wav',
@@ -58,7 +72,7 @@ MIME_EXTENSIONS = {'audio/mpeg': '.mp3', 'audio/mp3': '.mp3', 'audio/flac': '.fl
 # come back. Telethon would sleep silently for anything under a minute.
 FLOOD_LIMIT = 180
 AUDIO_EXTENSIONS = ('.mp3', '.flac', '.m4a', '.ogg', '.opus', '.wav', '.aac', '.wma', '.alac', '.aiff', '.ape')
-DATA_COMMANDS = ('dialogs', 'topics', 'resolve', 'sync', 'fetch', 'art')
+DATA_COMMANDS = ('dialogs', 'topics', 'resolve', 'sync', 'fetch', 'stream', 'art')
 
 
 class Rejected(Exception):
@@ -357,6 +371,265 @@ def chat_kind(entity):
     return ''
 
 
+class Transfer:
+    """One song coming down in blocks, readable while it does.
+
+    Blocks are fetched wherever the player reads (a seek lands anywhere) and,
+    beside that, from the last place it read to the end and then round to the
+    start, so the whole file is on disk soon after playback began. It is written
+    to a `.part` file that becomes the song only when every block is there.
+    """
+    def __init__(self, account, job, name, document, size, mime, part, target):
+        self.account, self.job, self.name, self.document = account, job, name, document
+        self.size, self.mime, self.part, self.target = size, mime, part, target
+        self.count = -(-size // BLOCK)
+        self.have = bytearray(self.count)
+        self.waiting = {}
+        self.cursor = 0
+        self.received = 0
+        self.closed = False
+        self.complete = False
+        self.fd = os.open(part, os.O_RDWR | os.O_CREAT | os.O_TRUNC, 0o600)
+        os.ftruncate(self.fd, size)
+
+    def next_missing(self):
+        for step in range(self.count):
+            index = (self.cursor + step) % self.count
+            if not self.have[index] and index not in self.waiting:
+                return index
+        return None
+
+    async def block(self, index):
+        if self.have[index]:
+            return
+        if self.closed:
+            raise asyncio.CancelledError()
+        task = self.waiting.get(index)
+        if task is None:
+            task = self.waiting[index] = asyncio.ensure_future(self.download(index))
+            task.add_done_callback(lambda finished: finished.cancelled() or finished.exception())   # seen, even if nobody is waiting any more
+        # A reader that leaves must not cancel a block somebody else will want.
+        await asyncio.shield(task)
+
+    async def download(self, index):
+        start = index * BLOCK
+        wanted = min(BLOCK, self.size - start)
+
+        async def read():
+            data = b''
+            async for chunk in self.account.client.iter_download(self.document, offset=start, request_size=BLOCK, limit=1, file_size=self.size):
+                data += bytes(chunk)
+            return data
+        try:
+            data = await self.account.guarded(read, self.job)
+            if len(data) < wanted:
+                raise Rejected('Telegram sent an incomplete file. Try again.')
+            if not self.closed:
+                os.pwrite(self.fd, data[:wanted], start)
+                self.have[index] = 1
+                self.received += wanted
+                self.account.emit({'event': 'progress', 'job': self.job, 'received': self.received, 'total': self.size})
+        finally:
+            self.waiting.pop(index, None)
+
+    async def read(self, offset, length):
+        """Up to `length` bytes at `offset`, within one block, waiting for it to arrive."""
+        index = offset // BLOCK
+        self.cursor = index
+        await self.block(index)
+        end = min(self.size, offset + length, (index + 1) * BLOCK)
+        return os.pread(self.fd, end - offset, offset)
+
+    async def run(self):
+        """Bring the whole file down; returns when it is the song."""
+        running = set()
+        try:
+            while True:
+                while len(running) < FILL_AHEAD:
+                    index = self.next_missing()
+                    if index is None:
+                        break
+                    running.add(asyncio.ensure_future(self.block(index)))
+                if not running:
+                    if self.waiting:                  # blocks only a reader is waiting for
+                        await asyncio.wait(list(self.waiting.values()))
+                        continue
+                    break
+                done, running = await asyncio.wait(running, return_when=asyncio.FIRST_COMPLETED)
+                failure = None
+                for finished in done:
+                    try:
+                        finished.result()
+                    except Exception as error:
+                        failure = failure or error
+                if failure is not None:
+                    raise failure
+            if sum(self.have) != self.count:
+                raise Rejected('Telegram sent an incomplete file. Try again.')
+            os.replace(self.part, self.target)
+            self.complete = True
+        finally:
+            for task in running:
+                task.cancel()
+            if not self.complete:
+                self.close()
+            if running:
+                await asyncio.gather(*running, return_exceptions=True)
+
+    def close(self):
+        """Stop: whatever is in flight is dropped, and a half-song is not kept."""
+        self.closed = True
+        for task in list(self.waiting.values()):
+            task.cancel()
+        if self.fd >= 0:
+            os.close(self.fd)
+            self.fd = -1
+        if not self.complete:
+            try:
+                self.part.unlink()
+            except FileNotFoundError:
+                pass
+
+
+def parse_range(header, size):
+    """(first, last) of the one range asked for, None for the whole file; ValueError if it can't be had."""
+    if not header:
+        return None
+    found = re.fullmatch(r'\s*bytes\s*=\s*(\d*)\s*-\s*(\d*)\s*', header)
+    if not found:
+        return None                      # several ranges, or something else: the whole file is a valid answer
+    first, last = found.groups()
+    if not first and not last:
+        return None
+    if not first:
+        length = int(last)
+        if length == 0:
+            raise ValueError('empty')
+        return max(0, size - length), size - 1
+    start = int(first)
+    end = min(int(last), size - 1) if last else size - 1
+    if start >= size or end < start:
+        raise ValueError('outside')
+    return start, end
+
+
+class StreamServer:
+    """The songs being fetched, over HTTP on this machine, for the player to open.
+
+    It listens on 127.0.0.1 only, on a port the system picks, and answers only
+    to a path that carries a random token made when it started; another program
+    on the Mac that does not know the token gets a 404 like any other path.
+    """
+    KEPT = 6
+
+    def __init__(self):
+        self.token = secrets.token_urlsafe(24)
+        self.server = None
+        self.port = 0
+        self.transfers = {}
+
+    async def url(self, transfer):
+        if self.server is None:
+            self.server = await asyncio.start_server(self.connection, '127.0.0.1', 0, backlog=16)
+            self.port = self.server.sockets[0].getsockname()[1]
+        key = transfer.name + (transfer.target.suffix or '.audio')
+        self.transfers.pop(key, None)
+        self.transfers[key] = transfer
+        for old in list(self.transfers)[:-self.KEPT]:
+            self.transfers.pop(old).close()
+        return 'http://127.0.0.1:%d/%s/%s' % (self.port, self.token, key)
+
+    def forget(self, transfer):
+        for key, held in list(self.transfers.items()):
+            if held is transfer:
+                del self.transfers[key]
+
+    async def stop(self):
+        if self.server is not None:
+            self.server.close()
+        for transfer in list(self.transfers.values()):
+            transfer.close()
+        self.transfers.clear()
+
+    async def connection(self, reader, writer):
+        try:
+            while await self.request(reader, writer):
+                pass
+        except (ConnectionError, asyncio.IncompleteReadError, asyncio.TimeoutError, OSError):
+            pass
+        except asyncio.CancelledError:
+            pass
+        finally:
+            try:
+                writer.close()
+            except Exception:
+                pass
+
+    @staticmethod
+    def reply(writer, status, headers=(), body=b''):
+        names = {200: 'OK', 206: 'Partial Content', 400: 'Bad Request', 404: 'Not Found', 405: 'Method Not Allowed',
+                 416: 'Range Not Satisfiable', 500: 'Internal Server Error'}
+        lines = ['HTTP/1.1 %d %s' % (status, names.get(status, 'Error')), 'Cache-Control: no-store', 'Accept-Ranges: bytes']
+        lines += ['%s: %s' % pair for pair in headers]
+        writer.write(('\r\n'.join(lines) + '\r\n\r\n').encode('latin-1') + body)
+
+    async def request(self, reader, writer):
+        """Answer one request; True if the connection may carry another."""
+        line = await asyncio.wait_for(reader.readline(), 120)
+        if not line:
+            return False
+        headers = {}
+        for _ in range(64):
+            header = await asyncio.wait_for(reader.readline(), 30)
+            if header in (b'\r\n', b'\n', b''):
+                break
+            name, _, value = header.decode('latin-1').partition(':')
+            headers[name.strip().lower()] = value.strip()
+        parts = line.decode('latin-1').split()
+        if len(parts) != 3:
+            self.reply(writer, 400, [('Content-Length', '0'), ('Connection', 'close')])
+            return False
+        method, target, _version = parts
+        pieces = target.split('?')[0].split('/')
+        transfer = None
+        if len(pieces) == 3 and hmac.compare_digest(pieces[1].encode(), self.token.encode()):
+            transfer = self.transfers.get(pieces[2])
+        if transfer is None or transfer.closed:
+            self.reply(writer, 404, [('Content-Length', '0')])
+            return True
+        if method not in ('GET', 'HEAD'):
+            self.reply(writer, 405, [('Allow', 'GET, HEAD'), ('Content-Length', '0')])
+            return True
+        kind = transfer.mime if '/' in (transfer.mime or '') else (mimetypes.guess_type(pieces[2])[0] or 'application/octet-stream')
+        try:
+            asked = parse_range(headers.get('range'), transfer.size)
+        except ValueError:
+            self.reply(writer, 416, [('Content-Range', 'bytes */%d' % transfer.size), ('Content-Length', '0')])
+            return True
+        first, last = asked if asked else (0, transfer.size - 1)
+        head = [('Content-Type', kind), ('Content-Length', str(last - first + 1))]
+        if asked:
+            head.append(('Content-Range', 'bytes %d-%d/%d' % (first, last, transfer.size)))
+        self.reply(writer, 206 if asked else 200, head)
+        if method == 'GET':
+            position = first
+            try:
+                while position <= last:
+                    data = await transfer.read(position, last - position + 1)
+                    writer.write(data)
+                    await writer.drain()
+                    position += len(data)
+            except asyncio.CancelledError:
+                if transfer.closed:
+                    return False
+                raise
+            except Rejected:
+                return False                     # the headers promised more than can be sent: end the connection
+        else:
+            await writer.drain()
+        return headers.get('connection', '').lower() != 'close'
+
+
 class Account:
     def __init__(self, make_client, directory, emit):
         self.make_client = make_client
@@ -371,6 +644,9 @@ class Account:
         self.extra = {}
         self.me = {}
         self.jobs = {}
+        self.transfers = {}
+        self.transfer_futures = {}
+        self.streams = StreamServer()
 
     def set_state(self, state, **extra):
         self.state = state
@@ -575,36 +851,62 @@ class Account:
 
         The file is written beside its final name and moved into place only when
         complete, so a cancelled or failed download never leaves something the
-        player could mistake for a song.
+        player could mistake for a song. With "stream" the song comes down in
+        blocks that `stream` can serve while they arrive.
         """
         job = request.get('job')
         name, directory = str(request.get('name') or ''), Path(str(request.get('directory') or ''))
         if not re.fullmatch(r'[A-Za-z0-9_]{1,64}', name) or not directory.is_dir():
             raise Rejected('Nowhere to keep the song.')
-        message = await self.message_for(request['chatId'], request['messageId'])
-        song = song_from(message) if message is not None else None
-        if song is None:
-            raise Rejected('This song is no longer in the chat.')
-        limit = int(request.get('limit') or MAX_FETCH)
-        if song['size'] > limit:
-            raise Rejected('This file is %d MB; Musix plays Telegram songs up to %d MB.' % (song['size'] // 1048576, limit // 1048576))
-        target = directory / (name + audio_extension(song['fileName'], song['mime']))
-        part = directory / (name + '.part')
-        document = message.media.document
-
-        def progress(received, total):
-            self.emit({'event': 'progress', 'job': job, 'received': int(received), 'total': int(total or song['size'])})
-
-        async def download():
-            with open(part, 'wb') as out:
-                await self.client.download_file(document, out, file_size=song['size'] or None, progress_callback=progress)
+        future = self.transfer_futures.setdefault(job, asyncio.get_running_loop().create_future())
         try:
-            await self.guarded(download, job)
-            if part.stat().st_size == 0 or (song['size'] and part.stat().st_size != song['size']):
-                raise Rejected('Telegram sent an incomplete file. Try again.')
-            os.replace(part, target)
+            message = await self.message_for(request['chatId'], request['messageId'])
+            song = song_from(message) if message is not None else None
+            if song is None:
+                raise Rejected('This song is no longer in the chat.')
+            limit = int(request.get('limit') or MAX_FETCH)
+            if song['size'] > limit:
+                raise Rejected('This file is %d MB; Musix plays Telegram songs up to %d MB.' % (song['size'] // 1048576, limit // 1048576))
+            target = directory / (name + audio_extension(song['fileName'], song['mime']))
+            part = directory / (name + '.part')
+            document = message.media.document
+
+            def progress(received, total):
+                self.emit({'event': 'progress', 'job': job, 'received': int(received), 'total': int(total or song['size'])})
+
+            if request.get('stream') and song['size'] > 0:
+                transfer = Transfer(self, job, name, document, song['size'], song['mime'], part, target)
+                self.transfers[job] = transfer
+                if not future.done():
+                    future.set_result(transfer)
+                try:
+                    await transfer.run()
+                finally:
+                    self.transfers.pop(job, None)
+                    if not transfer.complete:
+                        self.streams.forget(transfer)
+            else:
+                if not future.done():
+                    future.set_exception(Rejected('This song can’t be streamed.'))
+                    future.exception()
+
+                async def download():
+                    with open(part, 'wb') as out:
+                        await self.client.download_file(document, out, file_size=song['size'] or None, progress_callback=progress)
+                try:
+                    await self.guarded(download, job)
+                    if part.stat().st_size == 0 or (song['size'] and part.stat().st_size != song['size']):
+                        raise Rejected('Telegram sent an incomplete file. Try again.')
+                    os.replace(part, target)
+                finally:
+                    part.unlink(missing_ok=True)
+        except BaseException as error:
+            if not future.done():
+                future.set_exception(error if isinstance(error, Exception) else Rejected('Cancelled.'))
+                future.exception()                # nobody may be waiting for it; that is not an error
+            raise
         finally:
-            part.unlink(missing_ok=True)
+            self.transfer_futures.pop(job, None)
         result = {'file': str(target), 'size': target.stat().st_size, 'tags': read_tags(target)}
         art = str(request.get('artDirectory') or '')
         if art and re.fullmatch(r'[A-Za-z0-9_]{1,64}', str(request.get('artName') or '')) and Path(art).is_dir():
@@ -614,6 +916,18 @@ class Account:
                 self.write_file(found, cover[0])
                 result['art'] = str(found)
         return result
+
+    async def do_stream(self, request):
+        """The URL the player can open for a fetch that is running with "stream"."""
+        job = request.get('fetchJob')
+        future = self.transfer_futures.get(job)
+        if future is None:
+            raise Rejected('That song is not being downloaded.')
+        try:
+            transfer = await asyncio.wait_for(asyncio.shield(future), 60)
+        except asyncio.TimeoutError:
+            raise Rejected('Telegram took too long to find the song.')
+        return {'url': await self.streams.url(transfer), 'size': transfer.size}
 
     @staticmethod
     def write_file(target, data):
@@ -751,6 +1065,8 @@ class Account:
     async def logout(self):
         for task in list(self.jobs.values()):
             task.cancel()
+        await self.streams.stop()
+        self.streams = StreamServer()
         warning = ''
         try:
             if self.client is not None:
@@ -770,6 +1086,7 @@ class Account:
             self.set_state('wait-phone', error=warning)
 
     async def stop(self):
+        await self.streams.stop()
         try:
             if self.client is not None:
                 await self.client.disconnect()

@@ -235,6 +235,7 @@ void Telegram::submitPassword(const QString &password) { send("password", {{"pas
 void Telegram::back() { send("back"); }
 void Telegram::logout() {
   failFetches(true, "Signed out of Telegram.");
+  m_streamId.clear();
   clearCache();
   send("logout");
 }
@@ -663,7 +664,7 @@ bool Telegram::fetching(const QString &songId) const {
 void Telegram::setDownload() {
   QVariantMap next;
   for (const auto &entry : m_fetches)
-    if (entry.started && entry.done) {
+    if (entry.started && entry.done && !entry.streaming) {
       next = {{"id", entry.song.value("id")}, {"received", entry.received}, {"total", entry.total ? entry.total : entry.song.value("size").toLongLong()}};
       break;
     }
@@ -672,7 +673,7 @@ void Telegram::setDownload() {
   emit downloadChanged();
 }
 
-void Telegram::fetch(const QVariantMap &song, Fetched done) {
+void Telegram::fetch(const QVariantMap &song, Fetched done, Streamed stream) {
   const auto id = song.value("id").toString();
   const auto remote = song.value("remoteId").toString();
   const auto colon = remote.lastIndexOf(':');
@@ -689,12 +690,50 @@ void Telegram::fetch(const QVariantMap &song, Fetched done) {
   for (auto it = m_fetches.begin(); it != m_fetches.end(); ++it)
     if (it->song.value("id") == id) {
       if (done) it->done = std::move(done);
+      // A download that was started to be streamed can be asked for its URL
+      // again (the player lost it); a plain one is waited for.
+      if (stream && it->streamable) {
+        it->streaming = true;
+        if (it->started) requestStream(it.key(), std::move(stream));
+        else it->stream = std::move(stream);
+      }
       setDownload();
       return;
     }
   const int job = m_nextJob++;
-  m_fetches.insert(job, Fetch{song, std::move(done), false, 0, 0});
+  Fetch entry{song, std::move(done), false, 0, 0, {}, false, false};
+  entry.streamable = entry.streaming = bool(stream);
+  entry.stream = std::move(stream);
+  m_fetches.insert(job, std::move(entry));
   whenReady([this, job] { startFetch(job); });
+}
+
+// Asks the helper for the URL of a download it is running in blocks. If it
+// cannot be had the download goes on as an ordinary one and `done` is the way
+// the song arrives.
+void Telegram::requestStream(int job, Streamed stream) {
+  send("stream", {{"fetchJob", job}}, [this, job, stream = std::move(stream)](const QJsonObject &reply) {
+    auto it = m_fetches.find(job);
+    if (it == m_fetches.end()) return;
+    const auto result = reply.value("result").toObject();
+    const QUrl url(result.value("url").toString());
+    if (!reply.value("ok").toBool() || url.host() != "127.0.0.1") {
+      it->streaming = it->streamable = false;
+      setDownload();
+      return;
+    }
+    m_streamId = it->song.value("id").toString();
+    setDownload();
+    stream(url.toString(), qint64(result.value("size").toDouble()));
+  });
+}
+
+// The helper has to stay up for as long as the player reads from its URL, which
+// is long after the download is over.
+void Telegram::releaseStream() {
+  if (m_streamId.isEmpty()) return;
+  m_streamId.clear();
+  releaseSoon();
 }
 
 void Telegram::prefetch(const QVariantMap &song) { fetch(song, {}); }
@@ -715,8 +754,10 @@ void Telegram::startFetch(int job) {
     request.insert("artDirectory", chatFolder(chat));
     request.insert("artName", it->song.value("id").toString());
   }
+  if (it->streamable) request.insert("stream", true);
   send("fetch", request,
        [this, job](const QJsonObject &reply) { finishFetch(job, reply); });
+  if (auto again = m_fetches.find(job); again != m_fetches.end() && again->stream) requestStream(job, std::move(again->stream));
 }
 
 void Telegram::finishFetch(int job, const QJsonObject &reply) {

@@ -894,5 +894,292 @@ async def _done(value):
     return value
 
 
+class Streaming(Fetching):
+    """A song played while it is still coming down: blocks, a loopback server, Range."""
+    BLOCK = telegram.BLOCK
+
+    @staticmethod
+    def payload(blocks=2.5):
+        size = int(telegram.BLOCK * blocks) + 7
+        return bytes((i * 7 + i // 251) % 256 for i in range(size))
+
+    def song(self, payload, mime='audio/mpeg', name='Song.mp3'):
+        doc = Document(mime, [DocumentAttributeAudio('T', 'A', 100), DocumentAttributeFilename(name)], size=len(payload))
+        doc.payload = payload
+        return Message(7, doc)
+
+    def gate(self, a, closed):
+        """Hold back every request for an offset in `closed` until its event is set."""
+        real = a.client.iter_download
+        a.client.offsets = []
+
+        async def gated(document, offset=0, **kw):
+            a.client.offsets.append(offset)
+            if offset in closed:
+                await closed[offset].wait()
+            async for chunk in real(document, offset=offset, **kw):
+                yield chunk
+        a.client.iter_download = gated
+
+    def play(self, a, scenario, **extra):
+        """Start a streaming fetch, ask for its URL and hand both to `scenario`."""
+        outcome = {}
+
+        async def main():
+            request = {'id': 9, 'cmd': 'fetch', 'chatId': 5, 'messageId': 7, 'job': 4, 'name': 'tg_abc', 'directory': str(self.audio), 'stream': True}
+            fetch = asyncio.create_task(telegram.answer(a, dict(request, **extra)))
+            await asyncio.sleep(0)                      # the fetch is read before the request for its stream, as on the wire
+            await telegram.answer(a, {'id': 10, 'cmd': 'stream', 'fetchJob': 4})
+            reply = [e for e in self.events if e.get('id') == 10][0]
+            outcome['stream'] = reply
+            try:
+                if reply.get('ok'):
+                    await scenario(reply['result']['url'], fetch)
+            finally:
+                if not fetch.done():
+                    fetch.cancel()
+                await asyncio.gather(fetch, return_exceptions=True)
+                outcome['fetch'] = [e for e in self.events if e.get('id') == 9]
+                await a.streams.stop()
+        run(main())
+        return outcome
+
+    @staticmethod
+    async def http(url, method='GET', path=None, **headers):
+        from urllib.parse import urlparse
+        u = urlparse(url)
+        reader, writer = await asyncio.open_connection(u.hostname, u.port)
+        try:
+            lines = ['%s %s HTTP/1.1' % (method, path or u.path), 'Host: %s' % u.netloc] + ['%s: %s' % (k.replace('_', '-'), v) for k, v in headers.items()]
+            writer.write(('\r\n'.join(lines) + '\r\n\r\n').encode())
+            status = int((await reader.readline()).split()[1])
+            got = {}
+            while True:
+                line = await reader.readline()
+                if line in (b'\r\n', b''):
+                    break
+                name, _, value = line.decode().partition(':')
+                got[name.strip().lower()] = value.strip()
+            body = b'' if method == 'HEAD' else await reader.readexactly(int(got.get('content-length', 0)))
+            return status, got, body
+        finally:
+            writer.close()
+
+    def test_a_ranged_request_is_answered_from_the_blocks(self):
+        payload = self.payload()
+        a = self.ready({7: self.song(payload)})
+
+        async def scenario(url, fetch):
+            status, head, body = await self.http(url)
+            self.assertEqual((status, body), (200, payload))
+            self.assertEqual((head['accept-ranges'], head['content-type'], head['content-length']), ('bytes', 'audio/mpeg', str(len(payload))))
+            status, head, body = await self.http(url, Range='bytes=10-19')
+            self.assertEqual((status, body, head['content-range']), (206, payload[10:20], 'bytes 10-19/%d' % len(payload)))
+            edge = self.BLOCK - 3                                  # across the boundary between two blocks
+            status, _, body = await self.http(url, Range='bytes=%d-%d' % (edge, edge + 5))
+            self.assertEqual((status, body), (206, payload[edge:edge + 6]))
+            status, head, body = await self.http(url, Range='bytes=-5')
+            self.assertEqual((status, body, head['content-range']), (206, payload[-5:], 'bytes %d-%d/%d' % (len(payload) - 5, len(payload) - 1, len(payload))))
+            status, _, body = await self.http(url, Range='bytes=%d-' % (len(payload) - 3))
+            self.assertEqual((status, body), (206, payload[-3:]))
+            status, _, body = await self.http(url, Range='bytes=5-%d' % (len(payload) * 3))      # past the end is clamped
+            self.assertEqual((status, body), (206, payload[5:]))
+            status, head, _ = await self.http(url, Range='bytes=%d-' % len(payload))
+            self.assertEqual((status, head['content-range']), (416, 'bytes */%d' % len(payload)))
+            status, _, body = await self.http(url, Range='bytes=0-1,5-6')                         # several ranges: the whole file is a valid answer
+            self.assertEqual((status, body), (200, payload))
+            status, head, body = await self.http(url, 'HEAD')
+            self.assertEqual((status, body, head['content-length']), (200, b'', str(len(payload))))
+            await fetch
+        outcome = self.play(a, scenario)
+        self.assertTrue(outcome['stream']['ok'])
+        self.assertEqual(outcome['stream']['result']['size'], len(payload))
+
+    def test_the_song_becomes_a_whole_file_and_the_fetch_says_so(self):
+        payload = self.payload()
+        a = self.ready({7: self.song(payload)})
+
+        async def scenario(url, fetch):
+            await self.http(url, Range='bytes=0-9')
+            await fetch
+        outcome = self.play(a, scenario)
+        self.assertTrue(outcome['fetch'][0]['ok'], outcome['fetch'])
+        self.assertEqual((self.audio / 'tg_abc.mp3').read_bytes(), payload)
+        self.assertEqual(sorted(p.name for p in self.audio.iterdir()), ['tg_abc.mp3'])        # no .part left
+        progress = [e for e in self.events if e.get('event') == 'progress']
+        self.assertEqual(progress[-1]['received'], len(payload))
+        self.assertEqual(progress[-1]['total'], len(payload))
+
+    def test_it_can_be_read_before_the_rest_has_arrived(self):
+        payload = self.payload(4)
+        a = self.ready({7: self.song(payload)})
+        later = asyncio.Event()
+        gate = {i * self.BLOCK: None for i in range(1, 5)}
+
+        async def scenario(url, fetch):
+            status, _, body = await self.http(url, Range='bytes=0-99')
+            self.assertEqual((status, body), (206, payload[:100]))
+            self.assertFalse(fetch.done())                 # the song is not whole, and was already playable
+            self.assertFalse((self.audio / 'tg_abc.mp3').exists())
+            later.set()
+            await fetch
+        for key in gate:
+            gate[key] = later
+        self.gate(a, gate)
+        outcome = self.play(a, scenario)
+        self.assertTrue(outcome['fetch'][0]['ok'])
+        self.assertEqual((self.audio / 'tg_abc.mp3').read_bytes(), payload)
+
+    def test_a_seek_is_served_without_waiting_for_the_blocks_before_it(self):
+        payload = self.payload(4)
+        a = self.ready({7: self.song(payload)})
+        held = asyncio.Event()
+        self.gate(a, {0: held, self.BLOCK: held})              # the front is slow
+
+        async def scenario(url, fetch):
+            target = 3 * self.BLOCK + 10
+            status, _, body = await self.http(url, Range='bytes=%d-%d' % (target, target + 49))
+            self.assertEqual((status, body), (206, payload[target:target + 50]))
+            self.assertFalse(fetch.done())
+            self.assertIn(3 * self.BLOCK, a.client.offsets)
+            held.set()                                          # and the rest of the file still arrives
+            await fetch
+        outcome = self.play(a, scenario)
+        self.assertTrue(outcome['fetch'][0]['ok'])
+        self.assertEqual((self.audio / 'tg_abc.mp3').read_bytes(), payload)
+
+    def test_what_is_not_the_stream_is_not_found(self):
+        a = self.ready({7: self.song(self.payload(1))})
+
+        async def scenario(url, fetch):
+            from urllib.parse import urlparse
+            parts = urlparse(url).path.split('/')
+            for path in ('/', '/' + parts[1], '/%s/other.mp3' % parts[1], '/wrong-token/' + parts[2], '/%s/%s/x' % (parts[1], parts[2]), '/../' + parts[2]):
+                status, _, _ = await self.http(url, path=path)
+                self.assertEqual(status, 404, path)
+            status, head, _ = await self.http(url, 'POST')
+            self.assertEqual((status, head['allow']), (405, 'GET, HEAD'))
+            status, _, _ = await self.http(url, path=urlparse(url).path + '?x=1')                # a query string is ignored
+            self.assertEqual(status, 200)
+            await fetch
+        self.play(a, scenario)
+
+    def test_it_listens_on_this_machine_only_and_every_run_has_its_own_token(self):
+        a = self.ready({7: self.song(self.payload(1))})
+
+        async def scenario(url, fetch):
+            self.assertEqual([sock.getsockname()[0] for sock in a.streams.server.sockets], ['127.0.0.1'])
+            self.assertTrue(url.startswith('http://127.0.0.1:'))
+            await fetch
+        self.play(a, scenario)
+        first, second = telegram.StreamServer().token, telegram.StreamServer().token
+        self.assertNotEqual(first, second)
+        self.assertGreaterEqual(len(first), 30)
+
+    def test_a_cancelled_download_ends_the_stream_and_leaves_no_file(self):
+        payload = self.payload(3)
+        a = self.ready({7: self.song(payload)})
+        held = asyncio.Event()
+        self.gate(a, {self.BLOCK: held, 2 * self.BLOCK: held})
+
+        async def scenario(url, fetch):
+            status, _, _ = await self.http(url, Range='bytes=0-9')
+            self.assertEqual(status, 206)
+            reader = asyncio.ensure_future(self.http(url, Range='bytes=%d-%d' % (self.BLOCK, self.BLOCK + 9)))   # waits on a block that never comes
+            await asyncio.sleep(0.2)
+            await telegram.answer(a, {'id': 11, 'cmd': 'cancel', 'job': 4})
+            with self.assertRaises(asyncio.IncompleteReadError):
+                await reader
+            status, _, _ = await self.http(url)
+            self.assertEqual(status, 404)
+            await asyncio.gather(fetch, return_exceptions=True)
+        outcome = self.play(a, scenario)
+        self.assertEqual(outcome['fetch'][0]['error'], 'Cancelled.')
+        self.assertEqual(list(self.audio.iterdir()), [])
+
+    def test_a_block_that_comes_short_fails_the_download_and_cuts_the_stream(self):
+        payload = self.payload(2)
+        a = self.ready({7: self.song(payload)})
+        held = asyncio.Event()
+        self.gate(a, {self.BLOCK: held})
+        real = a.client.iter_download
+
+        async def short(document, offset=0, **kw):
+            async for chunk in real(document, offset=offset, **kw):
+                yield chunk[:len(chunk) // 2] if offset else chunk
+        a.client.iter_download = short
+
+        async def scenario(url, fetch):
+            reader = asyncio.ensure_future(self.http(url))        # playing, with the second block still on its way
+            await asyncio.sleep(0.2)
+            held.set()
+            with self.assertRaises(asyncio.IncompleteReadError):
+                await reader
+            await asyncio.gather(fetch, return_exceptions=True)
+        outcome = self.play(a, scenario)
+        self.assertIn('incomplete', outcome['fetch'][0]['error'])
+        self.assertEqual(list(self.audio.iterdir()), [])
+
+    def test_a_flood_wait_in_the_middle_of_the_stream_is_waited_out(self):
+        payload = self.payload(2)
+        a = self.ready({7: self.song(payload)})
+        real, asked = a.client.iter_download, []
+
+        slept = asyncio.sleep
+
+        async def sleeping(seconds): await slept(0)
+        telegram.asyncio.sleep = sleeping
+        self.addCleanup(setattr, telegram.asyncio, 'sleep', slept)
+
+        async def flooded(document, offset=0, **kw):
+            asked.append(offset)
+            if len(asked) == 1:
+                raise FloodWaitError(5)
+            async for chunk in real(document, offset=offset, **kw):
+                yield chunk
+        a.client.iter_download = flooded
+
+        async def scenario(url, fetch):
+            status, _, body = await self.http(url, Range='bytes=0-9')
+            self.assertEqual((status, body), (206, payload[:10]))
+            await fetch
+        outcome = self.play(a, scenario)
+        self.assertTrue(outcome['fetch'][0]['ok'])
+        self.assertEqual([e['seconds'] for e in self.events if e.get('event') == 'wait'], [5, 0])
+
+    def test_a_song_of_unknown_size_cannot_be_streamed_but_still_downloads(self):
+        doc = Document('audio/mpeg', [DocumentAttributeFilename('x.mp3')], size=0)
+        doc.payload = b'ID3-not-really-audio'
+        a = self.ready({7: Message(7, doc)})
+        outcome = self.play(a, None)
+        self.assertFalse(outcome['stream']['ok'])
+        self.assertTrue(outcome['fetch'][0]['ok'])
+        self.assertEqual((self.audio / 'tg_abc.mp3').read_bytes(), b'ID3-not-really-audio')
+
+    def test_asking_for_a_stream_that_was_never_started_is_refused(self):
+        a = self.ready({})
+        run(telegram.answer(a, {'id': 3, 'cmd': 'stream', 'fetchJob': 99}))
+        self.assertFalse([e for e in self.events if e.get('id') == 3][0]['ok'])
+
+    def test_an_oversize_file_is_refused_for_streaming_too(self):
+        big = Message(7, Document('audio/flac', [DocumentAttributeFilename('A.flac')], size=201 * 1048576))
+        a = self.ready({7: big})
+        outcome = self.play(a, None)
+        self.assertFalse(outcome['stream']['ok'])
+        self.assertIn('200 MB', outcome['fetch'][0]['error'])
+
+    def test_the_range_header_is_read_the_way_http_defines_it(self):
+        self.assertIsNone(telegram.parse_range(None, 100))
+        self.assertIsNone(telegram.parse_range('bytes=0-1,4-5', 100))
+        self.assertIsNone(telegram.parse_range('items=1-2', 100))
+        self.assertEqual(telegram.parse_range('bytes=0-', 100), (0, 99))
+        self.assertEqual(telegram.parse_range('bytes=-30', 100), (70, 99))
+        self.assertEqual(telegram.parse_range('bytes=-300', 100), (0, 99))
+        self.assertEqual(telegram.parse_range('bytes=90-1000', 100), (90, 99))
+        for bad in ('bytes=100-', 'bytes=50-10', 'bytes=-0'):
+            with self.assertRaises(ValueError, msg=bad):
+                telegram.parse_range(bad, 100)
+
+
 if __name__ == '__main__':
     unittest.main()

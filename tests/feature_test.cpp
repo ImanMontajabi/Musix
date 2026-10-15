@@ -5523,9 +5523,14 @@ void runTelegramTests(Backend *b, QQuickWindow *w) {
   b->openPlaylist("telegram:4242");
   c.check(c.until([&] { return b->results()->count() == 3; }), "a Telegram playlist opens like any other");
   const auto songId = [&](int i) { return b->results()->get(i).value("id").toString(); };
+  // Message 1001 is the slow song, which is preloaded and cancelled depending on
+  // whether the helper was still up when it was asked for, so it is not counted.
   const auto fetchLog = [&] {
     QFile log(account->sessionFolder() + "/fetches.log");
-    return log.open(QIODevice::ReadOnly) ? int(log.readAll().split('\n').size()) - 1 : 0;
+    if (!log.open(QIODevice::ReadOnly)) return 0;
+    int n = 0;
+    for (const auto &line : log.readAll().split('\n')) n += !line.isEmpty() && line != "1001";
+    return n;
   };
   c.check(b->results()->get(2).value("seconds").toInt() == 0 && b->results()->get(2).value("artist").toString().isEmpty(),
           "the plain document was listed with no length and no artist");
@@ -5619,6 +5624,60 @@ void runTelegramTests(Backend *b, QQuickWindow *w) {
   // A song's own picture, from inside its file: the public channel's fourth song has one.
   b->openPlaylist("telegram:-100777");
   c.check(c.until([&] { return b->results()->count() == 5; }), "the public channel's playlist opens");
+  // A song that plays while it is still coming down: the public channel's fifth song is
+  // served in blocks by the helper's own loopback server, a block every FIXTURE_BLOCK_DELAY.
+  {
+    const auto streamed = b->results()->get(4).value("id").toString();
+    c.check(account->cached(streamed).isEmpty(), "the fifth song is not in the cache yet");
+    b->playResults(4);
+    bool downloading = false, percent = false;
+    c.check(c.until([&] {
+      if (!(b->playing() && b->current().value("id").toString() == streamed && b->duration() > 0)) return false;
+      downloading = account->fetching(streamed);
+      auto label = shownItem(w->contentItem(), "durationLabel");
+      percent = label && label->property("text").toString().endsWith("%");
+      return true;
+    }, 20000), "a streamed song starts playing");
+    c.check(downloading, "while the rest of it is still coming down");
+    c.check(!percent, "with its length shown, not a percentage");
+    c.check(b->media()->source().host() == "127.0.0.1" && !b->media()->source().isLocalFile(), "from the helper's loopback address");
+    c.check(b->error().isEmpty(), "with no error shown");
+    const auto early = b->position();
+    c.shot("18-streaming");
+    c.check(c.until([&] { return !account->cached(streamed).isEmpty(); }, 20000), "the whole file lands in the cache");
+    c.check(b->playing() && c.until([&] { return b->position() > early + 700; }, 10000), "and playback carries on through that");
+    c.check(b->media()->source().host() == "127.0.0.1", "from the same stream");
+    b->seek(60000);
+    c.check(c.until([&] { return b->position() >= 59000 && b->position() < 75000 && b->playing(); }, 10000), "a seek inside it lands where it was asked");
+    c.check(c.until([&] { return b->position() > 61500; }, 10000), "and playback goes on from there");
+    c.check(b->error().isEmpty(), "with no error shown");
+    // The helper is lost while a song is being streamed: the player recovers on its own.
+    {
+      b->playResults(0);
+      c.check(c.until([&] { return b->playing() && b->current().value("id").toString() == b->results()->get(0).value("id").toString(); }, 20000), "another song plays");
+      account->clearAudio();
+      c.check(account->cached(streamed).isEmpty(), "and the streamed song is out of the cache");
+      b->playResults(4);
+      c.check(c.until([&] { return b->playing() && b->media()->source().host() == "127.0.0.1"; }, 20000), "the streamed song plays again from the stream");
+      QFile die(account->sessionFolder() + "/die");
+      c.check(die.open(QIODevice::WriteOnly), "the helper is told to die at the next block");
+      die.close();
+      c.check(c.until([&] { return !QFile::exists(die.fileName()); }, 20000), "and it does");
+      c.check(c.until([&] { return b->playing() && b->current().value("id").toString() == streamed && b->media()->mediaStatus() == QMediaPlayer::BufferedMedia
+                                   && !account->cached(streamed).isEmpty(); }, 40000),
+              "the song plays on, from a stream or a file that was brought down again");
+      c.check(b->error().isEmpty(), "with no error shown");
+      b->seek(30000);
+      c.check(c.until([&] { return b->position() > 30500 && b->playing(); }, 20000), "and seeking works");
+    }
+    // Skipping away lets go of the stream; the song is a file now.
+    b->playResults(0);
+    c.check(c.until([&] { return b->playing() && b->current().value("id").toString() == b->results()->get(0).value("id").toString(); }, 20000), "skipping to another song plays it");
+    b->playResults(4);
+    c.check(c.until([&] { return b->playing() && b->current().value("id").toString() == streamed && b->duration() > 0; }, 20000), "coming back to the streamed song plays");
+    c.check(b->media()->source().isLocalFile(), "from its file in the cache, with no stream");
+  }
+
   b->playResults(3);
   c.check(c.until([&] { return b->playing() && b->current().value("id").toString() == b->results()->get(3).value("id").toString(); }, 20000), "its fourth song plays");
   c.check(c.until([&] { return b->current().value("art").toString().contains("/cn100777/") ; }, 10000), "the picture inside the file becomes the song's art");

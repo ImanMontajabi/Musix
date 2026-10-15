@@ -125,7 +125,15 @@ public:
   void setLinger(int milliseconds) { m_linger.setInterval(milliseconds); }
   void setCacheLimits(int songs, qint64 bytes) { m_cacheSongs = songs; m_cacheBytes = bytes; }
   QString cached(const QString &songId) const;
-  void fetch(const QVariantMap &song, Fetched done);
+  // With `stream`, the song is also played as it comes down: `stream` gets a
+  // URL on the helper's loopback server as soon as there is one (never for a
+  // cached song, or when the helper cannot serve it, in which case `done`
+  // simply comes when the file is whole). `done` still comes at the end, with
+  // the whole file, in both cases. The helper is kept up for as long as the
+  // player may be reading from that URL: until releaseStream().
+  using Streamed = std::function<void(const QString &url, qint64 size)>;
+  void fetch(const QVariantMap &song, Fetched done, Streamed stream = {});
+  void releaseStream();
   // The same download for a song that will be wanted soon; nobody waits for it.
   void prefetch(const QVariantMap &song);
   void cancelFetch(const QString &songId);
@@ -176,7 +184,11 @@ private:
     Fetched done;
     bool started = false;
     qint64 received = 0, total = 0;
+    Streamed stream;           // wanted, and not yet given
+    bool streamable = false;   // the helper was asked to bring it down in blocks
+    bool streaming = false;    // a stream was asked for and has not failed: the player, not a percentage, shows it
   };
+  void requestStream(int job, Streamed stream);
   struct ArtTask {
     QString kind, chatId, messageId, name; // kind: thumb | photo
   };
@@ -216,7 +228,7 @@ private:
   void loadSources();
   void saveSources() const;
   QVariantMap songRow(const QVariantMap &source, const QJsonObject &song) const;
-  bool wanted() const { return m_holders > 0 || !m_jobs.isEmpty() || !m_afterReady.isEmpty() || !m_fetches.isEmpty() || m_artBusy || !m_artQueue.isEmpty() || m_linger.isActive(); }
+  bool wanted() const { return m_holders > 0 || !m_streamId.isEmpty() || !m_jobs.isEmpty() || !m_afterReady.isEmpty() || !m_fetches.isEmpty() || m_artBusy || !m_artQueue.isEmpty() || m_linger.isActive(); }
   void stopProcess();
   void releaseIfIdle();
   void start();
@@ -240,6 +252,7 @@ private:
   qint64 m_artBytes = 64LL * 1024 * 1024;
   QList<ArtTask> m_artQueue;
   QSet<QString> m_artFailed;
+  QString m_streamId;
   QSet<QString> m_noArt;
   QStringList m_noArtOrder;
   ArtTask m_artRunning;

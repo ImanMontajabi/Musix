@@ -164,7 +164,7 @@ if ready:
     telegram_helpers=out/"telegram-helper";telegram_helpers.mkdir(parents=True,exist_ok=True)
     for link,target in (("catalog.py","catalog_fixture.py"),("telegram.py","telegram_fixture.py")):
         (telegram_helpers/link).unlink(missing_ok=True);(telegram_helpers/link).symlink_to(root/"tests"/target)
-    e=profile("telegram-profile");e.update(SUNG_HELPER=str(telegram_helpers/"catalog.py"),SUNG_PYTHON=fixture_python,SUNG_TEST_OUTPUT=str(out/"telegram"),MUSIX_TELEGRAM_API_ID="12345",MUSIX_TELEGRAM_API_HASH="abcdef",FIXTURE_WAV_SECONDS="4")
+    e=profile("telegram-profile");e.update(SUNG_HELPER=str(telegram_helpers/"catalog.py"),SUNG_PYTHON=fixture_python,SUNG_TEST_OUTPUT=str(out/"telegram"),MUSIX_TELEGRAM_API_ID="12345",MUSIX_TELEGRAM_API_HASH="abcdef",FIXTURE_WAV_SECONDS="4",FIXTURE_BLOCK_DELAY="1.5")
     stage("telegram-dialog",[str(app),"--isolated","--telegram-test"],300,e)
     e=profile("interface-audit-profile");e.update(SUNG_HELPER=str(root/"tests/catalog_fixture.py"),SUNG_PYTHON=fixture_python,SUNG_TEST_OUTPUT=str(out/"interface-audit"))
     stage("interface-audit",[str(app),"--isolated","--interface-audit-test"],300,e)

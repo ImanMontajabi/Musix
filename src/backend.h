@@ -714,7 +714,8 @@ private:
   void telegramArtCleared();
   void applyTelegramCover(QVariantMap &playlist, const QString &key);
   void cancelTelegramFetch();
-  QString m_telegramFetchId, m_telegramPrefetchId;
+  void releaseTelegramStream();
+  QString m_telegramFetchId, m_telegramPrefetchId, m_telegramStreamId;
   QString pythonExecutable() const;
   QString ffmpegDirectory() const;
   QString writableRuntime() const;

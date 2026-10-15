@@ -50,6 +50,8 @@ Backend::Backend(QObject *parent) : QObject(parent) {
   connect(&m_telegram,&Telegram::songsReady,this,&Backend::telegramSongs);
   connect(&m_telegram,&Telegram::sourceRemoved,this,&Backend::telegramRemoved);
   connect(&m_telegram,&Telegram::songLearned,this,&Backend::telegramLearned);
+  // The helper is let go of once the player is no longer on the song it was serving (a handover moves on without playAt).
+  connect(this,&Backend::trackChanged,this,[this]{if(!m_telegramStreamId.isEmpty()&&current().value("id").toString()!=m_telegramStreamId)releaseTelegramStream();});
   connect(&m_telegram,&Telegram::coverReady,this,&Backend::telegramCover);
   connect(&m_telegram,&Telegram::artCleared,this,&Backend::telegramArtCleared);
   m_telegram.setCacheDirectory(Profile::location(QStandardPaths::CacheLocation)+"/telegram-audio");
@@ -711,14 +713,28 @@ void Backend::resolveCurrent(bool retry) {
     const auto token=m_trackToken;const auto song=current();const auto id=song.value("id").toString();
     m_telegramFetchId=id;
     m_telegram.keep({id});
-    m_telegram.fetch(song,[this,token,id](const QVariantMap &data,const QString &error){
+    // The song plays from the helper's loopback server as soon as it has the
+    // first block, while the download goes on; `done` then only brings the
+    // whole file in (for analysis, and for the next time).
+    auto streamed=std::make_shared<bool>(false);
+    m_telegram.fetch(song,[this,token,id,streamed](const QVariantMap &data,const QString &error){
       if(token!=m_trackToken)return;
       m_telegramFetchId.clear();
+      if(*streamed){
+        const QFileInfo done(data.value("file").toString());
+        if(error.isEmpty()&&done.isFile())analyseSource(current(),done.absoluteFilePath(),true);
+        return;
+      }
       if(!error.isEmpty()){m_resolving=false;m_wantPlay=false;notifyError(error,"play");emit playbackChanged();return;}
       const QFileInfo file(data.value("file").toString());
       if(!file.isFile()||!file.isReadable()){m_resolving=false;m_wantPlay=false;notifyError("The downloaded song can’t be opened.","play");emit playbackChanged();return;}
       m_media().setSource(QUrl::fromLocalFile(file.absoluteFilePath()));if(m_wantPlay)m_media().play();
       analyseSource(current(),file.absoluteFilePath(),true);
+      emit playbackChanged();
+    },[this,token,id,streamed](const QString &url,qint64){
+      if(token!=m_trackToken)return;
+      *streamed=true;m_telegramStreamId=id;
+      m_media().setSource(QUrl(url));if(m_wantPlay)m_media().play();
       emit playbackChanged();
     });
     emit playbackChanged();return;
@@ -1636,7 +1652,13 @@ void Backend::telegramArtCleared() {
   }
   emit libraryChanged();m_saveTimer.start();
 }
+void Backend::releaseTelegramStream() {
+  if(m_telegramStreamId.isEmpty())return;
+  m_telegramStreamId.clear();
+  m_telegram.releaseStream();
+}
 void Backend::cancelTelegramFetch() {
+  releaseTelegramStream();
   if(m_telegramFetchId.isEmpty())return;
   m_telegram.cancelFetch(m_telegramFetchId);
   m_telegramFetchId.clear();

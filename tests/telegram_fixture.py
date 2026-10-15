@@ -3,7 +3,11 @@
 stdout, a scripted account behind them, and no Telegram. FIXTURE_MODE picks a
 misbehaviour: fetchslow (a download takes its time, so it can be cancelled), flood (a sync ends with a long FLOOD_WAIT after its first page), slow (a sync takes
 its time, so it can be cancelled), crash (dies once after the first state, then behaves), silent
-(never says anything), exit2 (says why and leaves, asking for no restart)."""
+(never says anything), exit2 (says why and leaves, asking for no restart).
+
+Message 1004 is streamed: with "stream": true it is brought down in three
+blocks, 0.7 s apart, by the real helper's Transfer and served by its real
+StreamServer, so the player has something to open before the download is over."""
 import json, os, sys, threading, time
 from pathlib import Path
 
@@ -90,10 +94,10 @@ def sync(request, replies):
 # Long enough, when the UI suite asks, for a crossfade to fit in a song.
 WAV_SECONDS = int(os.environ.get('FIXTURE_WAV_SECONDS') or 1)
 
-def wav_bytes():
+def wav_bytes(seconds=WAV_SECONDS):
     import io, wave
     buffer = io.BytesIO()
-    w = wave.open(buffer, 'wb'); w.setnchannels(1); w.setsampwidth(2); w.setframerate(8000); w.writeframes(b'\0\0' * 8000 * WAV_SECONDS); w.close()
+    w = wave.open(buffer, 'wb'); w.setnchannels(1); w.setsampwidth(2); w.setframerate(8000); w.writeframes(b'\0\0' * 8000 * seconds); w.close()
     return buffer.getvalue()
 
 def fetch(request, replies):
@@ -126,6 +130,75 @@ def fetch(request, replies):
         result['art'] = str(inside)
     replies.put(dict(reply, ok=True, result=result))
 
+# --- Message 1004: the real helper's blocks and loopback server, a slow Telegram behind them ---
+import asyncio, importlib.util
+STREAMED = 1004
+_streaming = {}
+
+def _helper():
+    if 'module' not in _streaming:
+        source = Path(__file__).resolve().parents[1] / 'helper' / 'telegram.py'
+        spec = importlib.util.spec_from_file_location('real_helper', source)
+        module = importlib.util.module_from_spec(spec); spec.loader.exec_module(module)
+        loop = asyncio.new_event_loop()
+        threading.Thread(target=loop.run_forever, daemon=True).start()
+
+        class Document:
+            def __init__(self, payload): self.payload, self.size = payload, len(payload)
+
+        class Client:
+            async def iter_download(self, document, offset=0, request_size=None, limit=None, file_size=None):
+                await asyncio.sleep(float(os.environ.get('FIXTURE_BLOCK_DELAY', '0.7')))
+                if (directory / 'die').exists():             # a test asks for the helper to be lost once, mid-stream
+                    (directory / 'die').unlink()
+                    os._exit(1)
+                yield document.payload[offset:offset + request_size]
+
+        class Account:
+            client = Client()
+            def emit(self, event): emit(**event)
+            async def guarded(self, call, job=None): return await call()
+
+        _streaming.update(module=module, loop=loop, document=Document, account=Account(), transfers={}, tasks={}, server=asyncio.run_coroutine_threadsafe(_make_server(module), loop).result(10))
+    return _streaming
+
+async def _make_server(module): return module.StreamServer()
+
+def stream_fetch(request, replies):
+    h = _helper()
+    job, reply = request['job'], {'id': request['id']}
+    out = Path(request['directory'])
+    data = wav_bytes(96)                                    # three blocks of silence
+    part, target = out / (request['name'] + '.part'), out / (request['name'] + '.wav')
+    transfer = h['module'].Transfer(h['account'], job, request['name'], h['document'](data), len(data), 'audio/x-wav', part, target)
+    h['transfers'][job] = transfer
+
+    async def run():
+        try:
+            await transfer.run()
+        except asyncio.CancelledError:
+            replies.put(dict(reply, ok=False, error='Cancelled.')); return
+        except Exception as error:
+            replies.put(dict(reply, ok=False, error=str(error))); return
+        finally:
+            h['transfers'].pop(job, None)
+        replies.put(dict(reply, ok=True, result=dict(file=str(target), size=len(data), tags=dict(seconds=96, title='Streamed', artist='Tag Artist'))))
+    h['tasks'][job] = asyncio.run_coroutine_threadsafe(run(), h['loop'])
+
+def stream_url(request, replies):
+    reply, job = {'id': request['id']}, request['fetchJob']
+    if 'module' not in _streaming:
+        replies.put(dict(reply, ok=False, error='This song can’t be streamed.')); return
+    h = _streaming
+    for _ in range(300):
+        if job in h['transfers']: break
+        time.sleep(0.05)
+    else:
+        replies.put(dict(reply, ok=False, error='That song is not being downloaded.')); return
+    transfer = h['transfers'][job]
+    url = asyncio.run_coroutine_threadsafe(h['server'].url(transfer), h['loop']).result(10)
+    replies.put(dict(reply, ok=True, result=dict(url=url, size=transfer.size)))
+
 import queue
 cancelled = set()
 replies = queue.Queue()
@@ -153,6 +226,15 @@ for line in sys.stdin:
             reply['result'] = dict(chat=dict(chatId=-100777, title='Public Music', kind='channel', username='public_music'))
         else:
             reply.update(ok=False, error='There is no public channel called %s.' % request['query'])
+    elif cmd == 'fetch' and request.get('stream') and int(request['messageId']) == STREAMED:
+        with open(directory / 'fetches.log', 'a') as log:
+            log.write('%d\n' % STREAMED)
+        stream_fetch(request, replies)
+        continue
+    elif cmd == 'stream':
+        worker = threading.Thread(target=stream_url, args=(request, replies), daemon=True)
+        workers.append(worker); worker.start()
+        continue
     elif cmd in ('sync', 'fetch'):
         worker = threading.Thread(target={'sync': sync, 'fetch': fetch}[cmd], args=(request, replies), daemon=True)
         workers.append(worker); worker.start()
@@ -161,6 +243,8 @@ for line in sys.stdin:
         reply['result'] = art(request)
     elif cmd == 'cancel':
         cancelled.add(request['job'])
+        if request['job'] in _streaming.get('tasks', {}):
+            _streaming['tasks'][request['job']].cancel()
     elif cmd == 'phone':
         if not request['phone'].startswith('+49'):
             reply.update(ok=False, error='That phone number isn’t valid.')

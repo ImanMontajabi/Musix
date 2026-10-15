@@ -5,6 +5,8 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QSignalSpy>
+#include <QTcpSocket>
+#include <QUrl>
 #include <QJsonArray>
 #include <QTemporaryDir>
 #include <QtTest>
@@ -15,6 +17,34 @@ struct Got {
   QVariantMap data;
   QString error;
 };
+
+// One GET against the helper's loopback server: {status, body}. The body is read
+// to the length the headers promise, or until the server cuts the connection.
+static QPair<int, QByteArray> httpGet(const QString &address, const QString &range = {}, const QString &path = {}) {
+  const QUrl url(address);
+  QTcpSocket socket;
+  socket.connectToHost(url.host(), url.port());
+  if (!socket.waitForConnected(5000)) return {0, {}};
+  QByteArray request = "GET " + (path.isEmpty() ? url.path() : path).toUtf8() + " HTTP/1.1\r\nHost: test\r\nConnection: close\r\n";
+  if (!range.isEmpty()) request += "Range: bytes=" + range.toUtf8() + "\r\n";
+  socket.write(request + "\r\n");
+  QByteArray all;
+  qint64 length = -1;
+  int headerEnd = -1;
+  while (true) {
+    if (headerEnd < 0 && (headerEnd = all.indexOf("\r\n\r\n")) >= 0) {
+      const auto head = all.left(headerEnd).toLower();
+      const auto at = head.indexOf("content-length:");
+      length = at >= 0 ? head.mid(at + 15, head.indexOf("\r\n", at) < 0 ? -1 : head.indexOf("\r\n", at) - at - 15).trimmed().toLongLong() : 0;
+    }
+    if (headerEnd >= 0 && all.size() - (headerEnd + 4) >= length) break;
+    if (!socket.waitForReadyRead(10000)) break;
+    all += socket.readAll();
+  }
+  all += socket.readAll();
+  const int status = all.mid(9, 3).toInt();
+  return {status, headerEnd >= 0 ? all.mid(headerEnd + 4) : QByteArray()};
+}
 
 class TelegramTest : public QObject {
   Q_OBJECT
@@ -496,6 +526,111 @@ private slots:
     QVERIFY(QDir(cache()).entryList(QDir::Files).isEmpty());
     // The helper is still there for the next song.
     QCOMPARE(t->state(), QString("ready"));
+  }
+  // --- Playing while it comes down -----------------------------------------
+  void aStreamedSongGivesAUrlBeforeItIsWholeAndTheFileAtTheEnd() {
+    signIn();
+    auto t = make();
+    t->setCacheDirectory(cache());
+    Got got;
+    QString url;
+    qint64 size = 0;
+    t->fetch(song("tg_stream", 1004), into(got), [&](const QString &u, qint64 n) { url = u; size = n; });
+    QVERIFY(QTest::qWaitFor([&] { return !url.isEmpty(); }, 15000));
+    QVERIFY2(url.startsWith("http://127.0.0.1:"), qPrintable(url));
+    QVERIFY(size > 1000000);
+    QVERIFY(!got.done);                        // playable, not yet whole
+    QVERIFY(t->fetching("tg_stream"));
+    QVERIFY(t->download().isEmpty());          // the player, not a percentage, shows it
+    QVERIFY(t->cached("tg_stream").isEmpty());
+    const auto first = httpGet(url, "0-11");
+    QCOMPARE(first.first, 206);
+    QCOMPARE(first.second.left(4), QByteArray("RIFF"));
+    QCOMPARE(first.second.size(), 12);
+    QVERIFY(QTest::qWaitFor([&] { return got.done; }, 15000));
+    QVERIFY2(got.error.isEmpty(), qPrintable(got.error));
+    QCOMPARE(QFileInfo(got.data.value("file").toString()).size(), size);
+    QVERIFY(!t->cached("tg_stream").isEmpty());
+    QVERIFY(QDir(cache()).entryList({"*.part"}).isEmpty());
+    // Whole now, the same URL still answers: the player may be partway through it.
+    QCOMPARE(httpGet(url, "0-3").second, QByteArray("RIFF"));
+  }
+  void theHelperStaysForAsLongAsThePlayerMayBeReading() {
+    signIn();
+    auto t = make();
+    t->setCacheDirectory(cache());
+    t->setLinger(300);
+    Got got;
+    QString url;
+    t->fetch(song("tg_stream", 1004), into(got), [&](const QString &u, qint64) { url = u; });
+    QVERIFY(QTest::qWaitFor([&] { return got.done; }, 15000));
+    QTest::qWait(1200);                        // four times the linger
+    QCOMPARE(t->state(), QString("ready"));
+    QCOMPARE(httpGet(url, "0-3").second, QByteArray("RIFF"));
+    t->releaseStream();
+    QVERIFY(reach(*t, "closed", 5000));
+  }
+  void skippingAwayFromAStreamedSongEndsItsUrlAndLeavesNothing() {
+    signIn();
+    auto t = make();
+    t->setCacheDirectory(cache());
+    Got got;
+    QString url;
+    t->fetch(song("tg_stream", 1004), into(got), [&](const QString &u, qint64) { url = u; });
+    QVERIFY(QTest::qWaitFor([&] { return !url.isEmpty(); }, 15000));
+    QCOMPARE(httpGet(url, "0-3").first, 206);
+    t->cancelFetch("tg_stream");
+    t->releaseStream();
+    QTest::qWait(500);
+    QCOMPARE(httpGet(url, "0-3").first, 404);
+    QVERIFY(!got.done);
+    QVERIFY(QDir(cache()).entryList(QDir::Files).isEmpty());
+  }
+  void anotherProgramCannotReadItWithoutTheToken() {
+    signIn();
+    auto t = make();
+    t->setCacheDirectory(cache());
+    Got got;
+    QString url;
+    t->fetch(song("tg_stream", 1004), into(got), [&](const QString &u, qint64) { url = u; });
+    QVERIFY(QTest::qWaitFor([&] { return !url.isEmpty(); }, 15000));
+    const auto name = QUrl(url).path().section('/', -1);
+    QCOMPARE(httpGet(url, {}, "/" + name).first, 404);
+    QCOMPARE(httpGet(url, {}, "/guess/" + name).first, 404);
+    QCOMPARE(httpGet(url, "0-3").first, 206);
+    t->cancelFetch("tg_stream");
+    t->releaseStream();
+  }
+  void aSongThatCannotBeStreamedStillComesDownAndNobodyIsToldOfAStream() {
+    signIn();
+    auto t = make();
+    t->setCacheDirectory(cache());
+    Got got;
+    bool streamed = false;
+    t->fetch(song("tg_whole", 1000), into(got), [&](const QString &, qint64) { streamed = true; });
+    QVERIFY(QTest::qWaitFor([&] { return got.done; }, 15000));
+    QVERIFY2(got.error.isEmpty(), qPrintable(got.error));
+    QVERIFY(!streamed);
+    QVERIFY(!t->cached("tg_whole").isEmpty());
+    // A cached song needs no stream either.
+    got = {};
+    t->fetch(song("tg_whole", 1000), into(got), [&](const QString &, qint64) { streamed = true; });
+    QVERIFY(got.done && got.data.value("cached").toBool());
+    QVERIFY(!streamed);
+  }
+  void askingAgainForAStreamingSongGivesTheSameUrl() {
+    signIn();
+    auto t = make();
+    t->setCacheDirectory(cache());
+    Got got;
+    QString first, second;
+    t->fetch(song("tg_stream", 1004), into(got), [&](const QString &u, qint64) { first = u; });
+    QVERIFY(QTest::qWaitFor([&] { return !first.isEmpty(); }, 15000));
+    t->fetch(song("tg_stream", 1004), into(got), [&](const QString &u, qint64) { second = u; });   // the player lost it
+    QVERIFY(QTest::qWaitFor([&] { return !second.isEmpty(); }, 15000));
+    QCOMPARE(second, first);
+    QCOMPARE(fetchesLogged(), 1);
+    QVERIFY(QTest::qWaitFor([&] { return got.done; }, 15000));
   }
   void askingForASongAlreadyComingDownloadsItOnce() {
     signIn();
