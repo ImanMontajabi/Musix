@@ -910,7 +910,7 @@ void Backend::next() {
     playAt(0,1);
     return;
   }
-  if (autoplay() && !current().value("videoId").toString().isEmpty()) {
+  if (autoplay() && !current().value("videoId").toString().isEmpty() && current().value("source")!="telegram") {
     m_resolving = true;
     emit playbackChanged();
     const QString id = current().value("id").toString();
@@ -1027,7 +1027,7 @@ void Backend::seek(qint64 p) {
 }
 void Backend::radio(const QVariantMap &item) {
   auto id = item.value("videoId").toString();
-  if (id.isEmpty())
+  if (id.isEmpty() || item.value("source")=="telegram")
     return;
   playItem(item);
   request("radio", {{"op", "radio"}, {"id", id}},
@@ -1074,7 +1074,9 @@ void Backend::fetchLyrics() {
   if(isServerSource(current().value("source"))){
     m_server.lyrics(current(),[this,token](const QVariantMap &data,const QString &error){if(token!=m_trackToken)return;applyLyrics(data);if(!error.isEmpty())notifyError(error);});return;
   }
-  request("lyrics",{{"op",local.isEmpty()?"lyrics":"local-lyrics"},{"id",id},{"title",current().value("title")},{"artist",current().value("artist")},{"album",current().value("album")},{"seconds",duration()/1000},{"fallback",lyricsFallback()},{"lyricCache",Profile::location(QStandardPaths::CacheLocation)+"/lyrics"}},[this,id,token](const QVariantMap &data){
+  // A Telegram id is no YouTube video, so it takes the lookup by title and artist that local files do.
+  const bool byName=!local.isEmpty()||current().value("source")=="telegram";
+  request("lyrics",{{"op",byName?"local-lyrics":"lyrics"},{"id",id},{"title",current().value("title")},{"artist",current().value("artist")},{"album",current().value("album")},{"seconds",duration()/1000},{"fallback",lyricsFallback()},{"lyricCache",Profile::location(QStandardPaths::CacheLocation)+"/lyrics"}},[this,id,token](const QVariantMap &data){
     if(id!=current().value("id").toString()||token!=m_trackToken)return;
     applyLyrics(data);if(!data.value("ok").toBool())notifyError(data.value("error").toString());
   });
@@ -1303,7 +1305,7 @@ QString Backend::sleepLabel() const {
              : "Off";
 }
 void Backend::copyLink(const QVariantMap &t) {
-  if(isServerSource(t.value("source"))){QGuiApplication::clipboard()->setText(t.value("title").toString()+" — "+t.value("artist").toString());emit toast("Song details copied");return;}
+  if(isServerSource(t.value("source")) || t.value("source")=="telegram"){QGuiApplication::clipboard()->setText(t.value("title").toString()+" — "+t.value("artist").toString());emit toast("Song details copied");return;}
   if(!t.value("localPath").toString().isEmpty()){QGuiApplication::clipboard()->setText(t.value("localPath").toString());emit toast("Path copied");return;}
   QString url = "https://music.youtube.com/";
   if (!t.value("videoId").toString().isEmpty())

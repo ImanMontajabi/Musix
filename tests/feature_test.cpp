@@ -5517,6 +5517,8 @@ void runTelegramTests(Backend *b, QQuickWindow *w) {
   // Saved Messages holds two ordinary songs and a plain document that tells
   // nothing about itself; message 1001 is slow to download, so it can be skipped.
   const int wavSeconds = qMax(1, qEnvironmentVariableIntValue("FIXTURE_WAV_SECONDS"));
+  const QString requestLog = qEnvironmentVariable("SUNG_TEST_OUTPUT") + "/requests.log";
+  qputenv("SUNG_REQUEST_LOG", requestLog.toUtf8());
   account->setLinger(1500); // the helper stays this long after a song; the real wait is 90 s
   b->openPlaylist("telegram:4242");
   c.check(c.until([&] { return b->results()->count() == 3; }), "a Telegram playlist opens like any other");
@@ -5541,6 +5543,23 @@ void runTelegramTests(Backend *b, QQuickWindow *w) {
   c.check(settledSource("4242"), "refreshing the source again");
   c.check(b->results()->get(2).value("title").toString() == "Tagged 1002" && b->results()->get(2).value("artist").toString() == "Tag Artist",
           "keeps the title and artist the file gave");
+
+  // Lyrics and radio.
+  {
+    b->playResults(2);
+    c.check(c.until([&] { return b->playing() && b->current().value("id") == songId(2); }), "the song is playing");
+    // Nothing of Telegram's is a YouTube video: lyrics are found by name, and no radio is asked for.
+    QFile::remove(requestLog);
+    b->fetchLyrics();
+    c.check(c.until([&] { return !b->lyricsBusy(); }, 10000), "lyrics for a Telegram song are looked up");
+    b->radio(b->results()->get(2));
+    QFile log(requestLog);
+    QStringList ops;
+    if (log.open(QIODevice::ReadOnly))
+      for (const auto &line : log.readAll().split('\n')) if (!line.isEmpty()) ops << QJsonDocument::fromJson(line).object().value("op").toString();
+    c.check(ops.contains("local-lyrics") && !ops.contains("lyrics") && !ops.contains("radio"), "by title and artist, with no YouTube lookup of a Telegram id");
+    c.check(b->current().value("id") == songId(2), "and starting a radio from it does nothing");
+  }
 
   // The same song again is the cache: no second download.
   const int downloads = fetchLog();
