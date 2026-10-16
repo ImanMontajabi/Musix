@@ -55,6 +55,10 @@ def stage(name,cmd,timeout=600,env=None,app_free=False,retry=False):
         for arg in cmd:
             if isinstance(arg,str) and arg.startswith(str(out)+'/') and pathlib.Path(arg).is_dir() and pathlib.Path(arg).name==name:
                 pathlib.Path(arg).rename(pathlib.Path(arg).with_name(name+'.first-try'))
+        # A retry never inherits what the first try changed: the UI suites toggle
+        # state (a like), so a profile left behind failed the retry on its own.
+        if env and env.get('MUSIX_PROFILE') and (p:=pathlib.Path(env['MUSIX_PROFILE'])).is_dir():
+            p.rename(p.with_name(p.name+'.first-try'))
         again=stage(name,cmd,timeout,env,app_free,retry=False)
         rows[-1]['detail']=f'first try failed ({why}); '+('passed' if again else 'failed')+' on the second'
         return again
