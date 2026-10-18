@@ -16,6 +16,7 @@
 #include <QAbstractItemModelTester>
 #include <QRandomGenerator>
 #include <limits>
+#include <sys/stat.h>
 #include <cmath>
 
 class BackendTest : public QObject {
@@ -258,6 +259,27 @@ private slots:
     // Another source's album is still sent.
     QVariantMap local{{"id","local_1"},{"title","Song"},{"artist","Artist"},{"album","Real Album"}};
     QCOMPARE(Scrobbler::listenFor(local,1700000000).value("track_metadata").toMap().value("release_name").toString(),QString("Real Album"));
+  }
+  // macOS has no Secret Service, so the listening token is a file only its owner can read.
+  void theListeningTokenIsKeptInAnOwnerOnlyFile() {
+#ifdef Q_OS_MACOS
+    QTemporaryDir dir;const auto path=dir.filePath("scrobbler/token");
+    {
+      Scrobbler first(nullptr,false);first.setTokenFile(path);QVERIFY(first.keyringAvailable());
+      bool ok=false;QByteArray got;
+      first.secret({"lookup"},{},[&](bool o,QByteArray){ok=o;});QVERIFY(!ok);   // nothing stored yet
+      first.secret({"store"},"abc-token",[&](bool o,QByteArray){ok=o;});QVERIFY(ok);
+      struct stat st;
+      QVERIFY(stat(QFile::encodeName(path).constData(),&st)==0);QCOMPARE(int(st.st_mode&0777),0600);
+      QVERIFY(stat(QFile::encodeName(QFileInfo(path).absolutePath()).constData(),&st)==0);QCOMPARE(int(st.st_mode&0777),0700);
+      first.secret({"lookup"},{},[&](bool o,QByteArray t){ok=o;got=t;});QVERIFY(ok);QCOMPARE(got,QByteArray("abc-token"));
+      first.secret({"store"},"second",[&](bool o,QByteArray){ok=o;});first.secret({"lookup"},{},[&](bool,QByteArray t){got=t;});QCOMPARE(got,QByteArray("second"));
+    }
+    // A new run finds it again and is signed in without asking.
+    Scrobbler again(nullptr,true);again.setTokenFile(path);again.setEnabled(true);
+    QTRY_VERIFY_WITH_TIMEOUT(again.hasToken(),3000);
+    again.signOut();QVERIFY(!QFile::exists(path));QVERIFY(!again.hasToken());
+#endif
   }
   void libraryPolish() {
     Backend b;b.setWatchMusicFolders(false);b.clearQueue();b.m_localTracks.clear();b.m_playlists.clear();

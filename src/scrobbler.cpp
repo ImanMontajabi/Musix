@@ -1,9 +1,14 @@
 #include "scrobbler.h"
+#include "profile.h"
 #include <QDateTime>
+#include <QDir>
+#include <QFile>
+#include <QSaveFile>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QNetworkReply>
 #include <QNetworkRequest>
+#include <QFileInfo>
 #include <QProcess>
 #include <QStandardPaths>
 #include <QUrl>
@@ -19,6 +24,7 @@ QStringList clearArgs() { return QStringList{"clear"} + tokenAttributes; }
 } // namespace
 
 Scrobbler::Scrobbler(QObject *parent, bool restore) : QObject(parent) {
+  m_tokenFile = Profile::location(QStandardPaths::AppDataLocation) + "/scrobbler/token";
   m_retry.setSingleShot(true);
   m_retry.setInterval(60000);
   connect(&m_retry, &QTimer::timeout, this, &Scrobbler::flush);
@@ -55,12 +61,33 @@ Scrobbler::~Scrobbler() {
 
 bool Scrobbler::keyringAvailable() const {
 #ifdef Q_OS_MACOS
-  // secret-tool talks to a Secret Service, which macOS does not have. The
-  // Keychain is the answer there, once Musix is signed with a stable identity.
-  return false;
+  // No Secret Service here; the token is kept in a file only its owner can read (fileSecret).
+  return true;
 #else
   return !QStandardPaths::findExecutable("secret-tool").isEmpty();
 #endif
+}
+
+void Scrobbler::fileSecret(const QStringList &args, const QByteArray &input, std::function<void(bool, QByteArray)> callback) {
+  const auto operation = args.value(0);
+  if (operation == "lookup") {
+    QFile file(m_tokenFile);
+    if (!file.open(QIODevice::ReadOnly)) return callback(false, {});
+    return callback(true, file.readAll());
+  }
+  if (operation == "clear") {
+    callback(!QFile::exists(m_tokenFile) || QFile::remove(m_tokenFile), {});
+    return;
+  }
+  const QDir directory = QFileInfo(m_tokenFile).dir();
+  if (!directory.mkpath(".")) return callback(false, {});
+  QFile::setPermissions(directory.absolutePath(), QFileDevice::ReadOwner | QFileDevice::WriteOwner | QFileDevice::ExeOwner);
+  QSaveFile file(m_tokenFile);
+  // Restricted before anything is written, so the token is never readable by anyone else, not even briefly.
+  if (!file.open(QIODevice::WriteOnly) || !file.setPermissions(QFileDevice::ReadOwner | QFileDevice::WriteOwner) ||
+      file.write(input) != input.size() || !file.commit())
+    return callback(false, {});
+  callback(true, {});
 }
 
 qint64 Scrobbler::thresholdFor(qint64 durationMs) {
@@ -283,6 +310,10 @@ void Scrobbler::secret(const QStringList &args, const QByteArray &input,
     callback(false, {});
     return;
   }
+#ifdef Q_OS_MACOS
+  fileSecret(args, input, callback);
+  return;
+#endif
   auto *process = new QProcess(this);
   auto *timer = new QTimer(process);
   timer->setSingleShot(true);

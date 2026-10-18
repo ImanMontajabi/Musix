@@ -50,6 +50,9 @@ public:
   bool hasToken() const { return !m_token.isEmpty(); }
   int pending() const { return m_queue.size(); }
   bool keyringAvailable() const;
+  // Where the token lives on macOS, which has no Secret Service: a 0600 file, like the Telegram session.
+  QString tokenFile() const { return m_tokenFile; }
+  void setTokenFile(const QString &path) { m_tokenFile = path; }
 
   // Check a token and remember it when the server accepts it.
   Q_INVOKABLE void signIn(const QString &token);
@@ -63,6 +66,7 @@ signals:
   void changed();
 
 private:
+  friend class BackendTest;
   void send(const QVariantMap &payload, const QString &type,
             std::function<void(bool, const QString &)> done);
   void flush();
@@ -74,7 +78,8 @@ private:
 
   QSettings m_settings;
   QNetworkAccessManager m_network;
-  QString m_token, m_account, m_status;
+  void fileSecret(const QStringList &args, const QByteArray &input, std::function<void(bool, QByteArray)> callback);
+  QString m_token, m_account, m_status, m_tokenFile;
   bool m_busy = false, m_flushing = false;
   // Listens the server has not taken yet, oldest first.
   QVariantList m_queue;

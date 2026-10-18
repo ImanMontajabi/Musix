@@ -119,9 +119,9 @@ Your data lives in `~/Library/Application Support/Sung/sung/`, settings in `~/Li
 
 **My server password is not remembered.** It is not saved on macOS. Storing it needs a freedesktop secret service, which macOS does not have, so a server connection lasts for the session and the app says so when you connect. Address and username are remembered; the password is not.
 
-**ListenBrainz scrobbling will not stay signed in.** Same reason — the token has nowhere to be stored, and Settings says a system keyring is needed.
+**ListenBrainz scrobbling.** Settings → Connections → Listening history takes your user token. macOS has no freedesktop secret service, so the token is kept in a file only you can read (`scrobbler/token` in the app's data folder, mode 0600) rather than in the Keychain.
 
-**Media keys and notifications do nothing.** Both go through D-Bus, which macOS does not have. They work on Linux only.
+**Media keys.** On macOS they, Control Center and AirPods controls go through the system's Now Playing (MediaPlayer.framework). If another app (a browser tab playing video, say) played most recently, macOS may send the keys to it; start a song in Musix and they come back.
 
 ## Development
 

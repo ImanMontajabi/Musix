@@ -2022,6 +2022,7 @@ ApplicationWindow {
         }
     }
     ServerConnection { id: serverConnection }
+    ListeningHistory { id: listeningHistory }
     TelegramConnection { id: telegramConnection; onSourcesRequested: { telegramSources.open(); telegramConnection.close() } }
     TelegramSources { id: telegramSources }
     MDialog {
@@ -2227,6 +2228,7 @@ ApplicationWindow {
                     SungText {heading: true;text:"Connections";font.pixelSize:Theme.titleLarge;font.weight:Font.Medium;Layout.bottomMargin:Theme.space8}
                     ColumnLayout {id:options3;objectName:"settingsRows3";Layout.fillWidth:true;Layout.minimumWidth:0;spacing:Theme.space12
                 MSettingRow {opens:true;objectName:"musicServerButton";text:"Music server";visible:settingsDialog.matches("Music server library");onClicked:{window.openFromSettings(serverConnection)}}
+                MSettingRow {opens:true;objectName:"listeningHistoryButton";text:app.scrobbler.hasToken?"Listening history · "+(app.scrobbler.account||"signed in"):"Listening history";visible:settingsDialog.matches("Listening history scrobble ListenBrainz listens token");onClicked:{window.openFromSettings(listeningHistory)}}
                 MSettingRow {opens:true;objectName:"telegramButton";text:app.telegram.signedIn?"Telegram · "+app.telegram.name:"Telegram";visible:settingsDialog.matches("Telegram account sign in phone channels music");onClicked:{window.openFromSettings(telegramConnection)}}
                 MSettingRow {opens:true;objectName:"telegramSourcesButton";text:"Telegram music";visible:app.telegram.signedIn && settingsDialog.matches("Telegram music chats channels saved messages playlists");onClicked:{window.openFromSettings(telegramSources)}}
                 SungText { visible: settingsDialog.matches("YouTube cookies import replace remove sign in") || settingsDialog.matches("YouTube streaming quality standard data saver bitrate"); text: "YouTube"; font.pixelSize: Theme.labelLarge; font.weight: Font.Medium; color: Theme.muted; Layout.topMargin: Theme.space12 }
