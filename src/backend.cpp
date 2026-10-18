@@ -212,6 +212,9 @@ Backend::Backend(QObject *parent) : QObject(parent) {
             if(!isActive(*deck)){if(err!=QMediaPlayer::NoError)clearSpare();return;}
             if (err == QMediaPlayer::NoError || m_recovering)
               return;
+            // The device the sound was going to is gone: nothing is wrong with the song, so no error, and the
+            // player is rebuilt on the device the system moved to.
+            if (outputFault()) { recoverFromOutputFault(); return; }
             if(!current().value("localPath").toString().isEmpty()){
               m_resolving=false;m_wantPlay=false;notifyError("Could not play this local file. Check that it is readable and supported.","play");emit playbackChanged();return;
             }
@@ -1967,7 +1970,8 @@ void Backend::applyAudioDevice() {
   for(const auto &device:QMediaDevices::audioOutputs())if(QString::fromLatin1(device.id().toBase64())==audioDeviceId()){chosen=device;found=true;break;}
   // A disconnected device falls back immediately. It cannot steal playback if it reconnects.
   if(!found)m_settings.remove("audioDevice");
-  if(activeAudio().device()!=chosen)activeAudio().setDevice(chosen);
+  // Both decks' outputs: the idle one would otherwise keep naming a device that is gone.
+  for(auto *audio:{&m_audioA,&m_audioB})if(audio->device()!=chosen)audio->setDevice(chosen);
   m_outputId=chosen.id();m_outputDescription=chosen.description();
 }
 void Backend::playCollection(int index) {

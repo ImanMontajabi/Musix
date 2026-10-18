@@ -186,6 +186,18 @@ private slots:
     b.noteWatchedOutput("airpods",true);b.noteWatchedOutput("speakers",false);QVERIFY(!b.playing()); // disconnected
     b.play();QTRY_VERIFY(b.playing());b.noteWatchedOutput("speakers",false);QVERIFY(b.playing());     // no change, no pause
     b.m_watchedOutput.clear();
+    // The device under a song goes away and the player faults with it: no error banner, the place is kept, and Play
+    // carries on from there on the device the system moved to.
+    b.play();QTRY_VERIFY(b.playing());b.seek(20000);QTRY_VERIFY_WITH_TIMEOUT(b.position()>=20000&&b.position()<22000,4000);
+    b.noteRouteChange();b.pause();emit b.m_media().errorOccurred(QMediaPlayer::ResourceError,"output gone");
+    QVERIFY(b.error().isEmpty());QVERIFY(!b.playing());QVERIFY(b.position()>=19500&&b.position()<23000);
+    b.play();QTRY_VERIFY_WITH_TIMEOUT(b.playing()&&b.position()>=19500,5000);QVERIFY(b.error().isEmpty());
+    // Not paused (the setting is off): the song goes on by itself.
+    b.noteRouteChange();emit b.m_media().errorOccurred(QMediaPlayer::ResourceError,"output gone");
+    QVERIFY(b.error().isEmpty());QTRY_VERIFY_WITH_TIMEOUT(b.playing()&&b.position()>=19500,5000);
+    // An error with the output unchanged is still the song's, and still reported.
+    b.m_routeChanged.invalidate();emit b.m_media().errorOccurred(QMediaPlayer::ResourceError,"bad file");
+    QVERIFY(!b.error().isEmpty());QVERIFY(!b.m_wantPlay);b.dismissError();b.pause();
     b.play();QTRY_VERIFY(b.playing());b.m_outputId="removed-device";b.outputsChanged();QVERIFY(!b.playing());
     b.m_settings.setValue("pauseOnDisconnect",false);b.play();QTRY_VERIFY(b.playing());b.m_outputId="removed-device";b.outputsChanged();QVERIFY(b.playing());
     auto saved=b.m_sessions.first().toMap();auto unavailable=song;unavailable["available"]=false;

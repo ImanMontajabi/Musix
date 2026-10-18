@@ -693,7 +693,8 @@ private:
   QString m_serverArtwork;
   std::shared_ptr<QTemporaryDir> m_serverArtDirectory;
   QTimer m_serverListenTimer;
-  QElapsedTimer m_serverElapsed;
+  QElapsedTimer m_serverElapsed,m_routeChanged;
+  qint64 m_routePosition=0;
   quint64 m_serverListenToken=0;
   qint64 m_serverListened=0,m_serverStarted=0;
   bool m_serverSubmitted=false;
@@ -704,6 +705,9 @@ private:
   void recoverStream();
   void restorePlaybackPosition();
   void applyAudioDevice();
+  void noteRouteChange();
+  bool outputFault();
+  void recoverFromOutputFault();
   // Where the catalogue helper, its Python and its ffmpeg actually live. A
   // packaged app carries all three; a checkout keeps using what the scripts
   // export. The runtime is copied out of the read-only bundle so that the

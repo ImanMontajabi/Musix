@@ -301,12 +301,42 @@ bool Backend::restoreSession(const QString &id){
 }
 // Off unless QT_LOGGING_RULES="musix.output.info=true": what the output was, what it became, and why a pause did or did not follow.
 Q_LOGGING_CATEGORY(lcOutput,"musix.output",QtWarningMsg)
+// The output the sound goes to is changing: the player may fault for a moment, and where it was is kept for
+// recovering from that, since a faulted player reports 0.
+void Backend::noteRouteChange(){
+  m_routeChanged.start();
+  if(m_media().source().isEmpty())m_routePosition=0;
+  else if(m_media().error()==QMediaPlayer::NoError)m_routePosition=m_media().position();
+}
+// Whether a player error is the output going away rather than the song failing: a route change just happened,
+// or the device the active output names no longer exists.
+bool Backend::outputFault(){
+  const bool settling=m_routeChanged.isValid()&&m_routeChanged.elapsed()<6000;
+  const bool gone=!outputPresent(activeAudio().device().id());
+  qCInfo(lcOutput)<<"player error; route settling"<<settling<<"device gone"<<gone;
+  return settling||gone;
+}
+void Backend::recoverFromOutputFault(){
+  const bool resume=m_wantPlay;
+  const bool recent=m_routeChanged.isValid()&&m_routeChanged.elapsed()<6000;
+  const qint64 at=recent&&m_routePosition>0?m_routePosition:m_savedPosition>0?m_savedPosition:m_media().position();
+  qCInfo(lcOutput)<<"rebuilding the player on the new output at"<<at<<"resume"<<resume;
+  m_recovering=false;m_resolving=false;
+  applyAudioDevice();
+  m_media().stop();m_media().setSource({});
+  // With no source, position() answers m_savedPosition and Play loads the song again and seeks to it.
+  m_savedPosition=at;m_routePosition=0;
+  const auto token=m_trackToken;
+  if(resume)QTimer::singleShot(0,this,[this,token]{if(token==m_trackToken&&m_wantPlay)resolveCurrent();});
+  emit positionChanged();emit playbackChanged();
+}
 void Backend::pauseForDisconnect(){
   const bool pausing=pauseOnDisconnect()&&(playing()||m_wantPlay);
   qCInfo(lcOutput)<<"output lost; pause on disconnect"<<pauseOnDisconnect()<<"playing"<<playing()<<"->"<<(pausing?"pausing":"nothing to pause");
   if(pausing){pause();emit toast("Output disconnected · playback paused");}
 }
 void Backend::outputsChanged(){
+  noteRouteChange();
   bool present=m_outputId.isEmpty();for(const auto &d:QMediaDevices::audioOutputs())if(d.id()==m_outputId)present=true;
   if(!present)pauseForDisconnect();
   applyAudioDevice();emit audioDevicesChanged();if(pauseOnDisconnect())m_portDebounce.start();
@@ -367,6 +397,12 @@ void Backend::inspectOutputPorts(const QVariantList &sinks){
 // deselected): Bluetooth out of range, USB or a display unplugged. The first reading only sets the baseline.
 void Backend::noteWatchedOutput(const QByteArray &now,bool previousStillPresent){
   qCInfo(lcOutput)<<"watched output"<<m_watchedOutput<<"->"<<now<<"previous still present"<<previousStillPresent;
+  if(!m_watchedOutput.isEmpty()&&m_watchedOutput!=now){
+    noteRouteChange();
+    // "System default" follows the system, and the players name a device, not "the default": a stale name is what
+    // makes AVFoundation fault once that device is gone.
+    if(audioDeviceId().isEmpty())applyAudioDevice();
+  }
   if(!m_watchedOutput.isEmpty()&&m_watchedOutput!=now&&!previousStillPresent)pauseForDisconnect();
   m_watchedOutput=now;
 }
