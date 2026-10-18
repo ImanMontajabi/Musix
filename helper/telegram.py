@@ -787,32 +787,36 @@ class Account:
         return {'chat': {'chatId': marked_id(entity), 'title': getattr(entity, 'title', '') or name,
                          'kind': kind, 'username': getattr(entity, 'username', '') or name}}
 
-    async def page(self, peer, kind, offset, topic):
-        """One page of messages, newest first, from `offset` (a message id) on."""
+    async def page(self, peer, kind, offset, topic, min_id=0):
+        """One page of messages, newest first, from `offset` (a message id) on, none at or below `min_id`."""
         from telethon.tl import functions, types
         found = types.InputMessagesFilterMusic() if kind == 'music' else types.InputMessagesFilterDocument()
         result = await self.client(functions.messages.SearchRequest(
             peer=peer, q='', filter=found, min_date=None, max_date=None, offset_id=offset, add_offset=0,
-            limit=BATCH, max_id=0, min_id=0, hash=0, top_msg_id=topic or None))
+            limit=BATCH, max_id=0, min_id=min_id, hash=0, top_msg_id=topic or None))
         return list(getattr(result, 'messages', None) or [])
 
     async def do_sync(self, request):
         """Every song in a chat, or in one forum topic, sent a page at a time.
 
         Music-tagged audio first, then documents that are audio by type or
-        name; a song can turn up in both, and is sent once.
+        name; a song can turn up in both, and is sent once. With `minId` only
+        messages newer than that come back (an incremental refresh), and the
+        reply's `maxId` is the newest message id seen, for the next one.
         """
         job = request.get('job')
+        min_id = int(request.get('minId') or 0)
         topic = int(request.get('topicId') or 0)
         peer = await self.client.get_input_entity(int(request['chatId']))
-        seen, total, scanned, complete = set(), 0, 0, True
+        seen, total, scanned, complete, newest = set(), 0, 0, True, 0
         for kind in ('music', 'document'):
             offset = 0
             while complete:
-                messages = await self.guarded(lambda: self.page(peer, kind, offset, topic), job)
+                messages = await self.guarded(lambda: self.page(peer, kind, offset, topic, min_id), job)
                 if not messages:
                     break
                 scanned += len(messages)
+                newest = max([newest] + [message.id for message in messages])
                 songs = []
                 for message in messages:
                     if message.id in seen:
@@ -829,7 +833,7 @@ class Account:
                 if total >= MAX_SONGS:
                     complete = False
                 await asyncio.sleep(0.15)
-        return {'count': total, 'complete': complete}
+        return {'count': total, 'complete': complete, 'maxId': newest}
 
     async def message_for(self, chat, message_id):
         """The message a song lives in, found again from the ids the library kept."""

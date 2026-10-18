@@ -1588,7 +1588,7 @@ QString Backend::createPlaylist(const QString &name) {
 // Each Telegram source keeps its songs in a playlist of its own under a fixed id,
 // so a refresh replaces the songs and leaves a rename, a cover or a pin alone. A
 // sync that stopped early adds what it found to what was already there.
-void Backend::telegramSongs(const QString &key, const QString &title, const QVariantList &songs, bool complete) {
+void Backend::telegramSongs(const QString &key, const QString &title, const QVariantList &songs, bool complete, bool incremental) {
   const auto id = Telegram::playlistId(key);
   for (int i = 0; i < m_playlists.size(); ++i) {
     auto p = m_playlists[i].toMap();
@@ -1606,6 +1606,11 @@ void Backend::telegramSongs(const QString &key, const QString &title, const QVar
     if (m_libraryId == id && m_page == "local") {m_results.assign(tracks);m_cover=p.value("customCover").toString();emit catalogChanged();}
     emit libraryChanged();
     m_saveTimer.start();
+    return;
+  }
+  // The playlist was deleted since the last sync: what is new is not the whole of it, so ask for the whole.
+  if (incremental) {
+    QTimer::singleShot(0, this, [this, key] { m_telegram.refresh(key, true); });
     return;
   }
   QVariantMap created{{"id", id}, {"title", title.left(120)}, {"tracks", songs}, {"source", "telegram"}, {"telegramKey", key}};

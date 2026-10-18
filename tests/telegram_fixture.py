@@ -81,12 +81,22 @@ def song_row(chat, index):
                 size=4000000, date=1700000000 + index, fileName='s.mp3', thumb=chat in (4242, -100777))
 
 def sync(request, replies):
+    """Every song of a chat, 100 to a page. `minId` keeps it to newer messages, as Telegram's search does; a file
+    `more` in the session folder adds that many newer songs to every chat, to refresh against."""
     job, chat, topic = request['job'], int(request['chatId']), int(request.get('topicId') or 0)
-    total = COUNTS.get((chat, topic), 0)
+    min_id = int(request.get('minId') or 0)
+    with open(directory / 'syncs.log', 'a') as log:
+        log.write('%d %d\n' % (chat, min_id))
+    base = COUNTS.get((chat, topic), 0)
+    extra = int((directory / 'more').read_text()) if base and (directory / 'more').exists() else 0
+    everything = [song_row(chat, i) for i in range(base + extra)]
+    newest = max([row['messageId'] for row in everything], default=0)
+    rows = [row for row in everything if row['messageId'] > min_id]
+    total = len(rows)
     sent = 0
     while sent < total:
         n = min(100, total - sent)
-        emit(event='songs', job=job, songs=[song_row(chat, sent + i) for i in range(n)])
+        emit(event='songs', job=job, songs=rows[sent:sent + n])
         sent += n
         emit(event='progress', job=job, scanned=sent)
         if mode == 'flood':
@@ -99,7 +109,7 @@ def sync(request, replies):
                 time.sleep(0.05)
         if sent == 100 and total > 200:
             emit(event='wait', job=job, seconds=3); time.sleep(0.2); emit(event='wait', job=job, seconds=0)
-    replies.put({'id': request['id'], 'ok': True, 'result': dict(count=total, complete=True)})
+    replies.put({'id': request['id'], 'ok': True, 'result': dict(count=total, complete=True, maxId=newest if total else 0)})
 
 # Long enough, when the UI suite asks, for a crossfade to fit in a song.
 WAV_SECONDS = int(os.environ.get('FIXTURE_WAV_SECONDS') or 1)

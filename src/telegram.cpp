@@ -377,16 +377,17 @@ void Telegram::removeSource(const QString &key) {
     }
 }
 
-void Telegram::refresh(const QString &key) {
+void Telegram::refresh(const QString &key, bool full) {
   const auto source = sourceFor(key);
   const auto status = source.value("status").toString();
   if (source.isEmpty() || status == "queued" || status == "syncing" || status == "waiting") return;
+  if (full) m_fullSync.insert(key);
   setSource(key, {{"status", "queued"}, {"message", ""}});
   whenReady([this, key] { startSync(key); });
 }
 
-void Telegram::refreshAll() {
-  for (const auto &source : m_sources) refresh(source.toMap().value("key").toString());
+void Telegram::refreshAll(bool full) {
+  for (const auto &source : m_sources) refresh(source.toMap().value("key").toString(), full);
 }
 
 void Telegram::cancelSync(const QString &key) {
@@ -437,9 +438,15 @@ void Telegram::startSync(const QString &key) {
   const auto source = sourceFor(key);
   if (source.isEmpty() || source.value("status") != "queued") return;
   const int job = m_nextJob++;
-  m_jobs.insert(job, Job{key, {}});
-  setSource(key, {{"status", "syncing"}, {"message", ""}, {"count", 0}});
-  send("sync", {{"chatId", source.value("chatId").toString()}, {"topicId", source.value("topicId").toString()}, {"job", job}},
+  // Newer messages only, when the last sync ran to its end under today's rules.
+  const bool forced = m_fullSync.remove(key);
+  const qint64 last = source.value("lastMessageId").toLongLong();
+  const bool incremental = !forced && last > 0 && source.value("syncVersion").toInt() == syncVersion;
+  const int base = incremental ? source.value("count").toInt() : 0;
+  m_jobs.insert(job, Job{key, {}, incremental, base});
+  setSource(key, {{"status", "syncing"}, {"message", ""}, {"count", base}, {"added", 0}, {"incremental", incremental}});
+  send("sync", {{"chatId", source.value("chatId").toString()}, {"topicId", source.value("topicId").toString()}, {"job", job},
+                {"minId", incremental ? double(last) : 0.0}},
        [this, job](const QJsonObject &reply) { finishJob(job, reply); });
 }
 
@@ -449,23 +456,34 @@ void Telegram::finishJob(int job, const QJsonObject &reply) {
   const auto source = sourceFor(finished.key);
   const bool ok = reply.value("ok").toBool();
   const auto result = reply.value("result").toObject();
-  const bool complete = ok && result.value("complete").toBool(true);
+  const bool ranToEnd = ok && result.value("complete").toBool(true);
+  // An incremental run only knows what is new, so its list is merged, never taken for the whole source.
+  const bool complete = ranToEnd && !finished.incremental;
   const auto problem = reply.value("error").toString();
   const bool cancelled = !ok && problem == "Cancelled.";
   if (!source.isEmpty()) {
     // What arrived is kept even if the sync did not finish; the owner decides
     // how to merge it.
     if (ok || !finished.songs.isEmpty())
-      emit songsReady(finished.key, source.value("title").toString(), finished.songs, complete);
+      emit songsReady(finished.key, source.value("title").toString(), finished.songs, complete, finished.incremental);
     if (ok || !finished.songs.isEmpty()) {
       const auto chat = source.value("chatId").toString();
       // Song pictures wait for the list to show them (wantArt); the chat's
       // own cover is the one thing a sync asks for.
       queueSourceArt(chat);
     }
-    QVariantMap changes{{"status", ok || cancelled ? "" : "error"}, {"count", finished.songs.size()}};
+    QVariantMap changes{{"status", ok || cancelled ? "" : "error"}, {"count", finished.base + finished.songs.size()},
+                        {"added", finished.songs.size()}, {"incremental", false}};
     if (ok) changes["syncedAt"] = QDateTime::currentSecsSinceEpoch();
-    changes["message"] = ok ? (complete ? QString() : QString("Stopped after %1 songs; refresh for the rest.").arg(finished.songs.size()))
+    // The newest message seen is what the next refresh asks past, but only after a run that reached the
+    // end: a cancelled or capped one has skipped messages in between. A capped run starts over next time.
+    if (ranToEnd) {
+      changes["lastMessageId"] = qMax(qint64(result.value("maxId").toDouble()), finished.incremental ? source.value("lastMessageId").toLongLong() : 0);
+      changes["syncVersion"] = syncVersion;
+    } else if (ok) {
+      changes["lastMessageId"] = 0;
+    }
+    changes["message"] = ok ? (ranToEnd ? QString() : QString("Stopped after %1 songs; refresh for the rest.").arg(finished.songs.size()))
                             : cancelled ? QStringLiteral("Cancelled.") : problem;
     setSource(finished.key, changes);
     saveSources();
@@ -479,7 +497,7 @@ void Telegram::abandonJobs(const QString &message) {
   for (auto it = jobs.begin(); it != jobs.end(); ++it) {
     const auto source = sourceFor(it->key);
     if (source.isEmpty()) continue;
-    if (!it->songs.isEmpty()) emit songsReady(it->key, source.value("title").toString(), it->songs, false);
+    if (!it->songs.isEmpty()) emit songsReady(it->key, source.value("title").toString(), it->songs, false, it->incremental);
     setSource(it->key, {{"status", "error"}, {"message", message}, {"count", it->songs.size()}});
   }
 }
@@ -608,7 +626,7 @@ void Telegram::handle(const QJsonObject &message) {
     const auto source = sourceFor(entry.key);
     if (event == "songs") {
       for (const auto &song : message.value("songs").toArray()) entry.songs.append(songRow(source, song.toObject()));
-      setSource(entry.key, {{"count", entry.songs.size()}});
+      setSource(entry.key, {{"count", entry.base + entry.songs.size()}, {"added", entry.songs.size()}});
     } else if (event == "wait") {
       const int seconds = message.value("seconds").toInt();
       setSource(entry.key, seconds > 0

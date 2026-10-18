@@ -113,8 +113,9 @@ public:
   Q_INVOKABLE void addSource(const QString &chatId, const QString &title, const QString &kind,
                              const QString &username, const QString &topicId = {}, const QString &topicTitle = {});
   Q_INVOKABLE void removeSource(const QString &key);
-  Q_INVOKABLE void refresh(const QString &key);
-  Q_INVOKABLE void refreshAll();
+  // Only what is newer than the last full sync, unless `full`; a deleted message is only noticed by a full one.
+  Q_INVOKABLE void refresh(const QString &key, bool full = false);
+  Q_INVOKABLE void refreshAll(bool full = false);
   Q_INVOKABLE void cancelSync(const QString &key);
   Q_INVOKABLE bool hasSource(const QString &chatId, const QString &topicId = {}) const;
   // Playing. `done` gets {file, tags, cached} or an error; a cached song answers
@@ -168,7 +169,8 @@ signals:
   // stopped early (a long pause was asked for, it was cancelled, the helper
   // died): what arrived is still delivered, and the owner should add it to what
   // it already has instead of replacing that.
-  void songsReady(const QString &key, const QString &title, const QVariantList &songs, bool complete);
+  // `complete`: the list is the whole source, so it replaces what was kept; `incremental`: it is only what is new.
+  void songsReady(const QString &key, const QString &title, const QVariantList &songs, bool complete, bool incremental);
   void sourceRemoved(const QString &key);
   void downloadChanged();
   // The file said more about a song than the sync knew: its length, artist or
@@ -215,7 +217,12 @@ private:
   struct Job {
     QString key;
     QVariantList songs;
+    bool incremental = false;
+    int base = 0; // the songs the source already had, which an incremental run adds to
   };
+  // Bumped whenever a sync would store something a stale source lacks (cleaner titles, say), so the next refresh is a full one.
+  static constexpr int syncVersion = 2;
+  QSet<QString> m_fullSync;
   using Callback = std::function<void(const QJsonObject &)>;
   void send(const QString &command, const QJsonObject &fields, Callback done);
   void whenReady(std::function<void()> action);

@@ -31,7 +31,7 @@ MDialog {
     function subtitle(source) {
         const status = source.status
         if (status === "queued") return "Waiting for Telegram…"
-        if (status === "syncing") return source.count + " songs so far…"
+        if (status === "syncing") return source.incremental ? source.added + " new so far…" : source.count + " songs so far…"
         if (status === "waiting") return source.message
         if (status === "error") return source.message
         const synced = source.syncedAt > 0 ? "synced " + Qt.formatDateTime(new Date(source.syncedAt*1000), "d MMM yyyy, HH:mm") : "not synced yet"
@@ -97,6 +97,7 @@ MDialog {
                 Layout.fillWidth: true; visible: dialog.tg.sources.length > 0
                 SungText { Layout.fillWidth: true; color: Theme.muted; text: "Each one is a playlist in your library." }
                 MButton { objectName: "telegramRefreshAll"; text: "Refresh all"; symbol: "refresh"; onClicked: dialog.tg.refreshAll() }
+                MButton { objectName: "telegramFullResyncAll"; text: "Full resync"; tip: "Fetch everything again, which also drops songs deleted from Telegram"; onClicked: dialog.tg.refreshAll(true) }
             }
             SungText {
                 objectName: "telegramNoSources"; Layout.fillWidth: true; wrapMode: Text.Wrap; color: Theme.muted

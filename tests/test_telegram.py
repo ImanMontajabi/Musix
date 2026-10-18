@@ -376,8 +376,8 @@ class Songs(Case):
     def sync(self, account, pages, request=None, **extra):
         calls = []
 
-        async def page(peer, kind, offset, topic):
-            calls.append((kind, offset, topic))
+        async def page(peer, kind, offset, topic, min_id=0):
+            calls.append((kind, offset, topic, min_id))
             queue = pages.get(kind, [])
             return queue.pop(0) if queue else []
         account.page = page
@@ -393,9 +393,22 @@ class Songs(Case):
         doc = Message(2, Document('audio/flac', [DocumentAttributeFilename('Doc.flac')]))
         result, calls = self.sync(a, {'music': [[music(9), music(8)], [music(7)]],
                                       'document': [[music(8), doc, Message(1, Document('application/pdf'))]]})
-        self.assertEqual(result, {'count': 4, 'complete': True})
+        self.assertEqual(result, {'count': 4, 'complete': True, 'maxId': 9})
         self.assertEqual([s['messageId'] for s in self.songs()], [9, 8, 7, 2])
-        self.assertEqual(calls, [('music', 0, 0), ('music', 8, 0), ('music', 7, 0), ('document', 0, 0), ('document', 1, 0)])
+        self.assertEqual(calls, [('music', 0, 0, 0), ('music', 8, 0, 0), ('music', 7, 0, 0), ('document', 0, 0, 0), ('document', 1, 0, 0)])
+
+    def test_an_incremental_sync_asks_only_for_newer_messages_and_reports_the_newest(self):
+        a = self.ready()
+        result, calls = self.sync(a, {'music': [[music(12), music(11)]], 'document': [[Message(13, Document('application/pdf'))]]}, {'minId': 10})
+        self.assertEqual({c[3] for c in calls}, {10})
+        self.assertEqual([s['messageId'] for s in self.songs()], [12, 11])
+        # The newest message seen counts even when it is not a song: nothing at or below it needs asking about again.
+        self.assertEqual(result, {'count': 2, 'complete': True, 'maxId': 13})
+
+    def test_an_incremental_sync_with_nothing_new_reports_no_newest(self):
+        a = self.ready()
+        result, _ = self.sync(a, {}, {'minId': 500})
+        self.assertEqual(result, {'count': 0, 'complete': True, 'maxId': 0})
 
     def test_a_topic_is_searched_by_its_own_id(self):
         a = self.ready()
@@ -409,7 +422,7 @@ class Songs(Case):
         async def fast(seconds): slept.append(seconds)
         attempts = []
 
-        async def page(peer, kind, offset, topic):
+        async def page(peer, kind, offset, topic, min_id=0):
             if kind == 'document':
                 return []
             attempts.append(1)
@@ -430,7 +443,7 @@ class Songs(Case):
         a = self.ready()
         calls = []
 
-        async def page(peer, kind, offset, topic):
+        async def page(peer, kind, offset, topic, min_id=0):
             calls.append(1)
             if len(calls) == 1:
                 return [music(6), music(5)]
@@ -481,7 +494,7 @@ class Songs(Case):
         async def scenario():
             started = asyncio.Event()
 
-            async def page(peer, kind, offset, topic):
+            async def page(peer, kind, offset, topic, min_id=0):
                 started.set()
                 await asyncio.sleep(30)
             a.page = page

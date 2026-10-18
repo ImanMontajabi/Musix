@@ -401,10 +401,92 @@ private slots:
     QCOMPARE(source(*again, "-1002").value("count").toInt(), 4);
     QCOMPARE(source(*again, "-1002").value("status").toString(), QString(""));
     QSignalSpy ready(again.get(), &Telegram::songsReady);
+    // Remembered, so a refresh asks only for what is newer: nothing.
     again->refresh("-1002");
     QVERIFY(QTest::qWaitFor([&] { return ready.count() == 1; }, 10000));
+    QCOMPARE(ready.first().at(2).toList().size(), 0);
+    QVERIFY(!ready.first().at(3).toBool());
+    QVERIFY(settled(*again, "-1002"));
+    again->refresh("-1002", true);
+    QVERIFY(QTest::qWaitFor([&] { return ready.count() == 2; }, 10000));
+    QCOMPARE(ready.last().at(2).toList().size(), 4);
+    QVERIFY(ready.last().at(3).toBool());
+  }
+  QStringList syncsLogged() const {
+    QFile log(storage.path() + "/telegram/syncs.log");
+    return log.open(QIODevice::ReadOnly) ? QString::fromUtf8(log.readAll()).split('\n', Qt::SkipEmptyParts) : QStringList();
+  }
+  void aRefreshAsksOnlyForWhatIsNewAndMergesIt() {
+    signIn();
+    auto t = make();
+    QSignalSpy ready(t.get(), &Telegram::songsReady);
+    t->addSource("-1001", "News", "channel", "news");
+    QVERIFY(settled(*t, "-1001"));
+    QCOMPARE(ready.count(), 1);
+    QVERIFY(!ready.first().at(4).toBool()); // a first sync is a full one
+    QCOMPARE(source(*t, "-1001").value("lastMessageId").toLongLong(), qint64(1249));
+    QCOMPARE(source(*t, "-1001").value("syncVersion").toInt(), 2);
+    QCOMPARE(syncsLogged(), QStringList{"-1001 0"});
+
+    QFile more(storage.path() + "/telegram/more");
+    QVERIFY(more.open(QIODevice::WriteOnly));
+    more.write("3");
+    more.close();
+    t->refresh("-1001");
+    QVERIFY(QTest::qWaitFor([&] { return ready.count() == 2; }, 10000));
+    QCOMPARE(ready.last().at(2).toList().size(), 3);
+    QVERIFY2(!ready.last().at(3).toBool(), "what is new is merged in, not taken for the whole source");
+    QVERIFY(ready.last().at(4).toBool());
+    QVERIFY(settled(*t, "-1001"));
+    QCOMPARE(source(*t, "-1001").value("count").toInt(), 253);
+    QCOMPARE(source(*t, "-1001").value("added").toInt(), 3);
+    QCOMPARE(source(*t, "-1001").value("lastMessageId").toLongLong(), qint64(1252));
+    QCOMPARE(syncsLogged(), (QStringList{"-1001 0", "-1001 1249"}));
+
+    // Nothing newer: nothing comes back, and the mark stays.
+    t->refresh("-1001");
+    QVERIFY(QTest::qWaitFor([&] { return ready.count() == 3; }, 10000));
+    QCOMPARE(ready.last().at(2).toList().size(), 0);
+    QVERIFY(settled(*t, "-1001"));
+    QCOMPARE(source(*t, "-1001").value("lastMessageId").toLongLong(), qint64(1252));
+    QCOMPARE(source(*t, "-1001").value("count").toInt(), 253);
+
+    // A full resync is the whole list again, replacing what was kept.
+    t->refresh("-1001", true);
+    QVERIFY(QTest::qWaitFor([&] { return ready.count() == 4; }, 15000));
+    QCOMPARE(ready.last().at(2).toList().size(), 253);
+    QVERIFY(ready.last().at(3).toBool());
+    QVERIFY(!ready.last().at(4).toBool());
+    QCOMPARE(syncsLogged().last(), QString("-1001 0"));
+  }
+  void aSourceSyncedByAnOlderVersionIsSyncedInFullOnce() {
+    signIn();
+    {
+      auto t = make();
+      t->addSource("-1002", "Friends", "group", "");
+      QVERIFY(settled(*t, "-1002"));
+    }
+    // What an older build left: a mark, but not under today's rules.
+    QFile file(storage.path() + "/telegram/sources.json");
+    QVERIFY(file.open(QIODevice::ReadOnly));
+    auto sources = QJsonDocument::fromJson(file.readAll()).array();
+    file.close();
+    auto entry = sources.at(0).toObject();
+    entry["syncVersion"] = 1;
+    sources[0] = entry;
+    QVERIFY(file.open(QIODevice::WriteOnly | QIODevice::Truncate));
+    file.write(QJsonDocument(sources).toJson());
+    file.close();
+    QFile::remove(storage.path() + "/telegram/syncs.log");
+    auto again = make();
+    QSignalSpy ready(again.get(), &Telegram::songsReady);
+    again->refresh("-1002");
+    QVERIFY(QTest::qWaitFor([&] { return ready.count() == 1; }, 10000));
+    QCOMPARE(syncsLogged(), QStringList{"-1002 0"});
     QCOMPARE(ready.first().at(2).toList().size(), 4);
     QVERIFY(ready.first().at(3).toBool());
+    QVERIFY(settled(*again, "-1002"));
+    QCOMPARE(source(*again, "-1002").value("syncVersion").toInt(), 2);
   }
   void removingASourceForgetsIt() {
     signIn();
@@ -865,7 +947,7 @@ private slots:
     QVERIFY(artIdle(*t));
     const int asked = artRequests();
     QVERIFY(asked >= 3);
-    t->refresh("4242");
+    t->refresh("4242", true); // a full one: the rows it brings are the whole list again
     QVERIFY(QTest::qWaitFor([&] { return ready.count() == 2; }, 15000));
     QVERIFY(artIdle(*t));
     const auto rows = rowsOf(ready, 1);
