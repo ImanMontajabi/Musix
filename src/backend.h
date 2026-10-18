@@ -1,6 +1,7 @@
 #pragma once
 #include <QAbstractListModel>
 #include <QAudioOutput>
+#include "outputlatency.h"
 #include <QAudioBufferOutput>
 #include <QVariantAnimation>
 #include "audioanalysis.h"
@@ -728,10 +729,14 @@ private:
   void setupDisconnectMonitor();
   void refreshOutputPort();
   void inspectOutputPorts(const QVariantList &sinks);
+  void noteOutputPort(const QString &port);
+  void startPortWatch();
+  void stopPortWatch();
   void pauseForDisconnect();
   QByteArray m_outputId;
   QString m_outputDescription,m_outputPort;
   QProcess m_portMonitor,m_portProbe;
+  OutputPortWatcher m_outputWatcher;
   QProcess m_seedProcess,m_resolverProcess;
   // The versions to reinstall if an upgraded resolver will not import.
   QString m_resolverRollback;

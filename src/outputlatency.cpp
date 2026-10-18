@@ -47,6 +47,65 @@ double outputLatencyMs(const QByteArray &deviceId) {
   }
   return rate > 0 ? double(latency + safety + buffer + streamLatency) / rate * 1000.0 : 0;
 }
+
+QString outputPort(const QByteArray &deviceId) {
+  const AudioObjectID device = deviceFor(deviceId);
+  UInt32 source = 0;
+  if (device == kAudioObjectUnknown || !read(device, kAudioDevicePropertyDataSource, kAudioDevicePropertyScopeOutput, source))
+    return {};
+  switch (source) {
+  case 'hdpn': return QStringLiteral("headphones");
+  case 'ispk': return QStringLiteral("speaker");
+  default: return QStringLiteral("%1%2%3%4").arg(QChar(source >> 24 & 0xff)).arg(QChar(source >> 16 & 0xff)).arg(QChar(source >> 8 & 0xff)).arg(QChar(source & 0xff));
+  }
+}
+
+namespace {
+OSStatus changedOnAudioThread(AudioObjectID, UInt32, const AudioObjectPropertyAddress *, void *self) {
+  QMetaObject::invokeMethod(static_cast<OutputPortWatcher *>(self), "poke", Qt::QueuedConnection);
+  return noErr;
+}
+const AudioObjectPropertyAddress portAddress{kAudioDevicePropertyDataSource, kAudioDevicePropertyScopeOutput, kAudioObjectPropertyElementMain};
+const AudioObjectPropertyAddress systemAddresses[] = {
+    {kAudioHardwarePropertyDefaultOutputDevice, kAudioObjectPropertyScopeGlobal, kAudioObjectPropertyElementMain},
+    {kAudioHardwarePropertyDevices, kAudioObjectPropertyScopeGlobal, kAudioObjectPropertyElementMain}};
+} // namespace
+
+void OutputPortWatcher::rearm() {
+  if (m_device != kAudioObjectUnknown)
+    AudioObjectRemovePropertyListener(m_device, &portAddress, changedOnAudioThread, this);
+  m_device = deviceFor(m_id);
+  if (m_device != kAudioObjectUnknown)
+    AudioObjectAddPropertyListener(m_device, &portAddress, changedOnAudioThread, this);
+}
+void OutputPortWatcher::setDevice(const QByteArray &deviceId) {
+  m_id = deviceId;
+  if (!m_running) {
+    m_running = true;
+    for (const auto &address : systemAddresses)
+      AudioObjectAddPropertyListener(kAudioObjectSystemObject, &address, changedOnAudioThread, this);
+  }
+  rearm();
+}
+void OutputPortWatcher::stop() {
+  if (!m_running) return;
+  m_running = false;
+  for (const auto &address : systemAddresses)
+    AudioObjectRemovePropertyListener(kAudioObjectSystemObject, &address, changedOnAudioThread, this);
+  if (m_device != kAudioObjectUnknown)
+    AudioObjectRemovePropertyListener(m_device, &portAddress, changedOnAudioThread, this);
+  m_device = kAudioObjectUnknown;
+}
+void OutputPortWatcher::poke() {
+  if (!m_running) return;
+  rearm();
+  emit changed();
+}
 #else
 double outputLatencyMs(const QByteArray &) { return 0; }
+QString outputPort(const QByteArray &) { return {}; }
+void OutputPortWatcher::setDevice(const QByteArray &) {}
+void OutputPortWatcher::stop() {}
+void OutputPortWatcher::rearm() {}
+void OutputPortWatcher::poke() {}
 #endif

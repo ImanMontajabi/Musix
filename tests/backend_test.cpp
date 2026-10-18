@@ -173,6 +173,11 @@ private slots:
     b.m_settings.setValue("pauseOnDisconnect",true);b.m_outputDescription="Test headphones";
     b.inspectOutputPorts({QVariantMap{{"description","Test headphones"},{"active_port","analog-output-headphones"}}});QVERIFY(b.playing());
     b.inspectOutputPorts({QVariantMap{{"description","Test headphones"},{"active_port","analog-output-speaker"}}});QVERIFY(!b.playing());
+    // macOS reads one name for the port; leaving the headphones for anything else pauses.
+    b.play();QTRY_VERIFY(b.playing());b.m_outputPort.clear();b.noteOutputPort("headphones");QVERIFY(b.playing());b.noteOutputPort("speaker");QVERIFY(!b.playing());
+#ifdef Q_OS_MACOS
+    {OutputPortWatcher w;QVERIFY(!w.running());w.setDevice({});QVERIFY(w.running());w.setDevice(QByteArray("no-such-device"));const auto port=outputPort({});QVERIFY(port==""||port=="headphones"||port=="speaker"||port.size()==4);w.stop();QVERIFY(!w.running());w.stop();}
+#endif
     b.play();QTRY_VERIFY(b.playing());b.m_outputId="removed-device";b.outputsChanged();QVERIFY(!b.playing());
     b.m_settings.setValue("pauseOnDisconnect",false);b.play();QTRY_VERIFY(b.playing());b.m_outputId="removed-device";b.outputsChanged();QVERIFY(b.playing());
     auto saved=b.m_sessions.first().toMap();auto unavailable=song;unavailable["available"]=false;

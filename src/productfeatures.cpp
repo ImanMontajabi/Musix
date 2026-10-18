@@ -307,16 +307,26 @@ void Backend::outputsChanged(){
 void Backend::setPauseOnDisconnect(bool enabled){
   if(enabled==pauseOnDisconnect())return;
   m_settings.setValue("pauseOnDisconnect",enabled);emit settingsChanged();m_outputPort.clear();
-  if(enabled){if(m_portMonitor.state()==QProcess::NotRunning)m_portMonitor.start("pactl",{"subscribe"});m_portDebounce.start();}
-  else {m_portDebounce.stop();m_portTimeout.stop();m_portMonitor.kill();m_portProbe.kill();}
+  if(enabled)startPortWatch();else stopPortWatch();
+}
+// Where the output's port is read from: PulseAudio's event stream on Linux, Core Audio on macOS.
+void Backend::startPortWatch(){
+#ifndef Q_OS_MACOS
+  if(m_portMonitor.state()==QProcess::NotRunning)m_portMonitor.start("pactl",{"subscribe"});
+#endif
+  m_portDebounce.start();
+}
+void Backend::stopPortWatch(){
+  m_portDebounce.stop();m_portTimeout.stop();m_portMonitor.kill();m_portProbe.kill();m_outputWatcher.stop();
 }
 void Backend::setupDisconnectMonitor(){
   m_portDebounce.setSingleShot(true);m_portDebounce.setInterval(120);m_portTimeout.setSingleShot(true);m_portTimeout.setInterval(2500);
   connect(&m_portTimeout,&QTimer::timeout,this,[this]{m_portProbe.kill();});
   connect(&m_portDebounce,&QTimer::timeout,this,&Backend::refreshOutputPort);
+  connect(&m_outputWatcher,&OutputPortWatcher::changed,this,[this]{if(pauseOnDisconnect())m_portDebounce.start();});
   connect(&m_portMonitor,&QProcess::readyReadStandardOutput,this,[this]{const auto events=m_portMonitor.readAllStandardOutput();if(pauseOnDisconnect()&&(events.contains("sink")||events.contains("card")))m_portDebounce.start();});
   connect(&m_portMonitor,qOverload<int,QProcess::ExitStatus>(&QProcess::finished),this,[this]{
-    if(pauseOnDisconnect())QTimer::singleShot(1000,this,[this]{if(pauseOnDisconnect()&&m_portMonitor.state()==QProcess::NotRunning){m_portMonitor.start("pactl",{"subscribe"});m_portDebounce.start();}});
+    if(pauseOnDisconnect())QTimer::singleShot(1000,this,[this]{if(pauseOnDisconnect()&&m_portMonitor.state()==QProcess::NotRunning)startPortWatch();});
   });
   connect(&m_portMonitor,&QProcess::readyReadStandardError,this,[this]{m_portMonitor.readAllStandardError();});
   connect(&m_portProbe,&QProcess::readyReadStandardOutput,this,[this]{if(m_portProbe.bytesAvailable()>1024*1024)m_portProbe.kill();});
@@ -325,15 +335,25 @@ void Backend::setupDisconnectMonitor(){
     if(pauseOnDisconnect()&&code==0&&status==QProcess::NormalExit)inspectOutputPorts(QJsonDocument::fromJson(data).toVariant().toList());
     if(m_portDirty){m_portDirty=false;m_portDebounce.start();}
   });
-  if(pauseOnDisconnect()){m_portMonitor.start("pactl",{"subscribe"});m_portDebounce.start();}
+  if(pauseOnDisconnect())startPortWatch();
 }
-void Backend::refreshOutputPort(){if(!pauseOnDisconnect())return;if(m_portProbe.state()!=QProcess::NotRunning){m_portDirty=true;return;}m_portProbe.start("pactl",{"-f","json","list","sinks"});m_portTimeout.start();}
+void Backend::refreshOutputPort(){
+  if(!pauseOnDisconnect())return;
+#ifdef Q_OS_MACOS
+  // The jack and the speakers are one device with two data sources; a device that is
+  // really gone is outputsChanged()'s business.
+  m_outputWatcher.setDevice(m_outputId);noteOutputPort(outputPort(m_outputId));return;
+#endif
+  if(m_portProbe.state()!=QProcess::NotRunning){m_portDirty=true;return;}m_portProbe.start("pactl",{"-f","json","list","sinks"});m_portTimeout.start();}
 void Backend::inspectOutputPorts(const QVariantList &sinks){
   for(const auto &v:sinks){const auto s=v.toMap();if(s.value("description").toString()!=m_outputDescription && s.value("name").toString()!=QString::fromUtf8(m_outputId))continue;
-    const auto port=s.value("active_port").toString();
-    if(!m_outputPort.isEmpty() && m_outputPort!=port && (m_outputPort.contains("headphone",Qt::CaseInsensitive)||m_outputPort.contains("headset",Qt::CaseInsensitive)))pauseForDisconnect();
-    m_outputPort=port;return;
+    noteOutputPort(s.value("active_port").toString());return;
   }
+}
+// Leaving a headphone port for anything else pauses; the first reading only sets the baseline.
+void Backend::noteOutputPort(const QString &port){
+  if(!m_outputPort.isEmpty() && m_outputPort!=port && (m_outputPort.contains("headphone",Qt::CaseInsensitive)||m_outputPort.contains("headset",Qt::CaseInsensitive)))pauseForDisconnect();
+  m_outputPort=port;
 }
 
 // --- Listening statistics ----------------------------------------------------

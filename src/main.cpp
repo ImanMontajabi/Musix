@@ -101,10 +101,14 @@ int main(int argc, char **argv) {
 #ifdef SUNG_DIAGNOSTICS
   QElapsedTimer startupTimer;startupTimer.start();
 #endif
+#ifndef Q_OS_MACOS
+  // Only Qt's FFmpeg backend reads these; macOS plays through AVFoundation, which
+  // decodes in hardware on its own, and the bundle does not carry the FFmpeg one.
   if (!qEnvironmentVariableIsSet("QT_FFMPEG_DECODING_HW_DEVICE_TYPES"))
     qputenv("QT_FFMPEG_DECODING_HW_DEVICE_TYPES", ",");
   if (!qEnvironmentVariableIsSet("QT_FFMPEG_ENCODING_HW_DEVICE_TYPES"))
     qputenv("QT_FFMPEG_ENCODING_HW_DEVICE_TYPES", ",");
+#endif
   QGuiApplication app(argc, argv);
   app.setApplicationName("sung");
   // A run on its own profile names itself, so it is never mistaken for the
