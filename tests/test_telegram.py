@@ -598,6 +598,16 @@ class Fetching(Case):
                 self.fetch(a, messageId=message_id)
             self.assertEqual(str(caught.exception), 'This song is no longer in the chat.')
 
+    def test_a_message_that_is_gone_is_marked_so_in_the_reply_and_a_failure_is_not(self):
+        a = self.ready({7: Message(7, Document('application/pdf', [DocumentAttributeFilename('a.pdf')]))})
+        run(telegram.answer(a, {'id': 21, 'cmd': 'fetch', 'chatId': 5, 'messageId': 8, 'job': 6, 'name': 'tg_abc', 'directory': str(self.audio)}))
+        gone = [e for e in self.events if e.get('id') == 21][0]
+        self.assertEqual((gone['ok'], gone.get('gone')), (False, True))
+        run(telegram.answer(a, {'id': 22, 'cmd': 'fetch', 'chatId': 5, 'messageId': 7, 'job': 7, 'name': '../x', 'directory': str(self.audio)}))
+        other = [e for e in self.events if e.get('id') == 22][0]
+        self.assertFalse(other['ok'])
+        self.assertNotIn('gone', other)
+
     def test_a_name_that_could_leave_the_folder_is_refused(self):
         a = self.ready({7: self.sized_unknown()})
         for bad in ('../x', 'a/b', '', 'x.mp3'):

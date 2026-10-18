@@ -190,6 +190,30 @@ private slots:
     }
     b.pause();QVERIFY(b.saveSession("Updated",id));QCOMPARE(b.sessions().size(),1);QVERIFY(!b.restoreSession("missing"));b.deleteSession(id);QVERIFY(b.sessions().isEmpty());b.setCurrentArtworkFit(false);b.setMotion(true);b.clearQueue();b.save();
   }
+  void aFullTelegramRefreshDropsDeletedSongsExceptTheOnesKeptOffline() {
+    // A song kept offline: its pin and its file, as an earlier run left them.
+    const auto data = Profile::location(QStandardPaths::AppDataLocation);
+    QDir().mkpath(data + "/telegram");QDir().mkpath(data + "/telegram-offline");
+    QFile pins(data + "/telegram/offline.json");QVERIFY(pins.open(QIODevice::WriteOnly|QIODevice::Truncate));
+    pins.write("{\"tg_kept\":{\"id\":\"tg_kept\",\"source\":\"telegram\",\"kind\":\"song\",\"remoteId\":\"-1:3\",\"title\":\"Kept\"}}");pins.close();
+    QFile file(data + "/telegram-offline/tg_kept.mp3");QVERIFY(file.open(QIODevice::WriteOnly));file.write("x");file.close();
+    const auto row=[](const QString &id){return QVariantMap{{"id",id},{"source","telegram"},{"kind","song"},{"remoteId","-1:"+id.right(1)},{"title",id}};};
+    Backend b;b.setWatchMusicFolders(false);b.m_playlists.clear();
+    b.telegramSongs("-1","Chat",{row("tg_a1"),row("tg_kept"),row("tg_b2")},true);
+    QCOMPARE(b.m_playlists.size(),1);QCOMPARE(b.m_playlists.first().toMap().value("tracks").toList().size(),3);
+    // The chat no longer has two of them; a full refresh is the whole list.
+    b.telegramSongs("-1","Chat",{row("tg_a1")},true);
+    QStringList ids;for(const auto &t:b.m_playlists.first().toMap().value("tracks").toList())ids<<t.toMap().value("id").toString();
+    QCOMPARE(ids,(QStringList{"tg_a1","tg_kept"}));
+    // What is new is merged in, never taken for the list; and a deleted playlist asks for a full sync instead of becoming a partial one.
+    b.telegramSongs("-1","Chat",{row("tg_c4")},false,true);
+    QCOMPARE(b.m_playlists.first().toMap().value("tracks").toList().size(),3);
+    QCOMPARE(b.m_playlists.first().toMap().value("tracks").toList().first().toMap().value("id").toString(),QString("tg_c4"));
+    b.m_playlists.clear();
+    b.telegramSongs("-1","Chat",{row("tg_c4")},false,true);
+    QVERIFY(b.m_playlists.isEmpty());
+    QFile::remove(data + "/telegram/offline.json");QFile::remove(data + "/telegram-offline/tg_kept.mp3");
+  }
   void libraryPolish() {
     Backend b;b.setWatchMusicFolders(false);b.clearQueue();b.m_localTracks.clear();b.m_playlists.clear();
     auto a=track("local_one"),c=track("local_two"),d=track("local_three");

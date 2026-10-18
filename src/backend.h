@@ -588,6 +588,8 @@ public:
   Q_INVOKABLE bool hasShelfSongs() const;
   Q_INVOKABLE void playShelfSongs(bool shuffled = false);
   Q_INVOKABLE void enqueueCollection();
+  Q_INVOKABLE bool keepPlaylistOffline(const QString &playlistId, bool keep);
+  Q_INVOKABLE int playlistOfflineCount(const QString &playlistId) const;
   Q_INVOKABLE void playCover(const QVariantMap &item);
   Q_INVOKABLE void playItem(const QVariantMap &item);
   Q_INVOKABLE void enqueue(const QVariantMap &item, bool next = false);

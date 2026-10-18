@@ -79,6 +79,10 @@ class Rejected(Exception):
     """A request that fails in a way the person can act on."""
 
 
+class Gone(Rejected):
+    """The message is no longer in the chat: deleted, or the chat was left. Asking again will not help."""
+
+
 def describe(error):
     """What to tell the person about a Telegram error, without echoing it.
 
@@ -867,7 +871,7 @@ class Account:
             message = await self.message_for(request['chatId'], request['messageId'])
             song = song_from(message) if message is not None else None
             if song is None:
-                raise Rejected('This song is no longer in the chat.')
+                raise Gone('This song is no longer in the chat.')
             limit = int(request.get('limit') or MAX_FETCH)
             if song['size'] > limit:
                 raise Rejected('This file is %d MB; Musix plays Telegram songs up to %d MB.' % (song['size'] // 1048576, limit // 1048576))
@@ -1127,6 +1131,8 @@ async def answer(account, request):
         reply['ok'] = True
         if result is not None:
             reply['result'] = result
+    except Gone as error:
+        reply.update(ok=False, error=str(error), gone=True)
     except Rejected as error:
         reply.update(ok=False, error=str(error))
     except asyncio.CancelledError:

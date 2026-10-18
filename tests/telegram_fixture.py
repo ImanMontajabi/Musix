@@ -127,7 +127,7 @@ def fetch(request, replies):
         log.write('%d\n' % message)
     reply = {'id': request['id']}
     if message == 9999:
-        replies.put(dict(reply, ok=False, error='This song is no longer in the chat.')); return
+        replies.put(dict(reply, ok=False, error='This song is no longer in the chat.', gone=True)); return
     if message == 8888:
         replies.put(dict(reply, ok=False, error='This file is 300 MB; Musix plays Telegram songs up to 200 MB.')); return
     out = Path(request['directory'])

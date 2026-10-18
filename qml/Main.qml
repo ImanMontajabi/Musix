@@ -118,6 +118,9 @@ ApplicationWindow {
         for(let i=0;i<list.length;++i)if(list[i].key===telegramKey)return list[i]
         return null
     }
+    // How many of the playlist's songs are kept offline; read through app.telegram.offline so it follows the downloads.
+    readonly property int telegramKept: (app.telegram.offline, telegramKey ? app.playlistOfflineCount(localPlaylist) : 0)
+    function offlineState(id) { return app.telegram.offline[id] || "" }
     readonly property bool telegramBusy: !!telegramSource && (telegramSource.status==="queued"||telegramSource.status==="syncing"||telegramSource.status==="waiting")
     readonly property bool modalOpen: immersiveQueue.visible || otherModalOpen
     readonly property bool otherModalOpen: trimDialog.visible || onboarding.visible || artworkViewer.visible || (immersiveLoader.item && immersiveLoader.item.popupVisible) || viewLayoutDialog.visible || volumeControl.popupVisible || homeEditor.visible || outputPicker.visible || sessionsDialog.visible || statsDialog.visible || playlistVersionsDialog.visible || playlistCoverDialog.visible || commandPalette.visible || artworkControls.visible || smartDialog.visible || trackDetails.visible || shortcutHelp.visible || duplicateDialog.visible || serverToolbar.dialogOpen || serverConnection.visible || serverAddDialog.visible || serverRenameDialog.visible || serverDeleteDialog.visible || serverRatingDialog.visible || musicFoldersDialog.visible || musicFolderEntry.visible || cleanupDialog.visible || navigationDrawer.visible || bulkActions.visible || volumeStepMenu.visible || rateDialog.visible || lyricTimingDialog.visible || settingsDialog.visible || playlistDialog.visible || addPlaylistDialog.visible || deletePlaylistDialog.visible || actions.visible || playlistActions.visible || sleepMenu.visible || (fileDialogs!==null && fileDialogs.visible) || audioDeviceDialog.visible || collectionSort.menuOpen
@@ -981,6 +984,10 @@ ApplicationWindow {
                             SungText {heading: true; text: window.serverDisconnected ? "Music server" : window.destination==="library"&&window.libraryTab==="playlists"&&!window.localPlaylist ? "Playlists" : app.title; objectName: "collectionHeaderTitle"; emphasized: true; scaled: true; font.pixelSize: app.page==="home"?Theme.displaySmall:Theme.headlineMedium-(Theme.headlineMedium-Theme.titleLarge)*content.headerCollapse; Behavior on font.pixelSize { NumberAnimation { duration: app.motion?Theme.normal:0; easing.type: Easing.OutCubic } } Layout.fillWidth: true; wrapMode: Text.Wrap; maximumLineCount: 2 }
                                 SungText { objectName: "albumArtist"; visible: !!app.albumInfo.artist;opacity:1-content.headerCollapse;Layout.maximumHeight:implicitHeight*(1-content.headerCollapse);clip:true; Layout.fillWidth: true; text: app.albumInfo.artist || ""; font.pixelSize: Theme.bodyLarge; color: Theme.muted; maximumLineCount: 2; wrapMode: Text.Wrap }
                                 SungText {
+                                    objectName: "telegramOfflineStatus"; Layout.fillWidth: true; elide: Text.ElideRight; color: Theme.muted
+                                    visible: window.telegramKept>0; text: window.telegramKept+" of "+app.results.count+" kept offline"
+                                }
+                                SungText {
                                     objectName: "telegramSyncStatus"; Layout.fillWidth: true; elide: Text.ElideRight; color: window.telegramSource&&window.telegramSource.status==="error"?Theme.error:Theme.muted
                                     visible: !!window.telegramSource && (window.telegramBusy || window.telegramSource.status==="error" || !!window.telegramSource.message)
                                     text: !window.telegramSource ? "" : window.telegramBusy ? (window.telegramSource.status==="waiting" ? window.telegramSource.message : window.telegramSource.incremental ? window.telegramSource.added+" new so far…" : window.telegramSource.count+" songs so far…") : window.telegramSource.message
@@ -1009,6 +1016,10 @@ ApplicationWindow {
                                      visible:app.page!=="library"&&app.page!=="local", trigger:function(){app.refresh()}},
                                     {key:"telegramRefresh", name:"telegramRefreshButton", symbol:"refresh", label:window.telegramBusy?"Refreshing from Telegram…":"Refresh from Telegram",
                                      enabled:!window.telegramBusy, visible:!!window.telegramSource, trigger:function(){app.telegram.refresh(window.telegramKey)}},
+                                    {key:"telegramKeepOffline", name:"telegramKeepOfflineButton", text:window.telegramKept>0&&window.telegramKept>=app.results.count?"Remove offline":"Keep offline",
+                                     label:window.telegramKept>0&&window.telegramKept>=app.results.count?"Stop keeping this playlist offline":"Keep every song of this playlist offline",
+                                     visible:!!window.telegramSource&&app.results.count>0,
+                                     trigger:function(){app.keepPlaylistOffline(window.localPlaylist,!(window.telegramKept>0&&window.telegramKept>=app.results.count))}},
                                     {key:"telegramFullResync", name:"telegramFullResyncButton", text:"Full resync", label:"Full resync from Telegram, which also drops songs deleted there",
                                      enabled:!window.telegramBusy, visible:!!window.telegramSource, trigger:function(){app.telegram.refresh(window.telegramKey,true)}},
                                     {key:"folders", name:"musicFoldersButton", symbol:"folder", text:"Folders", label:"Manage music folders",
@@ -1782,6 +1793,12 @@ ApplicationWindow {
         MMenuItem { symbol: "chevron"; text: "Go to artist"; visible: !!window.menuItem.artistId; onTriggered: app.open(window.relatedItem(window.menuItem,"artist")) }
         MMenuItem { text: "Artwork…"; visible: window.menuItem.id===app.current.id && !!app.current.id; onTriggered: artworkControls.open() }
         MMenuItem { symbol: "disc"; text: "Go to album"; visible: !!window.menuItem.albumId; onTriggered: app.open(window.relatedItem(window.menuItem,"album")) }
+        MMenuItem {
+            objectName: "keepOfflineAction"; visible: window.menuItem.source==="telegram"
+            readonly property string keepState: window.offlineState(window.menuItem.id)
+            text: keepState==="ready" ? "Remove offline copy" : keepState==="queued"||keepState==="downloading" ? "Stop keeping offline" : keepState==="failed" ? "Retry keeping offline" : "Keep offline"
+            onTriggered: keepState==="ready"||keepState==="queued"||keepState==="downloading" ? app.telegram.stopKeepingOffline([window.menuItem.id]) : app.telegram.keepOffline([window.menuItem])
+        }
         MMenuItem { text: ["subsonic","jellyfin","telegram"].indexOf(window.menuItem.source)>=0?"Copy song details":window.menuItem.localPath?"Copy file path":"Copy link"; onTriggered: app.copyLink(window.menuItem) }
         MMenuItem { text: "Add to server playlist"; visible: !!window.menuItem.serverSong; enabled: app.server.connected; onTriggered: {window.batchItems=[];serverAddDialog.open()} }
         MMenuItem { text: "Rate song"; visible: !!window.menuItem.serverSong && app.server.supportsRating; enabled: app.server.connected; onTriggered: serverRatingDialog.open() }

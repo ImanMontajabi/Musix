@@ -5484,6 +5484,28 @@ void runTelegramTests(Backend *b, QQuickWindow *w) {
   c.check(settledSource("-1003/11"), "a topic syncs on its own");
   c.check(playlist("telegram:-1003/11").value("count").toInt() == 2 && playlist("telegram:-1003/11").value("title").toString() == "Forum › Jazz",
           "into a playlist named for the forum and the topic");
+  // A playlist can be kept offline from its header, and let go the same way.
+  b->openPlaylist("telegram:-1003/11");
+  c.check(c.until([&] { return b->results()->count() == 2 && shownItem(root(), "telegramKeepOfflineButton"); }), "its header offers Keep offline");
+  if (auto keep = shownItem(root(), "telegramKeepOfflineButton")) QMetaObject::invokeMethod(keep, "clicked");
+  const auto offlineReady = [&] {
+    int ready = 0;
+    for (const auto &state : account->offline()) ready += state.toString() == "ready";
+    return ready;
+  };
+  c.check(c.until([&] { return b->playlistOfflineCount("telegram:-1003/11") == 2; }), "Keep offline takes both songs");
+  c.check(c.until([&] { return offlineReady() == 2; }, 40000), "and they come down one after another");
+  c.check(c.until([&] { return shownItem(root(), "telegramOfflineStatus") != nullptr; }), "the header says how many are kept");
+  c.shot("10a-kept-offline");
+  // The song menu follows the state of the song it was opened for.
+  c.evaluate("window.menuItem = app.results.get(0)");
+  auto keepAction = [&] { return w->findChild<QObject *>("keepOfflineAction"); };
+  c.check(keepAction() && keepAction()->property("text").toString() == "Remove offline copy", "a kept song's menu offers to remove its offline copy");
+  c.check(c.evaluate("window.menuItem.source").toString() == "telegram", "for a Telegram song");
+  if (auto keep = shownItem(root(), "telegramKeepOfflineButton")) QMetaObject::invokeMethod(keep, "clicked");
+  c.check(c.until([&] { return b->playlistOfflineCount("telegram:-1003/11") == 0 && account->offline().isEmpty(); }), "the same button lets them go");
+  c.check(keepAction() && keepAction()->property("text").toString() == "Keep offline", "and the song menu offers Keep offline again");
+  c.evaluate("window.menuItem = ({})");
   c.evaluate("telegramSources.forum=null");
 
   // A public channel by link.

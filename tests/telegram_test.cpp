@@ -69,7 +69,7 @@ private slots:
     qputenv("MUSIX_TELEGRAM_API_ID", "12345");
     qputenv("MUSIX_TELEGRAM_API_HASH", "abcdef");
   }
-  void init() { clean(); QDir(cache()).removeRecursively(); QDir(art()).removeRecursively(); QFile::remove(storage.path() + "/telegram/art.log"); }
+  void init() { clean(); QDir(cache()).removeRecursively(); QDir(offlineDir()).removeRecursively(); QDir(art()).removeRecursively(); QFile::remove(storage.path() + "/telegram/art.log"); }
 
   void withoutCredentialsThereIsNothingToStart() {
     qputenv("MUSIX_TELEGRAM_API_ID", "0");
@@ -824,6 +824,179 @@ private slots:
     QVERIFY(QDir(cache()).entryList(QDir::Files).isEmpty());
     QVERIFY(!QFile::exists(storage.path() + "/telegram/tags.json"));
     QVERIFY(reach(*t, "wait-phone")); // the helper has handled it, so it can't reach into the next test's folder
+  }
+  // --- Kept offline --------------------------------------------------------
+  QString offlineDir() const { return storage.path() + "/offline"; }
+  static QVariantMap pinned(const QString &id, int message) {
+    auto s = song(id, message, 1);
+    s["telegramChat"] = "-1001";
+    s["title"] = "Kept " + id;
+    return s;
+  }
+  static bool ready(Telegram &t, const QString &id) { return QTest::qWaitFor([&] { return t.offlineState(id) == "ready"; }, 20000); }
+  void aKeptSongComesDownIntoItsOwnFolderAndOutlivesTheCache() {
+    signIn();
+    auto t = make();
+    t->setCacheDirectory(cache());
+    t->setOfflineDirectory(offlineDir());
+    t->setCacheLimits(1, 100 * 1024 * 1024);
+    QVERIFY(t->keepOffline({pinned("tg_keep", 5)}));
+    QVERIFY(t->offlineState("tg_keep") == "queued" || t->offlineState("tg_keep") == "downloading");
+    QVERIFY(ready(*t, "tg_keep"));
+    QVERIFY(QFile::exists(offlineDir() + "/tg_keep.wav"));
+    QVERIFY(!QFile::exists(cache() + "/tg_keep.wav"));
+    QCOMPARE(t->cached("tg_keep"), offlineDir() + "/tg_keep.wav");
+    QVERIFY(t->keptOffline("tg_keep"));
+    // The cache keeps one song; two others pass through it. The kept one is not its to trim.
+    Got got;
+    QVERIFY(fetched(*t, song("tg_x", 1), got));
+    QVERIFY(fetched(*t, song("tg_y", 1), got));
+    QVERIFY(t->cached("tg_x").isEmpty());
+    t->clearAudio(); // Settings' Clear cache
+    QVERIFY(QFile::exists(offlineDir() + "/tg_keep.wav"));
+    // Playing it asks Telegram for nothing.
+    const int before = fetchesLogged();
+    QVERIFY(fetched(*t, pinned("tg_keep", 5), got));
+    QVERIFY(got.data.value("cached").toBool());
+    QCOMPARE(got.data.value("file").toString(), offlineDir() + "/tg_keep.wav");
+    QCOMPARE(fetchesLogged(), before);
+    // Even once its message is gone from the chat, a song already kept plays.
+    QVERIFY(fetched(*t, pinned("tg_keep", 9999), got));
+    QVERIFY2(got.error.isEmpty(), qPrintable(got.error));
+    QVERIFY(ownerOnly(storage.path() + "/telegram/offline.json"));
+    // The pin and the file survive a restart.
+    t.reset();
+    auto again = make();
+    again->setCacheDirectory(cache());
+    again->setOfflineDirectory(offlineDir());
+    QCOMPARE(again->offlineState("tg_keep"), QString("ready"));
+    // Unkeeping is what removes it.
+    again->stopKeepingOffline({"tg_keep"});
+    QVERIFY(!QFile::exists(offlineDir() + "/tg_keep.wav"));
+    QCOMPARE(again->offlineState("tg_keep"), QString());
+    QVERIFY(again->offline().isEmpty());
+  }
+  void keptSongsComeDownOneAtATime() {
+    signIn();
+    auto t = make();
+    t->setCacheDirectory(cache());
+    t->setOfflineDirectory(offlineDir());
+    int most = 0;
+    connect(t.get(), &Telegram::offlineChanged, this, [&] {
+      int running = 0;
+      for (const auto &state : t->offline()) running += state.toString() == "downloading";
+      most = qMax(most, running);
+    });
+    QVERIFY(t->keepOffline({pinned("tg_one", 1), pinned("tg_two", 2), pinned("tg_three", 3)}));
+    QVERIFY(ready(*t, "tg_one") && ready(*t, "tg_two") && ready(*t, "tg_three"));
+    QCOMPARE(most, 1);
+  }
+  void aFullDiskRefusesNewDownloadsAndSaysWhy() {
+    signIn();
+    auto t = make();
+    t->setCacheDirectory(cache());
+    t->setOfflineDirectory(offlineDir());
+    t->setMinFreeBytes(Q_INT64_C(1) << 60);
+    QSignalSpy message(t.get(), &Telegram::offlineMessage);
+    QVERIFY(!t->keepOffline({pinned("tg_full", 5)}));
+    QCOMPARE(message.count(), 1);
+    QVERIFY(message.first().first().toString().contains("500 MB"));
+    QCOMPARE(t->offlineState("tg_full"), QString());
+    QVERIFY(!QFile::exists(storage.path() + "/telegram/offline.json") || QFileInfo(storage.path() + "/telegram/offline.json").size() <= 2);
+    QCOMPARE(fetchesLogged(), 0);
+  }
+  void aSongDeletedInTelegramBeforeItCameDownIsReportedAndLetGo() {
+    signIn();
+    auto t = make();
+    t->setCacheDirectory(cache());
+    t->setOfflineDirectory(offlineDir());
+    QSignalSpy message(t.get(), &Telegram::offlineMessage);
+    QVERIFY(t->keepOffline({pinned("tg_missing", 9999)}));
+    QVERIFY(QTest::qWaitFor([&] { return t->offlineState("tg_missing").isEmpty(); }, 10000));
+    QCOMPARE(message.count(), 1);
+    QVERIFY(message.first().first().toString().contains("no longer in its chat"));
+    QVERIFY(t->offline().isEmpty());
+  }
+  void aSongThatFailsForAnotherReasonStaysPinnedAndCanBeTriedAgain() {
+    signIn();
+    auto t = make();
+    t->setCacheDirectory(cache());
+    t->setOfflineDirectory(offlineDir());
+    QSignalSpy message(t.get(), &Telegram::offlineMessage);
+    QVERIFY(t->keepOffline({pinned("tg_big", 8888), pinned("tg_next", 2)}));
+    QVERIFY(QTest::qWaitFor([&] { return t->offlineState("tg_big") == "failed"; }, 10000));
+    QVERIFY(message.first().first().toString().contains("300 MB"));
+    QCOMPARE(t->offlineState("tg_next"), QString("queued")); // the rest waits for a retry
+    t->retryOffline();
+    QVERIFY(QTest::qWaitFor([&] { return t->offlineState("tg_big") == "failed" && t->offlineState("tg_next") == "ready"; }, 15000));
+  }
+  void thePlayerCanStartAKeptSongWhileItIsStillComingDown() {
+    signIn();
+    auto t = make();
+    t->setCacheDirectory(cache());
+    t->setOfflineDirectory(offlineDir());
+    QVERIFY(t->keepOffline({pinned("tg_slow", 1001)})); // message 1001 takes three seconds
+    Got got;
+    QVERIFY(fetched(*t, pinned("tg_slow", 1001), got));
+    QVERIFY2(got.error.isEmpty(), qPrintable(got.error));
+    QCOMPARE(got.data.value("file").toString(), offlineDir() + "/tg_slow.wav");
+    QCOMPARE(fetchesLogged(), 1); // one download served both
+    QVERIFY(ready(*t, "tg_slow"));
+  }
+  void skippingAwayDoesNotStopAKeptDownload() {
+    signIn();
+    auto t = make();
+    t->setCacheDirectory(cache());
+    t->setOfflineDirectory(offlineDir());
+    QVERIFY(t->keepOffline({pinned("tg_slow", 1001)}));
+    Got got;
+    t->fetch(pinned("tg_slow", 1001), into(got));
+    QTest::qWait(300);
+    t->cancelFetch("tg_slow");
+    QVERIFY(ready(*t, "tg_slow"));
+  }
+  void aSongTheCacheAlreadyHasIsKeptFromThatCopy() {
+    signIn();
+    auto t = make();
+    t->setCacheDirectory(cache());
+    t->setOfflineDirectory(offlineDir());
+    Got got;
+    QVERIFY(fetched(*t, pinned("tg_have", 1), got));
+    const int before = fetchesLogged();
+    QVERIFY(t->keepOffline({pinned("tg_have", 1)}));
+    QCOMPARE(t->offlineState("tg_have"), QString("ready"));
+    QCOMPARE(fetchesLogged(), before);
+  }
+  void unkeepingAKeptDownloadInProgressStopsIt() {
+    signIn();
+    auto t = make();
+    t->setCacheDirectory(cache());
+    t->setOfflineDirectory(offlineDir());
+    QVERIFY(t->keepOffline({pinned("tg_slow", 1001)}));
+    QTest::qWait(300);
+    t->stopKeepingOffline({"tg_slow"});
+    QCOMPARE(t->offlineState("tg_slow"), QString());
+    QTest::qWait(500);
+    QVERIFY(QDir(offlineDir()).entryList(QDir::Files).isEmpty());
+  }
+  void removingTheChatOrSigningOutDropsWhatWasKept() {
+    signIn();
+    auto t = make();
+    t->setCacheDirectory(cache());
+    t->setOfflineDirectory(offlineDir());
+    t->addSource("-1001", "News", "channel", "news");
+    QVERIFY(settled(*t, "-1001"));
+    QVERIFY(t->keepOffline({pinned("tg_chat", 1)}));
+    QVERIFY(ready(*t, "tg_chat"));
+    t->removeSource("-1001");
+    QVERIFY(t->offline().isEmpty());
+    QVERIFY(QDir(offlineDir()).entryList(QDir::Files).isEmpty());
+    QVERIFY(t->keepOffline({pinned("tg_out", 1)}));
+    QVERIFY(ready(*t, "tg_out"));
+    t->logout();
+    QVERIFY(t->offline().isEmpty());
+    QVERIFY(QDir(offlineDir()).entryList(QDir::Files).isEmpty());
+    QVERIFY(reach(*t, "wait-phone"));
   }
   // --- Cover art -----------------------------------------------------------
   static QVariantList rowsOf(const QSignalSpy &spy, int which = 0) { return spy.at(which).at(2).toList(); }

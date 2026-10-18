@@ -60,6 +60,8 @@ class Telegram : public QObject {
   Q_PROPERTY(bool syncing READ syncing NOTIFY sourcesChanged)
   // The song being downloaded to play: {id, received, total}, empty when none is.
   Q_PROPERTY(QVariantMap download READ download NOTIFY downloadChanged)
+  // Songs the person asked to keep: id -> "queued" | "downloading" | "ready" | "failed".
+  Q_PROPERTY(QVariantMap offline READ offline NOTIFY offlineChanged)
 public:
   // `directory` holds the session; `restore` reads who was signed in last time.
   explicit Telegram(const QString &directory, QObject *parent = nullptr);
@@ -86,6 +88,7 @@ public:
   QString listError() const { return m_listError; }
   bool syncing() const { return !m_jobs.isEmpty() || !m_afterReady.isEmpty(); }
   QVariantMap download() const { return m_download; }
+  QVariantMap offline() const;
 
   // Largest song that is downloaded, and how much of the cache is kept.
   static constexpr qint64 MaxSongBytes = 200LL * 1024 * 1024;
@@ -123,6 +126,19 @@ public:
   // replaces the first one's `done` instead of downloading it twice.
   using Fetched = std::function<void(const QVariantMap &data, const QString &error)>;
   void setCacheDirectory(const QString &directory);
+  // Where songs kept offline live: unlike the cache it is never trimmed, and only unkeeping, removing the
+  // chat or signing out removes a song from it.
+  void setOfflineDirectory(const QString &directory);
+  // Pins songs and brings them down one at a time. False, with offlineMessage, when the disk is too full.
+  Q_INVOKABLE bool keepOffline(const QVariantList &songs);
+  Q_INVOKABLE void stopKeepingOffline(const QStringList &ids);
+  Q_INVOKABLE QString offlineState(const QString &songId) const;
+  // Tries again the songs that could not be had (no network, a pause Telegram asked for).
+  Q_INVOKABLE void retryOffline();
+  // Pinned and on disk: playable whatever happens to the message.
+  bool keptOffline(const QString &songId) const;
+  static constexpr qint64 MinFreeBytes = 500LL * 1024 * 1024; // what a new offline download must leave free
+  void setMinFreeBytes(qint64 bytes) { m_minFreeBytes = bytes; } // for tests: a full disk is not easy to come by
   void setLinger(int milliseconds) { m_linger.setInterval(milliseconds); }
   void setCacheLimits(int songs, qint64 bytes) { m_cacheSongs = songs; m_cacheBytes = bytes; }
   QString cached(const QString &songId) const;
@@ -172,6 +188,9 @@ signals:
   // `complete`: the list is the whole source, so it replaces what was kept; `incremental`: it is only what is new.
   void songsReady(const QString &key, const QString &title, const QVariantList &songs, bool complete, bool incremental);
   void sourceRemoved(const QString &key);
+  void offlineChanged();
+  // Something the person should hear: a refusal, or a song that could not be kept.
+  void offlineMessage(const QString &message);
   void downloadChanged();
   // The file said more about a song than the sync knew: its length, artist or
   // title. `changes` holds only the fields to set.
@@ -189,6 +208,7 @@ private:
     Streamed stream;           // wanted, and not yet given
     bool streamable = false;   // the helper was asked to bring it down in blocks
     bool streaming = false;    // a stream was asked for and has not failed: the player, not a percentage, shows it
+    bool offline = false;      // a download to keep: it lands in the offline folder, and the player skipping away does not stop it
   };
   void requestStream(int job, Streamed stream);
   struct ArtTask {
@@ -207,6 +227,12 @@ private:
   void failFetches(bool startedToo, const QString &message);
   void evict(const QString &alsoKeep);
   void learn(const QVariantMap &song, const QJsonObject &tags);
+  void loadOffline();
+  void saveOffline() const;
+  QString offlineFile(const QString &songId) const;
+  void pumpOffline();
+  void finishOffline(const QString &songId, bool ok, const QString &error, bool gone);
+  void unpin(const QString &songId, bool removeFile);
   void loadTags();
   void saveTags() const;
   void rememberNoArt(const QString &id);
@@ -250,7 +276,12 @@ private:
   QProcess *m_process = nullptr;
   QByteArray m_buffer;
   QTimer m_startTimeout, m_restart, m_linger;
-  QString m_cacheDirectory;
+  QString m_cacheDirectory, m_offlineDirectory;
+  QHash<QString, QVariantMap> m_pinned; // id -> what is needed to find the song again
+  QStringList m_keepQueue;
+  QString m_keepActive;
+  QSet<QString> m_keepFailed;
+  qint64 m_minFreeBytes = MinFreeBytes;
   int m_cacheSongs = CacheSongs;
   qint64 m_cacheBytes = CacheBytes;
   QStringList m_keep;

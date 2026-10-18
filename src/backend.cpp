@@ -55,6 +55,8 @@ Backend::Backend(QObject *parent) : QObject(parent) {
   connect(&m_telegram,&Telegram::coverReady,this,&Backend::telegramCover);
   connect(&m_telegram,&Telegram::artCleared,this,&Backend::telegramArtCleared);
   m_telegram.setCacheDirectory(Profile::location(QStandardPaths::CacheLocation)+"/telegram-audio");
+  m_telegram.setOfflineDirectory(Profile::location(QStandardPaths::AppDataLocation)+"/telegram-offline");
+  connect(&m_telegram,&Telegram::offlineMessage,this,&Backend::toast);
   m_telegram.setArtDirectory(Profile::location(QStandardPaths::CacheLocation)+"/telegram-art");
   // Both decks report everything; only the one being heard is listened to.
   const auto eachDeck=[this](const std::function<void(QMediaPlayer *)> &wire){wire(&m_deckA);wire(&m_deckB);};
@@ -1594,12 +1596,12 @@ void Backend::telegramSongs(const QString &key, const QString &title, const QVar
     auto p = m_playlists[i].toMap();
     if (p.value("id") != id) continue;
     QVariantList tracks = songs;
-    if (!complete) {
-      QSet<QString> seen;
-      for (const auto &s : songs) seen.insert(itemId(s));
-      for (const auto &old : p.value("tracks").toList())
-        if (!seen.contains(itemId(old))) tracks.append(old);
-    }
+    QSet<QString> seen;
+    for (const auto &s : songs) seen.insert(itemId(s));
+    for (const auto &old : p.value("tracks").toList())
+      // A refresh that is the whole list drops what is gone from Telegram, except a song already kept offline: that
+      // stays playable until the person stops keeping it.
+      if (!seen.contains(itemId(old)) && (!complete || m_telegram.keptOffline(itemId(old)))) tracks.append(old);
     p["tracks"] = tracks;
     applyTelegramCover(p, key);
     m_playlists[i] = p;
@@ -1618,6 +1620,33 @@ void Backend::telegramSongs(const QString &key, const QString &title, const QVar
   m_playlists.append(created);
   emit libraryChanged();
   m_saveTimer.start();
+}
+// Every song of a Telegram playlist kept offline, or let go of. Returns false when the disk is too full.
+bool Backend::keepPlaylistOffline(const QString &playlistId, bool keep) {
+  for (const auto &v : m_playlists) {
+    const auto p = v.toMap();
+    if (p.value("id") != playlistId || p.value("source") != "telegram") continue;
+    const auto tracks = p.value("tracks").toList();
+    if (!keep) {
+      QStringList ids;
+      for (const auto &t : tracks) ids << itemId(t);
+      m_telegram.stopKeepingOffline(ids);
+      return true;
+    }
+    return m_telegram.keepOffline(tracks);
+  }
+  return false;
+}
+// How many of a Telegram playlist's songs are kept offline, or on their way to be.
+int Backend::playlistOfflineCount(const QString &playlistId) const {
+  const auto states = m_telegram.offline();
+  int count = 0;
+  for (const auto &v : m_playlists) {
+    const auto p = v.toMap();
+    if (p.value("id") != playlistId) continue;
+    for (const auto &t : p.value("tracks").toList()) count += states.contains(itemId(t));
+  }
+  return count;
 }
 // The chat's photo is the playlist's cover, unless the person chose one of their own.
 void Backend::applyTelegramCover(QVariantMap &playlist, const QString &key) {

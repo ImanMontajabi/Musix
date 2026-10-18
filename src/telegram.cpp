@@ -1,4 +1,5 @@
 #include "telegram.h"
+#include <QStorageInfo>
 #include "telegramtext.h"
 #include <QCoreApplication>
 #include <QCryptographicHash>
@@ -367,6 +368,9 @@ void Telegram::removeSource(const QString &key) {
       bool shared = false;
       for (const auto &other : m_sources) shared = shared || other.toMap().value("chatId") == chat;
       if (!shared) {
+        // Its songs are gone from the library, and what was kept of them goes too.
+        for (const auto &id : m_pinned.keys())
+          if (m_pinned.value(id).value("telegramChat") == chat) unpin(id, true);
         m_artQueue.erase(std::remove_if(m_artQueue.begin(), m_artQueue.end(), [&](const ArtTask &t) { return t.chatId == chat; }), m_artQueue.end());
         if (!chat.isEmpty() && !m_artDirectory.isEmpty()) QDir(chatFolder(chat)).removeRecursively();
       }
@@ -487,6 +491,7 @@ void Telegram::finishJob(int job, const QJsonObject &reply) {
                             : cancelled ? QStringLiteral("Cancelled.") : problem;
     setSource(finished.key, changes);
     saveSources();
+    if (ok) retryOffline(); // Telegram answered, so songs that could not be had are worth another try
   }
   releaseIfIdle();
 }
@@ -674,9 +679,12 @@ void Telegram::setCacheDirectory(const QString &directory) {
 }
 
 QString Telegram::cached(const QString &songId) const {
-  if (m_cacheDirectory.isEmpty() || songId.isEmpty()) return {};
-  for (const auto &name : QDir(m_cacheDirectory).entryList({songId + ".*"}, QDir::Files))
-    if (!name.endsWith(".part")) return m_cacheDirectory + "/" + name;
+  if (songId.isEmpty()) return {};
+  for (const auto &directory : {m_cacheDirectory, m_offlineDirectory}) {
+    if (directory.isEmpty()) continue;
+    for (const auto &name : QDir(directory).entryList({songId + ".*"}, QDir::Files))
+      if (!name.endsWith(".part")) return directory + "/" + name;
+  }
   return {};
 }
 
@@ -771,7 +779,7 @@ void Telegram::startFetch(int job) {
   it->started = true;
   setDownload();
   QJsonObject request{{"chatId", remote.left(colon)}, {"messageId", remote.mid(colon + 1)}, {"name", it->song.value("id").toString()},
-                      {"directory", m_cacheDirectory}, {"limit", double(MaxSongBytes)}, {"job", job}};
+                      {"directory", it->offline ? m_offlineDirectory : m_cacheDirectory}, {"limit", double(MaxSongBytes)}, {"job", job}};
   // The picture inside the file, if it has one and the song has none yet.
   const auto chat = it->song.value("telegramChat", remote.left(colon)).toString();
   if (!m_artDirectory.isEmpty() && artFile(chat, it->song.value("id").toString()).isEmpty()) {
@@ -796,10 +804,10 @@ void Telegram::finishFetch(int job, const QJsonObject &reply) {
     const auto result = reply.value("result").toObject();
     const QFileInfo file(result.value("file").toString());
     // The helper is trusted with the account, not with where files go.
-    if (file.isFile() && file.canonicalPath() == QFileInfo(m_cacheDirectory).canonicalFilePath()) {
+    if (file.isFile() && file.canonicalPath() == QFileInfo(finished.offline ? m_offlineDirectory : m_cacheDirectory).canonicalFilePath()) {
       data = {{"file", file.absoluteFilePath()}, {"cached", false}, {"tags", result.value("tags").toObject().toVariantMap()}};
       learn(finished.song, result.value("tags").toObject());
-      evict(id);
+      if (!finished.offline) evict(id);
       const QFileInfo art(result.value("art").toString());
       const auto chat = finished.song.value("telegramChat").toString();
       if (art.isFile() && !m_artDirectory.isEmpty() && art.canonicalPath() == QFileInfo(chatFolder(chat)).canonicalFilePath()) {
@@ -816,12 +824,31 @@ void Telegram::finishFetch(int job, const QJsonObject &reply) {
     error = reply.value("error").toString();
   }
   releaseSoon();
+  if (finished.offline) finishOffline(id, error.isEmpty(), error, reply.value("gone").toBool());
+  else if (m_pinned.contains(id)) {
+    // The player brought down a song that was asked to be kept: keep that copy rather than fetching it twice.
+    if (error.isEmpty() && offlineFile(id).isEmpty() &&
+        QFile::copy(data.value("file").toString(), m_offlineDirectory + "/" + QFileInfo(data.value("file").toString()).fileName())) {
+      m_keepQueue.removeAll(id);
+      m_keepFailed.remove(id);
+      emit offlineChanged();
+    }
+    pumpOffline(); // it was waiting for the player's download to be over
+  }
   if (finished.done) finished.done(data, error);
 }
 
 void Telegram::cancelFetch(const QString &songId) {
   for (auto it = m_fetches.begin(); it != m_fetches.end(); ++it) {
     if (it->song.value("id") != songId) continue;
+    if (it->offline) {
+      // Kept for later: only the player's interest ends.
+      it->done = {};
+      it->stream = {};
+      it->streaming = false;
+      setDownload();
+      return;
+    }
     const bool started = it->started;
     const int job = it.key();
     m_fetches.erase(it);
@@ -838,15 +865,18 @@ void Telegram::cancelFetch(const QString &songId) {
 // Fetches that cannot go on tell whoever waits; a prefetch has nobody to tell.
 void Telegram::failFetches(bool startedToo, const QString &message) {
   QList<Fetched> waiting;
+  QStringList gone; // offline downloads that did not arrive
   for (auto it = m_fetches.begin(); it != m_fetches.end();) {
     if (it->started && !startedToo) {
       ++it;
       continue;
     }
     if (it->done) waiting.append(it->done);
+    if (it->offline) gone.append(it->song.value("id").toString());
     it = m_fetches.erase(it);
   }
   setDownload();
+  for (const auto &id : gone) finishOffline(id, false, message, false);
   for (auto &done : waiting) done({}, message);
 }
 
@@ -924,12 +954,209 @@ void Telegram::clearAudio() {
 // Signing out: nothing of the account stays on this Mac.
 void Telegram::clearCache() {
   clearArt();
+  // What was kept offline is the account's too.
+  const auto pinned = m_pinned.keys();
+  if (!pinned.isEmpty() || !m_offlineDirectory.isEmpty()) {
+    for (const auto &id : pinned) unpin(id, true);
+    if (!m_offlineDirectory.isEmpty())
+      for (const auto &name : QDir(m_offlineDirectory).entryList(QDir::Files)) QFile::remove(m_offlineDirectory + "/" + name);
+  }
   if (!m_cacheDirectory.isEmpty())
     for (const auto &name : QDir(m_cacheDirectory).entryList(QDir::Files)) QFile::remove(m_cacheDirectory + "/" + name);
   if (!m_tags.isEmpty()) {
     m_tags.clear();
     QFile::remove(m_directory + "/tags.json");
   }
+}
+
+// --- Kept offline -------------------------------------------------------------
+//
+// A song the person pinned is brought down whole into its own folder, which the
+// cache's trimming never looks at. Downloads go one at a time through the same
+// fetch as playing, so the player can start a song that is still coming down.
+
+void Telegram::setOfflineDirectory(const QString &directory) {
+  m_offlineDirectory = directory;
+  ensureFolder(directory);
+  for (const auto &name : QDir(directory).entryList({"*.part"}, QDir::Files)) QFile::remove(directory + "/" + name);
+  loadOffline();
+  m_keepQueue.clear();
+  for (auto it = m_pinned.begin(); it != m_pinned.end(); ++it)
+    if (offlineFile(it.key()).isEmpty()) m_keepQueue.append(it.key());
+  if (!m_keepQueue.isEmpty()) QTimer::singleShot(0, this, [this] { pumpOffline(); });
+}
+
+QString Telegram::offlineFile(const QString &songId) const {
+  if (m_offlineDirectory.isEmpty() || songId.isEmpty()) return {};
+  for (const auto &name : QDir(m_offlineDirectory).entryList({songId + ".*"}, QDir::Files))
+    if (!name.endsWith(".part")) return m_offlineDirectory + "/" + name;
+  return {};
+}
+
+bool Telegram::keptOffline(const QString &songId) const { return m_pinned.contains(songId) && !offlineFile(songId).isEmpty(); }
+
+QString Telegram::offlineState(const QString &songId) const {
+  if (!m_pinned.contains(songId)) return {};
+  if (!offlineFile(songId).isEmpty()) return "ready";
+  if (m_keepActive == songId) return "downloading";
+  return m_keepFailed.contains(songId) ? "failed" : "queued";
+}
+
+QVariantMap Telegram::offline() const {
+  QVariantMap states;
+  for (auto it = m_pinned.begin(); it != m_pinned.end(); ++it) states.insert(it.key(), offlineState(it.key()));
+  return states;
+}
+
+void Telegram::loadOffline() {
+  m_pinned.clear();
+  QFile file(m_directory + "/offline.json");
+  if (!file.open(QIODevice::ReadOnly)) return;
+  const auto all = QJsonDocument::fromJson(file.readAll()).object();
+  for (auto it = all.begin(); it != all.end(); ++it) m_pinned.insert(it.key(), it.value().toObject().toVariantMap());
+}
+
+void Telegram::saveOffline() const {
+  QDir().mkpath(m_directory);
+  QJsonObject all;
+  for (auto it = m_pinned.begin(); it != m_pinned.end(); ++it) all.insert(it.key(), QJsonObject::fromVariantMap(it.value()));
+  QSaveFile file(m_directory + "/offline.json");
+  if (!file.open(QIODevice::WriteOnly)) return;
+  file.write(QJsonDocument(all).toJson(QJsonDocument::Compact));
+  if (file.commit()) QFile::setPermissions(m_directory + "/offline.json", QFileDevice::ReadOwner | QFileDevice::WriteOwner);
+}
+
+bool Telegram::keepOffline(const QVariantList &songs) {
+  if (m_offlineDirectory.isEmpty()) return false;
+  if (QStorageInfo(m_offlineDirectory).bytesAvailable() < m_minFreeBytes) {
+    emit offlineMessage("Not enough free disk space to keep songs offline; 500 MB must stay free.");
+    return false;
+  }
+  bool added = false;
+  for (const auto &entry : songs) {
+    const auto song = entry.toMap();
+    const auto id = song.value("id").toString();
+    if (id.isEmpty() || song.value("source") != "telegram" || song.value("remoteId").toString().lastIndexOf(':') <= 0) continue;
+    if (m_pinned.contains(id)) {
+      // Pinned already: asking again is how a failed one is tried again.
+      if (m_keepFailed.remove(id) && offlineFile(id).isEmpty() && !m_keepQueue.contains(id)) m_keepQueue.append(id);
+      added = true;
+      continue;
+    }
+    QVariantMap kept;
+    for (const auto *key : {"id", "source", "kind", "server", "remoteId", "title", "artist", "album", "seconds", "mime", "size", "added",
+                            "telegramChat", "telegramMessage", "telegramTopic", "fileName", "thumb"})
+      if (song.contains(key)) kept.insert(key, song.value(key));
+    m_pinned.insert(id, kept);
+    added = true;
+    if (!offlineFile(id).isEmpty()) continue;
+    // The player may already have it in the cache; copy it rather than ask Telegram again.
+    if (const auto path = cached(id); !path.isEmpty() && QFile::copy(path, m_offlineDirectory + "/" + QFileInfo(path).fileName())) continue;
+    m_keepQueue.append(id);
+  }
+  if (!added) return true;
+  saveOffline();
+  emit offlineChanged();
+  pumpOffline();
+  return true;
+}
+
+void Telegram::stopKeepingOffline(const QStringList &ids) {
+  for (const auto &id : ids) unpin(id, true);
+  pumpOffline();
+}
+
+void Telegram::unpin(const QString &songId, bool removeFile) {
+  const bool had = m_pinned.remove(songId) > 0;
+  m_keepQueue.removeAll(songId);
+  m_keepFailed.remove(songId);
+  if (m_keepActive == songId) {
+    for (auto it = m_fetches.begin(); it != m_fetches.end(); ++it)
+      if (it->offline && it->song.value("id") == songId) {
+        // Nobody waits for it now, but a player that does is told it did not come.
+        const auto done = it->done;
+        const int job = it.key();
+        const bool started = it->started;
+        m_fetches.erase(it);
+        if (started) send("cancel", {{"job", job}}, {});
+        setDownload();
+        if (done) done({}, "Cancelled.");
+        break;
+      }
+    m_keepActive.clear();
+  }
+  if (removeFile && !m_offlineDirectory.isEmpty())
+    for (const auto &name : QDir(m_offlineDirectory).entryList({songId + ".*"}, QDir::Files)) QFile::remove(m_offlineDirectory + "/" + name);
+  if (!had) return;
+  saveOffline();
+  emit offlineChanged();
+}
+
+void Telegram::retryOffline() {
+  bool any = false;
+  for (const auto &id : m_keepFailed) {
+    if (m_pinned.contains(id) && offlineFile(id).isEmpty() && !m_keepQueue.contains(id)) m_keepQueue.append(id);
+    any = true;
+  }
+  m_keepFailed.clear();
+  if (any) emit offlineChanged();
+  pumpOffline();
+}
+
+// The next song to keep, if nothing is being kept.
+void Telegram::pumpOffline() {
+  if (!m_keepActive.isEmpty() || m_keepQueue.isEmpty() || m_offlineDirectory.isEmpty()) return;
+  if (QStorageInfo(m_offlineDirectory).bytesAvailable() < m_minFreeBytes) {
+    // What had not come down is let go, rather than left to fill the disk later.
+    const auto waiting = m_keepQueue;
+    for (const auto &id : waiting) unpin(id, true);
+    emit offlineMessage("Not enough free disk space to keep the rest offline; 500 MB must stay free.");
+    return;
+  }
+  // A song the player is already bringing down into the cache is kept from that copy when it arrives.
+  QString next;
+  for (const auto &id : m_keepQueue)
+    if (!fetching(id)) {
+      next = id;
+      break;
+    }
+  if (next.isEmpty()) return;
+  m_keepQueue.removeAll(next);
+  m_keepActive = next;
+  const auto song = m_pinned.value(next);
+  const int job = m_nextJob++;
+  Fetch entry{song, {}, false, 0, 0, {}, false, false};
+  entry.streamable = true; // a player that wants it meanwhile is given its blocks
+  entry.offline = true;
+  m_fetches.insert(job, std::move(entry));
+  emit offlineChanged();
+  whenReady([this, job] { startFetch(job); });
+}
+
+void Telegram::finishOffline(const QString &songId, bool ok, const QString &error, bool gone) {
+  if (m_keepActive == songId) m_keepActive.clear();
+  if (!m_pinned.contains(songId)) {
+    pumpOffline();
+    return;
+  }
+  const auto title = m_pinned.value(songId).value("title").toString();
+  if (ok) {
+    m_keepFailed.remove(songId);
+    emit offlineChanged();
+    pumpOffline();
+    return;
+  }
+  if (gone) {
+    // Deleted in Telegram before it was ever downloaded: there is nothing to keep.
+    unpin(songId, true);
+    emit offlineMessage(QString("“%1” is no longer in its chat, so it can’t be kept offline.").arg(title));
+    pumpOffline();
+    return;
+  }
+  // Pinned still, and tried again by retryOffline(); the rest of the queue waits with it.
+  m_keepFailed.insert(songId);
+  emit offlineChanged();
+  emit offlineMessage(QString("Couldn’t keep “%1” offline: %2").arg(title, error));
 }
 
 // --- Cover art ----------------------------------------------------------------
