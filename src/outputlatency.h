@@ -15,6 +15,14 @@ double outputLatencyMs(const QByteArray &deviceId);
 // (Bluetooth, USB, HDMI), or off macOS.
 QString outputPort(const QByteArray &deviceId);
 
+// The UID of the system's default output, which is what an empty device id
+// follows; empty where unknown.
+QByteArray defaultOutputUid();
+// Whether a device with that UID is still connected. True where it cannot be told.
+bool outputPresent(const QByteArray &uid);
+// "name · transport · port" for the log line that explains a pause.
+QString describeOutput(const QByteArray &deviceId);
+
 // Tells when the default output, the set of outputs, or the chosen device's
 // port changes. Core Audio calls from its own thread; changed() arrives on this
 // object's.

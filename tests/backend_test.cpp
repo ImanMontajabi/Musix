@@ -179,6 +179,13 @@ private slots:
 #ifdef Q_OS_MACOS
     {OutputPortWatcher w;QVERIFY(!w.running());w.setDevice({});QVERIFY(w.running());w.setDevice(QByteArray("no-such-device"));const auto port=outputPort({});QVERIFY(port==""||port=="headphones"||port=="speaker"||port.size()==4);w.stop();QVERIFY(!w.running());w.stop();}
 #endif
+    // On "System default" the device that goes away is the old default: AirPods out of range, a display or a DAC unplugged.
+    b.play();QTRY_VERIFY(b.playing());b.m_watchedOutput.clear();
+    b.noteWatchedOutput("airpods",true);QVERIFY(b.playing());       // the first reading is the baseline
+    b.noteWatchedOutput("speakers",true);QVERIFY(b.playing());      // chosen in Control Center: the AirPods are still there
+    b.noteWatchedOutput("airpods",true);b.noteWatchedOutput("speakers",false);QVERIFY(!b.playing()); // disconnected
+    b.play();QTRY_VERIFY(b.playing());b.noteWatchedOutput("speakers",false);QVERIFY(b.playing());     // no change, no pause
+    b.m_watchedOutput.clear();
     b.play();QTRY_VERIFY(b.playing());b.m_outputId="removed-device";b.outputsChanged();QVERIFY(!b.playing());
     b.m_settings.setValue("pauseOnDisconnect",false);b.play();QTRY_VERIFY(b.playing());b.m_outputId="removed-device";b.outputsChanged();QVERIFY(b.playing());
     auto saved=b.m_sessions.first().toMap();auto unavailable=song;unavailable["available"]=false;

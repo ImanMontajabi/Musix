@@ -60,6 +60,42 @@ QString outputPort(const QByteArray &deviceId) {
   }
 }
 
+QByteArray defaultOutputUid() {
+  AudioObjectID device = kAudioObjectUnknown;
+  CFStringRef uid = nullptr;
+  UInt32 size = sizeof(uid);
+  AudioObjectPropertyAddress address{kAudioDevicePropertyDeviceUID, kAudioObjectPropertyScopeGlobal, kAudioObjectPropertyElementMain};
+  if (!read(kAudioObjectSystemObject, kAudioHardwarePropertyDefaultOutputDevice, kAudioObjectPropertyScopeGlobal, device) ||
+      device == kAudioObjectUnknown || AudioObjectGetPropertyData(device, &address, 0, nullptr, &size, &uid) != noErr || !uid)
+    return {};
+  const QByteArray result = QString::fromCFString(uid).toUtf8();
+  CFRelease(uid);
+  return result;
+}
+
+bool outputPresent(const QByteArray &uid) {
+  if (uid.isEmpty()) return true;
+  AudioObjectID device = kAudioObjectUnknown;
+  CFStringRef key = CFStringCreateWithBytes(nullptr, reinterpret_cast<const UInt8 *>(uid.constData()), uid.size(), kCFStringEncodingUTF8, false);
+  AudioObjectPropertyAddress address{kAudioHardwarePropertyTranslateUIDToDevice, kAudioObjectPropertyScopeGlobal, kAudioObjectPropertyElementMain};
+  UInt32 size = sizeof(device);
+  const OSStatus status = AudioObjectGetPropertyData(kAudioObjectSystemObject, &address, sizeof(key), &key, &size, &device);
+  CFRelease(key);
+  return status == noErr && device != kAudioObjectUnknown;
+}
+
+QString describeOutput(const QByteArray &deviceId) {
+  const AudioObjectID device = deviceFor(deviceId);
+  if (device == kAudioObjectUnknown) return QStringLiteral("none");
+  CFStringRef name = nullptr;
+  UInt32 size = sizeof(name), transport = 0;
+  AudioObjectPropertyAddress address{kAudioObjectPropertyName, kAudioObjectPropertyScopeGlobal, kAudioObjectPropertyElementMain};
+  QString label = AudioObjectGetPropertyData(device, &address, 0, nullptr, &size, &name) == noErr && name ? QString::fromCFString(name) : QStringLiteral("?");
+  if (name) CFRelease(name);
+  read(device, kAudioDevicePropertyTransportType, kAudioObjectPropertyScopeGlobal, transport);
+  return QStringLiteral("%1 · %2%3%4%5 · %6").arg(label).arg(QChar(transport >> 24 & 0xff)).arg(QChar(transport >> 16 & 0xff)).arg(QChar(transport >> 8 & 0xff)).arg(QChar(transport & 0xff)).arg(outputPort(deviceId));
+}
+
 namespace {
 OSStatus changedOnAudioThread(AudioObjectID, UInt32, const AudioObjectPropertyAddress *, void *self) {
   QMetaObject::invokeMethod(static_cast<OutputPortWatcher *>(self), "poke", Qt::QueuedConnection);
@@ -104,6 +140,9 @@ void OutputPortWatcher::poke() {
 #else
 double outputLatencyMs(const QByteArray &) { return 0; }
 QString outputPort(const QByteArray &) { return {}; }
+QByteArray defaultOutputUid() { return {}; }
+bool outputPresent(const QByteArray &) { return true; }
+QString describeOutput(const QByteArray &) { return {}; }
 void OutputPortWatcher::setDevice(const QByteArray &) {}
 void OutputPortWatcher::stop() {}
 void OutputPortWatcher::rearm() {}

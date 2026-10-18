@@ -38,6 +38,7 @@
 /tests/*
 !/tests/*.cpp
 !/tests/*.h
+!/tests/*.m
 !/tests/*.py
 !/tests/fixtures/
 /tests/fixtures/*

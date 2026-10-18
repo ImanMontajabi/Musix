@@ -4,6 +4,7 @@
 #include <QDir>
 #include <QFileInfo>
 #include <QSet>
+#include <QLoggingCategory>
 #include <QStandardPaths>
 #include <QDateTime>
 #include <QHash>
@@ -298,7 +299,13 @@ bool Backend::restoreSession(const QString &id){
     emit trackChanged();emit positionChanged();play();m_saveTimer.start();return true;
   }return false;
 }
-void Backend::pauseForDisconnect(){if(pauseOnDisconnect()&&(playing()||m_wantPlay)){pause();emit toast("Output disconnected · playback paused");}}
+// Off unless QT_LOGGING_RULES="musix.output.info=true": what the output was, what it became, and why a pause did or did not follow.
+Q_LOGGING_CATEGORY(lcOutput,"musix.output",QtWarningMsg)
+void Backend::pauseForDisconnect(){
+  const bool pausing=pauseOnDisconnect()&&(playing()||m_wantPlay);
+  qCInfo(lcOutput)<<"output lost; pause on disconnect"<<pauseOnDisconnect()<<"playing"<<playing()<<"->"<<(pausing?"pausing":"nothing to pause");
+  if(pausing){pause();emit toast("Output disconnected · playback paused");}
+}
 void Backend::outputsChanged(){
   bool present=m_outputId.isEmpty();for(const auto &d:QMediaDevices::audioOutputs())if(d.id()==m_outputId)present=true;
   if(!present)pauseForDisconnect();
@@ -340,15 +347,28 @@ void Backend::setupDisconnectMonitor(){
 void Backend::refreshOutputPort(){
   if(!pauseOnDisconnect())return;
 #ifdef Q_OS_MACOS
-  // The jack and the speakers are one device with two data sources; a device that is
-  // really gone is outputsChanged()'s business.
-  m_outputWatcher.setDevice(m_outputId);noteOutputPort(outputPort(m_outputId));return;
+  // The jack and the speakers are one device with two data sources.
+  // With "System default" the output is whatever the system follows (m_outputId is only the default as of the last
+  // device change), and a headset, a monitor or a USB DAC that goes away is a different device, not a port change:
+  // the default moves and the old one stops existing.
+  const QByteArray followed=audioDeviceId().isEmpty()?QByteArray():m_outputId;
+  m_outputWatcher.setDevice(followed);
+  noteWatchedOutput(followed.isEmpty()?defaultOutputUid():followed,outputPresent(m_watchedOutput));
+  qCInfo(lcOutput)<<"output now"<<describeOutput(followed);
+  noteOutputPort(outputPort(followed));return;
 #endif
   if(m_portProbe.state()!=QProcess::NotRunning){m_portDirty=true;return;}m_portProbe.start("pactl",{"-f","json","list","sinks"});m_portTimeout.start();}
 void Backend::inspectOutputPorts(const QVariantList &sinks){
   for(const auto &v:sinks){const auto s=v.toMap();if(s.value("description").toString()!=m_outputDescription && s.value("name").toString()!=QString::fromUtf8(m_outputId))continue;
     noteOutputPort(s.value("active_port").toString());return;
   }
+}
+// The device the sound goes to has been replaced by another and the first has really gone (not merely been
+// deselected): Bluetooth out of range, USB or a display unplugged. The first reading only sets the baseline.
+void Backend::noteWatchedOutput(const QByteArray &now,bool previousStillPresent){
+  qCInfo(lcOutput)<<"watched output"<<m_watchedOutput<<"->"<<now<<"previous still present"<<previousStillPresent;
+  if(!m_watchedOutput.isEmpty()&&m_watchedOutput!=now&&!previousStillPresent)pauseForDisconnect();
+  m_watchedOutput=now;
 }
 // Leaving a headphone port for anything else pauses; the first reading only sets the baseline.
 void Backend::noteOutputPort(const QString &port){

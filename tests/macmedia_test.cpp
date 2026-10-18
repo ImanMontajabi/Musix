@@ -65,6 +65,8 @@ private slots:
     QVERIFY(info.value("artwork").toBool());
     QCOMPARE(info.value("rate").toDouble(), 1.0);
     QCOMPARE(media.playbackState(), QString("playing"));
+    // For a person with a probe of the system's own Now Playing state: stay up and playing.
+    if (const int hold = qEnvironmentVariableIntValue("MACMEDIA_HOLD_MS")) QTest::qWait(hold);
 
     QVERIFY(media.perform("pause"));
     QTRY_VERIFY_WITH_TIMEOUT(!b.playing(), 3000);

@@ -732,10 +732,11 @@ private:
   void refreshOutputPort();
   void inspectOutputPorts(const QVariantList &sinks);
   void noteOutputPort(const QString &port);
+  void noteWatchedOutput(const QByteArray &now,bool previousStillPresent);
   void startPortWatch();
   void stopPortWatch();
   void pauseForDisconnect();
-  QByteArray m_outputId;
+  QByteArray m_outputId,m_watchedOutput;
   QString m_outputDescription,m_outputPort;
   QProcess m_portMonitor,m_portProbe;
   OutputPortWatcher m_outputWatcher;
