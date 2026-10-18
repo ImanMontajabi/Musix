@@ -213,7 +213,8 @@ QtObject {
     readonly property int springSlowEffectsMs: app.motion ? 300 : 0
 
     // --- Typography ----------------------------------------------------------
-    readonly property string fontFamily: "Google Sans Flex"
+    // uiFontFamily comes from main.cpp: Google Sans Flex if installed, else the system font.
+    readonly property string fontFamily: typeof uiFontFamily !== "undefined" ? uiFontFamily : "Google Sans Flex"
     // Material's emphasized styles lean on a variable font's weight and width
     // to carry hierarchy, rather than only its size. Google Sans Flex is
     // variable, so the emphasis is real rather than a synthesised bold.

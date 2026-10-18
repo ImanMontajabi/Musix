@@ -1,6 +1,7 @@
 #include <QPainter>
 #include <QQmlProperty>
 #include "uitest.h"
+#include "uifont.h"
 #include "backend.h"
 #include "profile.h"
 #include "motionartwork.h"
@@ -115,7 +116,11 @@ void runUiTests(Backend *b, QQuickWindow *w) {
   auto label=findItem(w->contentItem(),"sungText");
   if(QFontDatabase::families().contains("Google Sans Flex"))
     check(label && QFontInfo(label->property("font").value<QFont>()).family()=="Google Sans Flex","Google Sans Flex rendered font");
-  else fprintf(stdout,"SKIP Google Sans Flex rendered font: the font is not installed, and Musix uses it only when it is\n");
+  else {
+    fprintf(stdout,"SKIP Google Sans Flex rendered font: the font is not installed, and Musix uses it only when it is\n");
+    // Without it the interface is set in the family main.cpp chose, not in Qt's guess at a missing one.
+    check(label && QFontInfo(label->property("font").value<QFont>()).family()==QFontInfo(QFont(interfaceFontFamily())).family(),"the interface uses the fallback font");
+  }
   b->setTheme("dark");
   b->setMotion(true);
   b->setAutoplay(false);

@@ -4,6 +4,7 @@
 #ifdef SUNG_DBUS
 #include "mpris.h"
 #endif
+#include "uifont.h"
 #include "roundedart.h"
 #include "windowchrome.h"
 #include "windowresources.h"
@@ -178,9 +179,8 @@ int main(int argc, char **argv) {
     server.listen(instanceName);
   }
   QQuickStyle::setStyle("Basic");
-  QFont font(QFontDatabase::families().contains("Google Sans Flex")
-                 ? "Google Sans Flex"
-                 : "Noto Sans");
+  const QString interfaceFamily = interfaceFontFamily();
+  QFont font(interfaceFamily);
   font.setPixelSize(14);
   app.setFont(font);
   qmlRegisterType<RowSelection>("Sung.Native", 1, 0, "RowSelection");
@@ -218,6 +218,7 @@ int main(int argc, char **argv) {
   engine.rootContext()->setContextProperty("windowChrome", &windowChrome);
   engine.addImageProvider("symbols", new Symbols);
   engine.rootContext()->setContextProperty("app", &backend);
+  engine.rootContext()->setContextProperty("uiFontFamily", interfaceFamily);
   // A local mock can stand in for GitHub; setEndpoint takes nothing else.
   if (const auto endpoint = qEnvironmentVariable("MUSIX_UPDATE_API"); !endpoint.isEmpty() && !updates.setEndpoint(QUrl(endpoint)))
     fprintf(stderr, "MUSIX_UPDATE_API ignored: only a loopback http address is accepted\n");
