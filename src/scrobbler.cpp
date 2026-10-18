@@ -76,7 +76,9 @@ QVariantMap Scrobbler::listenFor(const QVariantMap &track, qint64 startedAt) {
   if (title.isEmpty() || artist.isEmpty() || startedAt <= 0)
     return {};
   QVariantMap metadata{{"track_name", title}, {"artist_name", artist}};
-  const auto album = track.value("album").toString().trimmed();
+  // A Telegram song's album is the chat it came from, which is no release: sent as one it would put a channel's name
+  // in the person's listening history.
+  const auto album = track.value("source") == "telegram" ? QString() : track.value("album").toString().trimmed();
   if (!album.isEmpty())
     metadata.insert("release_name", album);
   QVariantMap info{{"media_player", "Musix"}, {"submission_client", "Musix"}};

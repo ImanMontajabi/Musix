@@ -2,6 +2,7 @@
 #include "profile.h"
 #include "artworkurl.h"
 #include "lrc.h"
+#include "telegramtext.h"
 #include <QStandardPaths>
 #include <QDateTime>
 #include "rowselection.h"
@@ -213,6 +214,31 @@ private slots:
     b.telegramSongs("-1","Chat",{row("tg_c4")},false,true);
     QVERIFY(b.m_playlists.isEmpty());
     QFile::remove(data + "/telegram/offline.json");QFile::remove(data + "/telegram-offline/tg_kept.mp3");
+  }
+  void telegramSongsScrobbleWithTheirCleanDetailsAndNeverTheChatName() {
+    // A channel's signed song as Telegram::songRow hands it over, with the chat title as its album.
+    const auto row=[](const QString &title,const QString &artist){
+      const auto c=telegramtext::cleanSong(title,artist);
+      return QVariantMap{{"id","tg_1"},{"source","telegram"},{"kind","song"},{"title",c.title},{"artist",c.artist},{"album","Music Hub Channel"},{"seconds",200}};
+    };
+    auto listen=Scrobbler::listenFor(row("The Weeknd - Blinding Lights @MusicHub","Telegram Audio"),1700000000);
+    QVERIFY(!listen.isEmpty());
+    auto meta=listen.value("track_metadata").toMap();
+    QCOMPARE(meta.value("artist_name").toString(),QString("The Weeknd"));
+    QCOMPARE(meta.value("track_name").toString(),QString("Blinding Lights"));
+    QVERIFY2(!meta.contains("release_name"),"the chat is not a release");
+    QCOMPARE(meta.value("additional_info").toMap().value("duration").toInt(),200);
+    QCOMPARE(listen.value("listened_at").toLongLong(),qint64(1700000000));
+    // A performer the file named is used as it is, cleaned.
+    meta=Scrobbler::listenFor(row("Blinding Lights | @MusicHub","The Weeknd (@MusicHub)"),1700000000).value("track_metadata").toMap();
+    QCOMPARE(meta.value("artist_name").toString(),QString("The Weeknd"));
+    QCOMPARE(meta.value("track_name").toString(),QString("Blinding Lights"));
+    // No artist even after cleaning: nothing to send, and the channel is not put in its place.
+    QVERIFY(Scrobbler::listenFor(row("Blinding Lights @MusicHub","Telegram Audio"),1700000000).isEmpty());
+    QVERIFY(Scrobbler::listenFor(row("Blinding Lights","@MusicHub"),1700000000).isEmpty());
+    // Another source's album is still sent.
+    QVariantMap local{{"id","local_1"},{"title","Song"},{"artist","Artist"},{"album","Real Album"}};
+    QCOMPARE(Scrobbler::listenFor(local,1700000000).value("track_metadata").toMap().value("release_name").toString(),QString("Real Album"));
   }
   void libraryPolish() {
     Backend b;b.setWatchMusicFolders(false);b.clearQueue();b.m_localTracks.clear();b.m_playlists.clear();
