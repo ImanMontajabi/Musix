@@ -81,8 +81,9 @@ target_link_libraries(musix PRIVATE Qt6::Core Qt6::Gui Qt6::Quick Qt6::Qml Qt6::
 # Same shape as the MPRIS split above: one of the two implementations is
 # compiled, never both, so neither platform carries a stub of the other.
 if(APPLE)
- target_sources(musix PRIVATE src/windowchrome.mm src/releasenotifier.mm src/releasenotifier.h)
- target_link_libraries(musix PRIVATE "-framework AppKit" "-framework UserNotifications" "-framework CoreAudio")
+ target_sources(musix PRIVATE src/windowchrome.mm src/releasenotifier.mm src/releasenotifier.h src/macmedia.mm src/macmedia.h)
+ set_source_files_properties(src/macmedia.mm PROPERTIES COMPILE_OPTIONS -fobjc-arc)
+ target_link_libraries(musix PRIVATE "-framework AppKit" "-framework UserNotifications" "-framework CoreAudio" "-framework MediaPlayer")
 else()
  target_sources(musix PRIVATE src/windowchrome.cpp)
 endif()
@@ -226,6 +227,15 @@ if(BUILD_TESTING)
  target_include_directories(musix-tests PRIVATE src)
  target_link_libraries(musix-tests PRIVATE ${SUNG_BACKEND_LIBS} Qt6::Test)
  add_test(NAME backend COMMAND musix-tests)
+ if(APPLE)
+  # Control Center and the media keys, read back in-process.
+  qt_add_executable(musix-macmedia-tests tests/macmedia_test.cpp src/macmedia.mm src/macmedia.h src/artworkurl.h src/desktoptheme.cpp src/desktoptheme.h ${SUNG_BACKEND_SOURCES})
+  set_source_files_properties(src/macmedia.mm PROPERTIES COMPILE_OPTIONS -fobjc-arc)
+  target_include_directories(musix-macmedia-tests PRIVATE src)
+  target_link_libraries(musix-macmedia-tests PRIVATE ${SUNG_BACKEND_LIBS} Qt6::Test "-framework AppKit" "-framework MediaPlayer")
+  add_test(NAME macmedia COMMAND musix-macmedia-tests)
+  set_tests_properties(macmedia PROPERTIES TIMEOUT 300 ENVIRONMENT "QT_QPA_PLATFORM=${SUNG_MEDIA_TEST_QPA};SUNG_FIXTURE_HELPER=${CMAKE_CURRENT_SOURCE_DIR}/tests/catalog_fixture.py")
+ endif()
  set_tests_properties(backend PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=${SUNG_MEDIA_TEST_QPA};SUNG_FIXTURE_HELPER=${CMAKE_CURRENT_SOURCE_DIR}/tests/catalog_fixture.py;QT_FFMPEG_DECODING_HW_DEVICE_TYPES=,;QT_FFMPEG_ENCODING_HW_DEVICE_TYPES=,")
  # The notifier speaks to org.freedesktop.Notifications, so both the test and
  # the bus it needs exist only where there is a session bus.

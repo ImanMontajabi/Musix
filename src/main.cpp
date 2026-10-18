@@ -5,6 +5,9 @@
 #include "mpris.h"
 #endif
 #include "uifont.h"
+#ifdef Q_OS_MACOS
+#include "macmedia.h"
+#endif
 #include "roundedart.h"
 #include "windowchrome.h"
 #include "windowresources.h"
@@ -204,6 +207,11 @@ int main(int argc, char **argv) {
   exposeMpris = exposeMpris || args.contains("--mpris-test");
 #endif
   if (exposeMpris) registerMpris(&backend);
+#endif
+#ifdef Q_OS_MACOS
+  // Control Center and the media keys belong to the whole machine; a test or
+  // isolated run must not take them from whatever else is playing.
+  if (!args.contains("--isolated")) registerMacMedia(&backend);
 #endif
   WindowResources windowResources;
   WindowChrome windowChrome;
