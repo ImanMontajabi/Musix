@@ -14,16 +14,8 @@ A minimal Material 3 player built with C++20 and Qt Quick. No account, no teleme
 
 </div>
 
-## Screenshots
+<img width="1920" height="1080" alt="Screenshot 2026-10-18 at 16 40 13" src="https://github.com/user-attachments/assets/4c9bce55-efaa-4b91-8019-91e0af880ff2" />
 
-### Mini player
-<img width="566" height="262" alt="The Musix mini player: a compact rounded window with album art, track title, a lyric line and transport controls" src="https://github.com/user-attachments/assets/63ca9eb1-c9ae-42a2-9408-ebec2c486961" />
-
-### Play from YouTube Music
-<img width="1366" height="868" alt="The Musix home page showing YouTube Music shelves of album artwork, with the navigation rail on the left and the player bar along the bottom" src="https://github.com/user-attachments/assets/f3016ea7-710b-46d0-96fe-0b2bcbc7dcce" />
-
-### Play your local music
-<img width="1366" height="868" alt="The Musix local library showing imported songs in a list with embedded artwork, and the now-playing panel on the right" src="https://github.com/user-attachments/assets/ae6dfbba-4402-4566-a47e-122071082b2f" />
 
 ## Features
 
