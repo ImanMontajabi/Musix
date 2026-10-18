@@ -1,15 +1,18 @@
 #include "macmedia.h"
+#include <QLoggingCategory>
 #include <QMetaObject>
 #include <QNetworkReply>
 #include <QPointer>
 #include <QUrl>
 #import <AppKit/AppKit.h>
 #import <MediaPlayer/MediaPlayer.h>
+#import <objc/message.h>
 
 namespace {
 NSString *ns(const QString &s) { return s.toNSString(); }
 QString qs(id value) { return [value isKindOfClass:NSString.class] ? QString::fromNSString(value) : QString(); }
 // A cover that never arrives or is huge is not worth holding up the controls for.
+Q_LOGGING_CATEGORY(lcMedia, "musix.media", QtWarningMsg)
 constexpr qint64 maxArtworkBytes = 8 * 1024 * 1024;
 } // namespace
 
@@ -21,10 +24,12 @@ struct MacMedia::Impl {
 MacMedia::MacMedia(Backend *backend, QObject *parent) : QObject(parent), b(backend), d(new Impl) {
   MPRemoteCommandCenter *center = MPRemoteCommandCenter.sharedCommandCenter;
   QPointer<MacMedia> self(this);
-  auto add = [&](MPRemoteCommand *command, QString name) {
+  // By value: the blocks outlive this constructor, and a reference to `self` would dangle by the first key press.
+  auto add = [&, self](MPRemoteCommand *command, QString name) {
     command.enabled = YES;
     id token = [command addTargetWithHandler:^MPRemoteCommandHandlerStatus(MPRemoteCommandEvent *event) {
       // The system calls from its own queue; the player answers on the main thread.
+      qCInfo(lcMedia) << "remote command" << name << "allowed" << (self && self->allowed(name)) << "on main thread" << NSThread.isMainThread;
       if (!self || !self->allowed(name)) return MPRemoteCommandHandlerStatusNoActionableNowPlayingItem;
       const double argument = [event isKindOfClass:MPChangePlaybackPositionCommandEvent.class]
                                   ? ((MPChangePlaybackPositionCommandEvent *)event).positionTime : 0;
@@ -92,6 +97,18 @@ bool MacMedia::perform(const QString &command, double argument) {
     const qint64 target = qint64(argument * 1000);
     b->seek(qBound<qint64>(0, target, b->duration()));
   }
+  return true;
+}
+
+bool MacMedia::deliver(const QString &command) {
+  MPRemoteCommandCenter *center = MPRemoteCommandCenter.sharedCommandCenter;
+  MPRemoteCommand *c = command == "play" ? center.playCommand : command == "pause" ? center.pauseCommand
+                     : command == "toggle" ? center.togglePlayPauseCommand : command == "next" ? center.nextTrackCommand
+                     : command == "previous" ? center.previousTrackCommand : nil;
+  SEL invoke = NSSelectorFromString(@"invokeCommandWithEvent:completion:");
+  if (!c || ![c respondsToSelector:invoke]) return false;
+  void (^done)(NSArray *) = ^(NSArray *) {};
+  ((void (*)(id, SEL, id, id))objc_msgSend)(c, invoke, nil, done);
   return true;
 }
 

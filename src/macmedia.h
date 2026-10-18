@@ -25,6 +25,9 @@ public:
   // Whether the system has a handler registered for it and offers it.
   bool commandEnabled(const QString &command) const;
   bool perform(const QString &command, double argument = 0);
+  // Runs the handler the system would call for that command, in this process (MPRemoteCommand's own dispatch,
+  // not an event sent to the machine): the path perform() alone does not cover. False if it could not be reached.
+  bool deliver(const QString &command);
 
 private:
   struct Impl;

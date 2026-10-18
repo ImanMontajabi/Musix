@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 # Prints the Now Playing client macOS has and what it was told: the check that
-# Control Center and the media keys have a Musix to talk to. Read-only.
+# Control Center and the media keys have a Musix to talk to. Read-only unless
+# MR_SEND (0 play, 1 pause, 2 toggle, 4 next, 5 previous) and MR_CLIENT are set:
+# then that command goes to the Now Playing client only if its name contains
+# MR_CLIENT, e.g. MR_CLIENT='(<pid>)' for a run you started yourself.
 #   scripts/nowplaying-probe.sh [seconds]    polls once a second for that long (default: once)
 set -euo pipefail
 root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"

@@ -66,7 +66,18 @@ private slots:
     QCOMPARE(info.value("rate").toDouble(), 1.0);
     QCOMPARE(media.playbackState(), QString("playing"));
     // For a person with a probe of the system's own Now Playing state: stay up and playing.
-    if (const int hold = qEnvironmentVariableIntValue("MACMEDIA_HOLD_MS")) QTest::qWait(hold);
+    if (const int hold = qEnvironmentVariableIntValue("MACMEDIA_HOLD_MS"))
+      for (int waited = 0; waited < hold; waited += 500) { QTest::qWait(500); qInfo("held: playing=%d position=%lld", b.playing(), (long long)b.position()); }
+
+    // Through the handler the system calls, once the constructor is long gone (a dangling capture crashed here).
+    QVERIFY(media.deliver("pause"));
+    QTRY_VERIFY_WITH_TIMEOUT(!b.playing(), 3000);
+    QVERIFY(media.deliver("play"));
+    QTRY_VERIFY_WITH_TIMEOUT(b.playing(), 3000);
+    QVERIFY(media.deliver("toggle"));
+    QTRY_VERIFY_WITH_TIMEOUT(!b.playing(), 3000);
+    QVERIFY(media.deliver("toggle"));
+    QTRY_VERIFY_WITH_TIMEOUT(b.playing(), 3000);
 
     QVERIFY(media.perform("pause"));
     QTRY_VERIFY_WITH_TIMEOUT(!b.playing(), 3000);
