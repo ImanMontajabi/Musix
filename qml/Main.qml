@@ -110,6 +110,15 @@ ApplicationWindow {
     readonly property bool searchViewOpen: searchSuggestions.visible
     property bool searchFocused: (window.activeFocusItem && window.activeFocusItem.handlesTextInput===true) || searchField.activeFocus || (window.activeFocusItem && window.activeFocusItem.objectName==="lyricSearchField")
     readonly property bool editableLocal: {app.playlists;return !!localPlaylist && !app.smartPlaylist(localPlaylist).id;}
+    // The Telegram source behind the playlist on show, if it is one: its header offers a refresh without a trip through Settings.
+    readonly property string telegramKey: localPlaylist.indexOf("telegram:")===0 ? localPlaylist.slice(9) : ""
+    readonly property var telegramSource: {
+        if(!telegramKey)return null
+        const list=app.telegram.sources
+        for(let i=0;i<list.length;++i)if(list[i].key===telegramKey)return list[i]
+        return null
+    }
+    readonly property bool telegramBusy: !!telegramSource && (telegramSource.status==="queued"||telegramSource.status==="syncing"||telegramSource.status==="waiting")
     readonly property bool modalOpen: immersiveQueue.visible || otherModalOpen
     readonly property bool otherModalOpen: trimDialog.visible || onboarding.visible || artworkViewer.visible || (immersiveLoader.item && immersiveLoader.item.popupVisible) || viewLayoutDialog.visible || volumeControl.popupVisible || homeEditor.visible || outputPicker.visible || sessionsDialog.visible || statsDialog.visible || playlistVersionsDialog.visible || playlistCoverDialog.visible || commandPalette.visible || artworkControls.visible || smartDialog.visible || trackDetails.visible || shortcutHelp.visible || duplicateDialog.visible || serverToolbar.dialogOpen || serverConnection.visible || serverAddDialog.visible || serverRenameDialog.visible || serverDeleteDialog.visible || serverRatingDialog.visible || musicFoldersDialog.visible || musicFolderEntry.visible || cleanupDialog.visible || navigationDrawer.visible || bulkActions.visible || volumeStepMenu.visible || rateDialog.visible || lyricTimingDialog.visible || settingsDialog.visible || playlistDialog.visible || addPlaylistDialog.visible || deletePlaylistDialog.visible || actions.visible || playlistActions.visible || sleepMenu.visible || (fileDialogs!==null && fileDialogs.visible) || audioDeviceDialog.visible || collectionSort.menuOpen
     property bool sliderFocused: window.activeFocusItem && window.activeFocusItem.handlesArrowKeys === true
@@ -971,6 +980,11 @@ ApplicationWindow {
                                 Layout.fillWidth: true; spacing: Theme.textGap
                             SungText {heading: true; text: window.serverDisconnected ? "Music server" : window.destination==="library"&&window.libraryTab==="playlists"&&!window.localPlaylist ? "Playlists" : app.title; objectName: "collectionHeaderTitle"; emphasized: true; scaled: true; font.pixelSize: app.page==="home"?Theme.displaySmall:Theme.headlineMedium-(Theme.headlineMedium-Theme.titleLarge)*content.headerCollapse; Behavior on font.pixelSize { NumberAnimation { duration: app.motion?Theme.normal:0; easing.type: Easing.OutCubic } } Layout.fillWidth: true; wrapMode: Text.Wrap; maximumLineCount: 2 }
                                 SungText { objectName: "albumArtist"; visible: !!app.albumInfo.artist;opacity:1-content.headerCollapse;Layout.maximumHeight:implicitHeight*(1-content.headerCollapse);clip:true; Layout.fillWidth: true; text: app.albumInfo.artist || ""; font.pixelSize: Theme.bodyLarge; color: Theme.muted; maximumLineCount: 2; wrapMode: Text.Wrap }
+                                SungText {
+                                    objectName: "telegramSyncStatus"; Layout.fillWidth: true; elide: Text.ElideRight; color: window.telegramSource&&window.telegramSource.status==="error"?Theme.error:Theme.muted
+                                    visible: !!window.telegramSource && (window.telegramBusy || window.telegramSource.status==="error" || !!window.telegramSource.message)
+                                    text: !window.telegramSource ? "" : window.telegramBusy ? (window.telegramSource.status==="waiting" ? window.telegramSource.message : window.telegramSource.incremental ? window.telegramSource.added+" new so far…" : window.telegramSource.count+" songs so far…") : window.telegramSource.message
+                                }
                                 SungText { objectName: "albumSummary"; visible: !!app.albumInfo.summary;opacity:1-content.headerCollapse;Layout.maximumHeight:implicitHeight*(1-content.headerCollapse);clip:true; Layout.fillWidth: true; text: app.albumInfo.summary || ""; font.pixelSize: Theme.appBarSubtitle.medium; color: Theme.muted; wrapMode: Text.Wrap }
                             }
                             // The app bar's own actions. Material measures them
@@ -993,6 +1007,10 @@ ApplicationWindow {
                                      visible:!!app.collectionItem.id, trigger:function(){app.togglePin(app.collectionItem)}},
                                     {key:"refresh", symbol:"refresh", label:"Refresh", enabled:!app.busy,
                                      visible:app.page!=="library"&&app.page!=="local", trigger:function(){app.refresh()}},
+                                    {key:"telegramRefresh", name:"telegramRefreshButton", symbol:"refresh", label:window.telegramBusy?"Refreshing from Telegram…":"Refresh from Telegram",
+                                     enabled:!window.telegramBusy, visible:!!window.telegramSource, trigger:function(){app.telegram.refresh(window.telegramKey)}},
+                                    {key:"telegramFullResync", name:"telegramFullResyncButton", text:"Full resync", label:"Full resync from Telegram, which also drops songs deleted there",
+                                     enabled:!window.telegramBusy, visible:!!window.telegramSource, trigger:function(){app.telegram.refresh(window.telegramKey,true)}},
                                     {key:"folders", name:"musicFoldersButton", symbol:"folder", text:"Folders", label:"Manage music folders",
                                      visible:window.destination==="library" && window.libraryTab==="files",
                                      trigger:function(){musicFoldersDialog.open()}},

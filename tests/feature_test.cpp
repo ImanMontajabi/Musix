@@ -5447,6 +5447,31 @@ void runTelegramTests(Backend *b, QQuickWindow *w) {
   const auto firstSong = b->results()->count() ? b->results()->get(0) : QVariantMap();
   c.check(firstSong.value("source").toString() == "telegram" && firstSong.value("remoteId").toString() == "-1001:1000",
           "its songs carry source telegram and a remoteId of chat:message");
+  // The playlist's own header refreshes it, without a trip through Settings.
+  c.check(c.until([&] { return shownItem(root(), "telegramRefreshButton") && shownItem(root(), "telegramFullResyncButton"); }),
+          "a Telegram playlist's header has Refresh and Full resync");
+  {
+    const auto syncedAt = [&] {
+      for (const auto &v : account->sources())
+        if (v.toMap().value("key") == "-1001") return v.toMap().value("syncedAt").toLongLong();
+      return qint64(0);
+    };
+    const auto before = syncedAt();
+    QTest::qWait(1100); // syncedAt is in whole seconds
+    // The header's buttons are rebuilt as the page changes; look again after waiting.
+    if (auto refresh = shownItem(root(), "telegramRefreshButton")) QMetaObject::invokeMethod(refresh, "clicked");
+    c.check(settledSource("-1001") && c.until([&] { return syncedAt() > before; }), "Refresh from the header syncs the source again");
+    c.check(b->results()->count() == 250, "and an incremental refresh with nothing new keeps all of its songs");
+    const auto beforeFull = syncedAt();
+    QTest::qWait(1100);
+    if (auto full = shownItem(root(), "telegramFullResyncButton")) QMetaObject::invokeMethod(full, "clicked");
+    c.check(settledSource("-1001") && c.until([&] { return syncedAt() > beforeFull; }), "Full resync from the header runs too");
+    c.check(c.until([&] { return b->results()->count() == 250; }), "and gives the same 250 songs back");
+  }
+  b->openPlaylist("telegram:4242");
+  c.check(c.until([&] { return b->results()->count() == 3; }), "another Telegram playlist opens");
+  b->openPlaylist("telegram:-1001");
+  c.check(c.until([&] { return b->results()->count() == 250; }), "and back");
   c.check(c.evaluate("telegramSources.added('4242')").toBool(), "an added chat shows as added");
   c.shot("09-added");
 
