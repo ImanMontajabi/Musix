@@ -40,7 +40,7 @@ DIALOGS = [dict(chatId=4242, title='Saved Messages', kind='saved', username=''),
            dict(chatId=-1002, title='Friends', kind='group', username=''),
            dict(chatId=-1003, title='Forum', kind='forum', username='')]
 TOPICS = {-1003: [dict(topicId=11, title='Jazz'), dict(topicId=12, title='Rock')]}
-COUNTS = {(4242, 0): 3, (-1001, 0): 250, (-1002, 0): 4, (-1003, 0): 3, (-1003, 11): 2, (-1003, 12): 1, (-100777, 0): 5}
+COUNTS = {(4242, 0): 3, (-1001, 0): 250, (-1002, 0): 4, (-1003, 0): 3, (-1003, 11): 2, (-1003, 12): 1, (-100777, 0): 5, (-1004, 0): 5}
 
 def png(r, g, b):
     import struct, zlib
@@ -63,7 +63,17 @@ def art(request):
     target.write_bytes(png(200, 40, 40) if request['kind'] == 'photo' else png(40, 40, 200))
     return dict(file=str(target))
 
+# A channel that signs its songs: handles in titles and performers, links, a file name for a title.
+PROMO = [('The Weeknd - Blinding Lights @MusicHub', 'Telegram Audio', 'a.mp3'),
+         ('Song | @MusicHub', '@MusicHub', 'b.mp3'),
+         ('Plain_File @MusicHub', '', 'Plain_File @MusicHub.mp3'),
+         ('Calvin Harris - Feel So Close (TMC & BLH Remix) [t.me/music_hub]', '', 'c.mp3'),
+         ('Untouched (Live)', 'Real Artist', 'd.mp3')]
+
 def song_row(chat, index):
+    if chat == -1004:
+        title, artist, name = PROMO[index]
+        return dict(messageId=1000 + index, title=title, artist=artist, seconds=200, mime='audio/mpeg', size=4000000, date=1700000000 + index, fileName=name, thumb=False)
     """Saved Messages' third song is a plain document: no duration, no artist, its file name for a title."""
     if chat == 4242 and index == 2:
         return dict(messageId=1002, title='Plain', artist='', seconds=0, mime='audio/x-wav', size=16044, date=1700000002, fileName='Plain.wav', thumb=True)
@@ -123,7 +133,7 @@ def fetch(request, replies):
     part.write_bytes(data)
     emit(event='progress', job=job, received=len(data), total=len(data))
     part.replace(target)
-    result = dict(file=str(target), size=len(data), tags=dict(seconds=WAV_SECONDS, title='Tagged %d' % message, artist='Tag Artist'))
+    result = dict(file=str(target), size=len(data), tags=dict(seconds=WAV_SECONDS, title='Tagged %d | @MusicHub' % message, artist='Tag Artist (@MusicHub)'))
     if request.get('artDirectory') and message == 1003:   # only message 1003 has a picture inside
         inside = Path(request['artDirectory']) / (request['artName'] + '.png')
         inside.write_bytes(png(40, 200, 40))

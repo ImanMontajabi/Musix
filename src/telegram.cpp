@@ -1,4 +1,5 @@
 #include "telegram.h"
+#include "telegramtext.h"
 #include <QCoreApplication>
 #include <QCryptographicHash>
 #include <QDateTime>
@@ -422,6 +423,12 @@ QVariantMap Telegram::songRow(const QVariantMap &source, const QJsonObject &song
   // that only knows what the message carried.
   const auto learned = m_tags.value(row.value("id").toString());
   for (auto it = learned.begin(); it != learned.end(); ++it) row[it.key()] = it.value();
+  // A title that is the file's name is still the file's name once it is cleaned; learn() looks for that.
+  const auto rawTitle = song.value("title").toString();
+  if (rawTitle == "Untitled" || rawTitle == QFileInfo(song.value("fileName").toString()).completeBaseName()) row["titleFromName"] = true;
+  const auto cleaned = telegramtext::cleanSong(row.value("title").toString(), row.value("artist").toString());
+  row["title"] = cleaned.title;
+  row["artist"] = cleaned.artist;
   if (const auto topic = source.value("topicId").toString(); !topic.isEmpty() && topic != "0") row["telegramTopic"] = topic;
   return row;
 }
@@ -836,12 +843,14 @@ void Telegram::learn(const QVariantMap &song, const QJsonObject &tags) {
   QVariantMap changes;
   const auto seconds = tags.value("seconds").toInt();
   if (song.value("seconds").toInt() <= 0 && seconds > 0) changes["seconds"] = seconds;
-  const auto artist = tags.value("artist").toString();
+  // The file's own tags carry the same channel marketing the message did.
+  const auto fromTags = telegramtext::cleanSong(tags.value("title").toString(), tags.value("artist").toString());
+  const auto artist = fromTags.artist;
   if (song.value("artist").toString().isEmpty() && !artist.isEmpty()) changes["artist"] = artist;
-  const auto title = tags.value("title").toString();
+  const auto title = tags.value("title").toString().isEmpty() ? QString() : fromTags.title;
   const auto current = song.value("title").toString();
   const auto stem = QFileInfo(song.value("fileName").toString()).completeBaseName();
-  if (!title.isEmpty() && (current == "Untitled" || (!stem.isEmpty() && current == stem))) changes["title"] = title;
+  if (!title.isEmpty() && (current == "Untitled" || song.value("titleFromName").toBool() || (!stem.isEmpty() && current == stem))) changes["title"] = title;
   if (changes.isEmpty()) return;
   const auto id = song.value("id").toString();
   auto kept = m_tags.value(id);

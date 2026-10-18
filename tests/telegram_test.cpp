@@ -340,6 +340,32 @@ private slots:
     // With the work done and no dialog open, the helper goes.
     QVERIFY(reach(*t, "closed"));
   }
+  void channelMarketingIsTakenOffTitlesAndArtists() {
+    signIn();
+    auto t = make();
+    QSignalSpy ready(t.get(), &Telegram::songsReady);
+    t->addSource("-1004", "Promo", "channel", "");
+    QVERIFY(settled(*t, "-1004"));
+    QCOMPARE(ready.count(), 1);
+    const auto songs = ready.first().at(2).toList();
+    QCOMPARE(songs.size(), 5);
+    const auto row = [&](int i) { return songs.at(i).toMap(); };
+    // No performer: the title's own "Artist - Title" is split once the handle is gone.
+    QCOMPARE(row(0).value("artist").toString(), QString("The Weeknd"));
+    QCOMPARE(row(0).value("title").toString(), QString("Blinding Lights"));
+    // A performer that is only a handle is no performer.
+    QCOMPARE(row(1).value("title").toString(), QString("Song"));
+    QCOMPARE(row(1).value("artist").toString(), QString());
+    // A file name: the handle and the extension go, and it is still known to be a file name.
+    QCOMPARE(row(2).value("title").toString(), QString("Plain_File"));
+    QVERIFY(row(2).value("titleFromName").toBool());
+    // What belongs to the music stays.
+    QCOMPARE(row(3).value("artist").toString(), QString("Calvin Harris"));
+    QCOMPARE(row(3).value("title").toString(), QString("Feel So Close (TMC & BLH Remix)"));
+    QCOMPARE(row(4).value("title").toString(), QString("Untouched (Live)"));
+    QCOMPARE(row(4).value("artist").toString(), QString("Real Artist"));
+    QVERIFY(!row(4).contains("titleFromName"));
+  }
   void aForumTopicIsASourceOfItsOwn() {
     signIn();
     auto t = make();
@@ -439,7 +465,7 @@ private slots:
     const auto changes = learned.first().at(1).toMap();
     QCOMPARE(changes.value("seconds").toInt(), 1);
     QCOMPARE(changes.value("artist").toString(), QString("Tag Artist"));
-    QCOMPARE(changes.value("title").toString(), QString("Tagged 12"));
+    QCOMPARE(changes.value("title").toString(), QString("Tagged 12")); // the file's tags had "| @MusicHub" on them
     // Progress was shown while it ran, and is gone when it finished.
     QVERIFY(!shown.isEmpty());
     QCOMPARE(shown.first().value("id").toString(), QString("tg_one"));
