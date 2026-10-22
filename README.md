@@ -20,6 +20,7 @@ A minimal Material 3 player built with C++20 and Qt Quick. No account, no teleme
 ## Features
 
 - **YouTube Music** — search songs, albums, artists and playlists, and play audio with no browser and no ad interface. Standard or data-saver quality.
+- **Telegram** channels and Saved Messages.
 - **Your own files** — import MP3, FLAC, OGG, Opus, M4A, AAC, WAV, AIFF and WMA, individually or a folder at a time. Folders are watched and rescanned while the app runs.
 - **Telegram** — play the audio in your Saved Messages, chats and channels. Songs start while they download, refreshes fetch only what is new, and **Keep offline** pins songs or a whole playlist so they play without Telegram.
 - **Navidrome / Subsonic and Jellyfin** — browse and search your server, stream original or transcoded audio, edit permitted playlists, and sync favourites and history.
