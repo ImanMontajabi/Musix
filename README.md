@@ -20,6 +20,7 @@ A minimal Material 3 player built with C++20 and Qt Quick. No account, no teleme
 ## Features
 
 - **YouTube Music** — search songs, albums, artists and playlists, and play audio with no browser and no ad interface. Standard or data-saver quality.
+- **Telegram** channels and Saved Messages.
 - **Your own files** — import MP3, FLAC, OGG, Opus, M4A, AAC, WAV, AIFF and WMA, individually or a folder at a time. Folders are watched and rescanned while the app runs.
 - **Navidrome / Subsonic and Jellyfin** — browse and search your server, stream original or transcoded audio, edit permitted playlists, and sync favourites and history.
 - **Artwork** — embedded covers, sidecar images, and animated covers from GIF, WebP, MP4 or WebM. Missing covers for YouTube songs are looked up on Apple Music, then MusicBrainz.
