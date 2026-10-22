@@ -401,7 +401,7 @@ ApplicationWindow {
     function activateSide(which) { side=side===which?"":which;if(side==="lyrics")app.fetchLyrics(); }
 
     function quickCommands() {
-        let rows=[{id:"view-layout",title:"Current view layout"},{id:"home-layout",title:"Customize Home"},{id:"sessions",title:"Listening sessions"},{id:"stats",title:"Listening statistics"},{id:"search",title:"Search music"},{id:"queue",title:"Show queue"},{id:"lyrics",title:"Show lyrics"},{id:"playing",title:"Show playing song"},{id:"mini",title:"Open mini player"},{id:"settings",title:"Open settings"},{id:"folders",title:"Manage music folders"},{id:"rescan",title:"Rescan music folders"},{id:"files",title:"Browse local music"},{id:"favorites",title:"Browse liked songs"}];
+        let rows=[{id:"view-layout",title:"Current view layout"},{id:"home-layout",title:"Customize Home"},{id:"sessions",title:"Listening sessions"},{id:"stats",title:"Listening statistics"},{id:"search",title:"Search music"},{id:"queue",title:"Show queue"},{id:"lyrics",title:"Show lyrics"},{id:"playing",title:"Show playing song"},{id:"mini",title:"Open mini player"},{id:"pin-window",title:app.alwaysOnTop?"Unpin window from top":"Pin window on top"},{id:"settings",title:"Open settings"},{id:"folders",title:"Manage music folders"},{id:"rescan",title:"Rescan music folders"},{id:"files",title:"Browse local music"},{id:"favorites",title:"Browse liked songs"}];
         if(app.currentIndex>=0)rows.push({id:"artwork",title:"Change animated cover"},{id:"play",title:app.playing?"Pause playback":"Resume playback"},{id:"immersive",title:"Toggle immersive player"});
         for(const p of app.playlists)rows.push({id:"playlist:"+p.id,title:"Open playlist · "+p.title,value:p.id});
         for(const device of app.audioDevices)rows.push({id:"device:"+device.id,title:"Audio output · "+device.name,value:device.id});
@@ -417,6 +417,7 @@ ApplicationWindow {
             else if(c.id==="queue" || c.id==="lyrics"){if(window.immersive)window.toggleImmersive();window.side=c.id;if(c.id==="lyrics")app.fetchLyrics();}
             else if(c.id==="playing")window.revealPlaying();
             else if(c.id==="mini")window.openMiniPlayer();
+            else if(c.id==="pin-window")app.alwaysOnTop=!app.alwaysOnTop;
             else if(c.id==="settings")settingsDialog.open();
             else if(c.id==="sessions")sessionsDialog.open();
             else if(c.id==="stats")statsDialog.open();
@@ -444,6 +445,10 @@ ApplicationWindow {
     Shortcut { sequence: "Ctrl+J"; enabled: !window.modalOpen; onActivated: window.revealPlaying() }
     Shortcut { sequences: ["?", "F1"]; enabled: !window.modalOpen && !window.searchFocused; onActivated: shortcutHelp.open() }
     Shortcut { sequence: Keymap.miniPlayer; enabled: !window.modalOpen; onActivated: window.openMiniPlayer() }
+    Shortcut { sequence: Keymap.alwaysOnTop; enabled: !window.modalOpen; onActivated: app.alwaysOnTop=!app.alwaysOnTop }
+    function applyPin() { windowChrome.setAlwaysOnTop(window, app.alwaysOnTop, false) }
+    onVisibleChanged: if(visible)applyPin()
+    Connections { target: app; function onAlwaysOnTopChanged() { window.applyPin() } }
     Shortcut { sequence: "Ctrl+K"; enabled: !window.modalOpen; onActivated: window.focusSearch() }
     Shortcut { sequence: "Ctrl+F"; enabled: !window.modalOpen; onActivated: window.focusSearch() }
     Shortcut { sequence: "Space"; enabled: !window.searchFocused && !window.modalOpen && (!window.activeFocusItem || window.activeFocusItem===content || window.activeFocusItem===immersiveLoader.item); onActivated: app.toggle() }
@@ -849,6 +854,7 @@ ApplicationWindow {
                     }
                 }
                 Item { Layout.fillWidth: true; Layout.horizontalStretchFactor: 1 }
+                MButton { objectName: "pinWindowButton"; symbol: "pin"; toggle: true; selected: app.alwaysOnTop; tip: (app.alwaysOnTop?"Unpin from top · ":"Pin on top · ")+Keymap.label(Keymap.alwaysOnTop); onClicked: app.alwaysOnTop=!app.alwaysOnTop }
             }
             RowLayout {
                 id: contentRow

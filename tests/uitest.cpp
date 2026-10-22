@@ -575,6 +575,33 @@ void runFeatureTests(Backend *b,QQuickWindow *w) {
     click(mini,"miniRestoreButton");QTest::qWait(200);
     check(w->isVisible()&&!w->property("compactMode").toBool()&&!mini->isVisible(),"restore hides mini window and restores full player");
   }
+  // Always on top: the toggles flip one preference that both windows follow, and on a platform with no native
+  // window to set a level on (this one) the flag stands in for it.
+  {
+    QQuickWindow *mini=nullptr;for(auto window:QGuiApplication::allWindows())if(window->objectName()=="miniPlayerWindow")mini=qobject_cast<QQuickWindow*>(window);
+    const bool flagged=QGuiApplication::platformName()!=QLatin1String("cocoa");
+    auto pinned=[&](QQuickWindow *window){return bool(window->flags()&Qt::WindowStaysOnTopHint);};
+    check(!b->alwaysOnTop()&&!pinned(w),"the window starts unpinned");
+    auto button=findItem(w->contentItem(),"pinWindowButton");
+    check(button&&button->isVisible(),"the full player has a pin button in its top bar");
+    check(button&&button->property("tip").toString().startsWith("Pin on top"),"it offers to pin");
+    click(w,"pinWindowButton");
+    check(until([&]{return b->alwaysOnTop();}),"the pin button pins");
+    if(flagged)check(until([&]{return pinned(w);}),"the full player takes the stay-on-top flag");
+    check(button&&button->property("selected").toBool()&&button->property("tip").toString().startsWith("Unpin"),"the button shows it is pinned and offers to unpin");
+    QMetaObject::invokeMethod(w,"openMiniPlayer");QTest::qWait(350);
+    if(mini){
+      auto miniPin=findItem(mini->contentItem(),"miniPinButton");
+      check(miniPin&&miniPin->isVisible()&&miniPin->property("selected").toBool(),"the mini player shows the pin it was opened with");
+      if(flagged)check(until([&]{return pinned(mini);}),"the mini player is pinned too");
+      click(mini,"miniPinButton");
+      check(until([&]{return !b->alwaysOnTop();}),"the mini player's pin button unpins");
+      if(flagged)check(until([&]{return !pinned(mini);}),"and its flag goes");
+      click(mini,"miniRestoreButton");QTest::qWait(250);
+    }
+    if(flagged)check(!pinned(w),"the full player is unpinned with it");
+    check(!b->alwaysOnTop(),"pinning ends where it started");
+  }
   check(w->isPersistentGraphics() && w->isPersistentSceneGraph(),"restored player keeps active render resources warm");
   auto restored=w->grabWindow();
   if(auto nav=findItem(w->contentItem(),"nav_home"))if(auto icon=findItem(nav,"materialIcon")){

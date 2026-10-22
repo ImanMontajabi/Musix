@@ -35,6 +35,14 @@ public:
   // Let a frameless window's own rounded shape be the shape macOS sees, so
   // nothing square shows behind it and the shadow follows the corners.
   Q_INVOKABLE void roundCorners(QQuickWindow *window);
+  // Keep a window above the others. On macOS this is the NSWindow's level, set on the live window: asking Qt for
+  // Qt::WindowStaysOnTopHint there recreates the native window, which flickers and drops the chrome set up above.
+  // acrossSpaces also lets a frameless window (the mini player) follow the person to other Spaces and stay over
+  // a fullscreen app. Where there is no native window to ask (Linux, the offscreen platform the UI suites run on)
+  // it is the flag.
+  Q_INVOKABLE void setAlwaysOnTop(QQuickWindow *window, bool on, bool acrossSpaces = false);
+  // The NSWindow level the window is at (0 is normal, 3 floating), or -1 without a native window.
+  Q_INVOKABLE int nativeLevel(QQuickWindow *window) const;
   qreal inset() const { return m_inset; }
 signals:
   void insetChanged();

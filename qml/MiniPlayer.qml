@@ -18,6 +18,11 @@ Window {
     signal restoreRequested()
     Component.onCompleted: { windowResources.manage(mini);windowChrome.roundCorners(mini); }
     onClosing: Qt.quit()
+    // The preference is the app's, so the full player and this one are pinned together.
+    function applyPin() { windowChrome.setAlwaysOnTop(mini, app.alwaysOnTop, true) }
+    onVisibleChanged: if(visible)applyPin()
+    Connections { target: app; function onAlwaysOnTopChanged() { mini.applyPin() } }
+    Shortcut { sequence: Keymap.alwaysOnTop; onActivated: app.alwaysOnTop=!app.alwaysOnTop }
     Shortcut { sequence: Keymap.miniPlayer; onActivated: mini.restoreRequested() }
     Shortcut { sequence: "Escape"; enabled:!miniVolume.popupVisible;onActivated: mini.restoreRequested() }
     Shortcut { sequence: "Ctrl+Q"; onActivated: Qt.quit() }
@@ -38,6 +43,7 @@ Window {
                     SungText { text: presentation.shown.title || "Nothing playing"; opacity: presentation.fade; transform: Translate { x: presentation.offset } Layout.fillWidth: true; font.pixelSize: Theme.titleMedium; typeRole: "titleMedium"; font.weight: Font.DemiBold }
                     SungText { text: presentation.shown.artist || ""; opacity: presentation.fade; transform: Translate { x: presentation.offset } Layout.fillWidth: true; font.pixelSize: Theme.bodyMedium; color: Theme.muted }
                 }
+                MButton { objectName: "miniPinButton"; symbol: "pin"; toggle: true; selected: app.alwaysOnTop; tip: (app.alwaysOnTop?"Unpin from top · ":"Pin on top · ")+Keymap.label(Keymap.alwaysOnTop); onClicked: app.alwaysOnTop=!app.alwaysOnTop }
                 MButton { objectName: "miniRestoreButton"; symbol: "expand"; tip: "Full player · "+Keymap.label(Keymap.miniPlayer); onClicked: mini.restoreRequested() }
                 MButton { symbol: "close"; tip: "Quit Musix"; onClicked: Qt.quit() }
             }

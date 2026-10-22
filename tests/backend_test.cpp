@@ -281,6 +281,14 @@ private slots:
     again.signOut();QVERIFY(!QFile::exists(path));QVERIFY(!again.hasToken());
 #endif
   }
+  void alwaysOnTopIsOnePreferenceThatIsKept() {
+    Backend b;b.setWatchMusicFolders(false);const bool before=b.alwaysOnTop();
+    QSignalSpy spy(&b,&Backend::alwaysOnTopChanged);
+    b.setAlwaysOnTop(before);QCOMPARE(spy.count(),0);   // no change, no signal
+    b.setAlwaysOnTop(!before);QCOMPARE(spy.count(),1);QCOMPARE(b.alwaysOnTop(),!before);
+    b.save();{Backend again;again.setWatchMusicFolders(false);QCOMPARE(again.alwaysOnTop(),!before);}
+    b.setAlwaysOnTop(before);QCOMPARE(spy.count(),2);
+  }
   void libraryPolish() {
     Backend b;b.setWatchMusicFolders(false);b.clearQueue();b.m_localTracks.clear();b.m_playlists.clear();
     auto a=track("local_one"),c=track("local_two"),d=track("local_three");

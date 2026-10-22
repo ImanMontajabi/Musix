@@ -11,6 +11,8 @@ QtObject {
     readonly property bool mac: Qt.platform.os==="osx"
     // Cmd+M is Minimize and has to stay Minimize; the app was swallowing it.
     readonly property string miniPlayer: mac ? "Ctrl+Shift+M" : "Ctrl+M"
+    // Cmd+Shift+P is the command palette.
+    readonly property string alwaysOnTop: "Ctrl+Shift+T"
     // F11 is Show Desktop and never reaches the app at all.
     readonly property string immersive: mac ? "Ctrl+Shift+F" : "F11"
     // Two a Mac user expects that had nothing on them. Left off Linux, where

@@ -14,6 +14,11 @@ bool WindowChrome::offerToQuitUnresponsive(qint64 pid) {
 void WindowChrome::blend(QQuickWindow *) {}
 void WindowChrome::titleBarDoubleClick() {}
 void WindowChrome::roundCorners(QQuickWindow *) {}
+void WindowChrome::setAlwaysOnTop(QQuickWindow *window, bool on, bool) {
+  if (window)
+    window->setFlag(Qt::WindowStaysOnTopHint, on);
+}
+int WindowChrome::nativeLevel(QQuickWindow *) const { return -1; }
 void WindowChrome::refresh() {}
 void WindowChrome::installAppMenuItems() {}
 #endif

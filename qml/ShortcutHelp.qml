@@ -28,6 +28,7 @@ MDialog {
             ["Mute¹","M"],
             ["Back","Alt+←"],
             ["Mini player",Keymap.miniPlayer],
+            ["Pin window on top",Keymap.alwaysOnTop],
             ["Immersive player",Keymap.immersive],
             ["Select all songs²","Ctrl+A"],
             ["Extend selection²","Shift+↑ / ↓"],

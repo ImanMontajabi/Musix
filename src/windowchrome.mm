@@ -103,6 +103,29 @@ void WindowChrome::blend(QQuickWindow *window) {
   installAppMenuItems();
 }
 
+void WindowChrome::setAlwaysOnTop(QQuickWindow *window, bool on, bool acrossSpaces) {
+  if (!window)
+    return;
+  if (QGuiApplication::platformName() != QLatin1String("cocoa")) {
+    window->setFlag(Qt::WindowStaysOnTopHint, on);
+    return;
+  }
+  // winId() creates the native window if the window has not been shown yet, so the level is there when it is.
+  NSWindow *native = nativeWindow(window);
+  if (!native)
+    return;
+  native.level = on ? NSFloatingWindowLevel : NSNormalWindowLevel;
+  // Auxiliary is not allowed beside the primary behaviour a fullscreen-capable main window carries, so only the
+  // frameless mini player takes it.
+  const NSWindowCollectionBehavior spaces = NSWindowCollectionBehaviorCanJoinAllSpaces | NSWindowCollectionBehaviorFullScreenAuxiliary;
+  native.collectionBehavior = (on && acrossSpaces) ? (native.collectionBehavior | spaces) : (native.collectionBehavior & ~spaces);
+}
+
+int WindowChrome::nativeLevel(QQuickWindow *window) const {
+  NSWindow *native = nativeWindow(window);
+  return native ? int(native.level) : -1;
+}
+
 void WindowChrome::installAppMenuItems() {
   if (QGuiApplication::platformName() != QLatin1String("cocoa"))
     return;

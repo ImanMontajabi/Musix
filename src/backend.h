@@ -206,6 +206,7 @@ class Backend : public QObject {
   Q_PROPERTY(bool albumCovers READ albumCovers WRITE setAlbumCovers NOTIFY settingsChanged)
   Q_PROPERTY(bool animatedArtwork READ animatedArtwork WRITE setAnimatedArtwork NOTIFY settingsChanged)
   Q_PROPERTY(bool motion READ motion WRITE setMotion NOTIFY settingsChanged)
+  Q_PROPERTY(bool alwaysOnTop READ alwaysOnTop WRITE setAlwaysOnTop NOTIFY alwaysOnTopChanged)
   Q_PROPERTY(bool historyPaused READ historyPaused WRITE setHistoryPaused NOTIFY settingsChanged)
   Q_PROPERTY(bool trackNotifications READ trackNotifications WRITE setTrackNotifications NOTIFY settingsChanged)
   Q_PROPERTY(bool keepCompletedLyrics READ keepCompletedLyrics WRITE setKeepCompletedLyrics NOTIFY settingsChanged)
@@ -480,6 +481,9 @@ public:
   bool animatedArtwork() const { return m_settings.value("animatedArtwork",true).toBool(); }
   void setAnimatedArtwork(bool value) { if(animatedArtwork()==value)return;m_settings.setValue("animatedArtwork",value);emit settingsChanged(); }
   bool motion() const { return m_settings.value("motion", true).toBool(); }
+  // One preference for both windows, so pinning survives the trip between the full player and the mini player.
+  bool alwaysOnTop() const { return m_settings.value("alwaysOnTop", false).toBool(); }
+  void setAlwaysOnTop(bool on) { if (on == alwaysOnTop()) return; m_settings.setValue("alwaysOnTop", on); emit alwaysOnTopChanged(); }
   void setMotion(bool);
   Q_INVOKABLE void setUiActive(bool active);
   bool uiActive() const { return m_uiActive; }
@@ -649,6 +653,7 @@ signals:
   void positionChanged();
   void lyricIndexChanged();
   void settingsChanged();
+  void alwaysOnTopChanged();
   void libraryChanged();
   void followingChanged();
   // An automatic check found this many; a manual one says so in a toast.
