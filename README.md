@@ -21,11 +21,14 @@ A minimal Material 3 player built with C++20 and Qt Quick. No account, no teleme
 
 - **YouTube Music** — search songs, albums, artists and playlists, and play audio with no browser and no ad interface. Standard or data-saver quality.
 - **Your own files** — import MP3, FLAC, OGG, Opus, M4A, AAC, WAV, AIFF and WMA, individually or a folder at a time. Folders are watched and rescanned while the app runs.
+- **Telegram** — play the audio in your Saved Messages, chats and channels. Songs start while they download, refreshes fetch only what is new, and **Keep offline** pins songs or a whole playlist so they play without Telegram.
 - **Navidrome / Subsonic and Jellyfin** — browse and search your server, stream original or transcoded audio, edit permitted playlists, and sync favourites and history.
 - **Artwork** — embedded covers, sidecar images, and animated covers from GIF, WebP, MP4 or WebM. Missing covers for YouTube songs are looked up on Apple Music, then MusicBrainz.
 - **Lyrics** — synchronised lyrics with an immersive view, timing adjustment, LRC import and search with jump-to-line.
 - **Library tools** — likes, history, smart playlists, M3U import and export, custom playlist covers, multi-selection, drag reordering and Undo.
 - **Playback** — mini player, immersive player, queue editing, volume normalisation, per-song gain, shuffle, repeat, sleep timer and playback speed.
+- **A good Mac citizen** — the song shows in Control Center and on the lock screen, the media keys and AirPods controls work, playback can pause when headphones or Bluetooth disconnect, and the player can stay on top of other windows (**⌘⇧T**), across Spaces and over fullscreen apps for the mini player.
+- **Listening history** — send what you play to ListenBrainz. Off until you sign in.
 - **Appearance** — light and dark themes that follow the system, a pickable Material accent colour, artwork-derived colour and an ambient cover backdrop.
 - **Keyboard and assistive use** — every control takes focus and shows it, and colours are solved to hold 4.5:1 contrast in both themes.
 
@@ -60,6 +63,7 @@ Every launch after that is ordinary. The refusal is expected: Musix is signed, b
 | ⌘L | Queue |
 | ⌘Y | Lyrics |
 | ⌘⇧M | Mini player |
+| ⌘⇧T | Pin the window on top (full and mini player) |
 | ⌘⇧F | Immersive player |
 | ⌘← / → | Previous / next track |
 | ← / → | Seek ten seconds |
@@ -88,6 +92,8 @@ What leaves your Mac, and only when the matching feature is used:
 | `music.youtube.com` | Search terms, and the id of the song being played | Browsing or playing YouTube Music. Anonymous — no Google account is involved, and likes and playlists stay local. |
 | `itunes.apple.com`, `music.apple.com` | A song's title, artist and album | Looking for a cover or an animated cover a YouTube song has none of |
 | `musicbrainz.org`, `coverartarchive.org` | A song's title, artist and album | Only when Apple Music has no match |
+| Telegram's servers | Your phone number and the login code (and your two-step password if you have one), then the requests to list and download the audio you choose | Only if you sign in to Telegram. The session is stored on your Mac in a file only you can read, and signing out deletes it, with anything kept offline. |
+| `api.listenbrainz.org` | Your user token, and each song's title, artist, release (never a Telegram chat's name) and length, with when you played it | Only if you sign in under **Settings → Connections → Listening history** and leave it on |
 | `lrclib.net` | A song's title, artist, album and duration | Lyrics, when the source has none. Can be turned off in Settings. |
 | Your own server | Whatever Subsonic or Jellyfin needs | Only if you connect one |
 | `music.youtube.com`, `www.youtube.com` | The id of each artist or channel you follow | Only if you follow someone: once a day while Musix is running, and when you press refresh under **Library → Following**, Musix asks YouTube Music for each artist's albums and singles and YouTube for each channel's latest uploads. What it finds stays on your Mac. Unfollow to stop. |
@@ -110,6 +116,10 @@ Your data lives in `~/Library/Application Support/Sung/sung/`, settings in `~/Li
 **A song will not play.** Playback depends on YouTube's availability, your region and the network. Musix buffers a song before playing it, so starting can take a moment. When YouTube changes how audio is served, the app refreshes its own resolver in the background — at most once a day, and immediately after a failure — keeping the last working version if an update is broken. There is nothing to run by hand.
 
 **My server password is not remembered.** It is not saved on macOS. Storing it needs a freedesktop secret service, which macOS does not have, so a server connection lasts for the session and the app says so when you connect. Address and username are remembered; the password is not.
+
+**Playback does not pause when my headphones or Bluetooth disconnect.** **Settings → Playback → Pause when audio output disconnects** is off by default. With it on, unplugging the headphone jack, a Bluetooth device going out of range or switching off, or a USB or display speaker being unplugged pauses playback, and Play continues from the same place on the speakers.
+
+**Telegram songs are missing, or not up to date.** Refresh asks Telegram only for messages newer than the last sync. Messages deleted in Telegram are noticed by **Full resync** (Settings → Connections → Telegram, or in the playlist's header). Songs that Telegram reports no size for are downloaded whole before they play, and files over 200 MB are refused.
 
 **ListenBrainz scrobbling.** Settings → Connections → Listening history takes your user token. macOS has no freedesktop secret service, so the token is kept in a file only you can read (`scrobbler/token` in the app's data folder, mode 0600) rather than in the Keychain.
 

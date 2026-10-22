@@ -86,6 +86,12 @@ Press **⌘⇧P** for quick actions, saved playlists and audio outputs. Type to 
 
 The arrow beside the player’s volume controls opens an audio-output picker. It remains available in narrow windows.
 
+**Control Center and media keys.** What is playing (title, artist, album, cover and position) shows in Control Center and on the lock screen, and the keyboard media keys, Control Center and AirPods controls play, pause, skip and scrub it. If another app (a browser tab with video, say) played more recently, macOS may send the keys to it; start a song in Musix and they come back.
+
+**Settings → Playback → Pause when audio output disconnects** pauses playback when the headphone jack is unplugged, Bluetooth headphones go out of range or are switched off, or a USB or display speaker is unplugged, instead of carrying on through the Mac’s speakers. It works with the output set to System default or to a chosen device. Press Play to continue from the same place. Choosing another output yourself does not pause. The setting is off by default.
+
+**Pin on top.** The pin button at the right of the top bar, the pin in the mini player’s header, **⌘⇧T** and Quick Actions keep the window above other windows. It is one setting for the full player and the mini player, so it carries from one to the other. The mini player also follows you to other Spaces and stays over fullscreen apps.
+
 **Settings → Playback → Volume normalization** evens out loudness between recordings. ReplayGain and R128 tags are read when a file is imported; everything else, including YouTube and server audio, is measured from the decoded stream and levelled from the next play onward. Recordings shorter than 45 seconds of playback are never treated as measured. Gain is limited to -15 dB and +6 dB, and the mixer cannot amplify past full scale, so a quiet track is only lifted while your own volume leaves headroom. Your chosen volume is never rewritten, and **Track details** shows the correction in use. Up to 2,000 measurements are kept locally. Existing imports need a rescan to pick up their tags.
 
 **Track details** shows playback codec, bitrate and decoded sample rate/channels when reported by the decoder. Local file metadata is labeled separately. Missing values are omitted.
@@ -108,6 +114,30 @@ Connection settings include audio quality and server listening history. Original
 
 Tested against Navidrome 0.63.2 and Jellyfin 10.11.11 / 12.0. Other servers must support Subsonic 1.16.1 token authentication and JSON responses. OpenSubsonic lyrics and form POST are detected when available. Jellyfin 10.11 removes duplicate playlist additions on the server; 12.0 preserves them. Jellyfin collections are paginated; a single opened collection is limited to 20,000 items. Server administration, video, podcasts, remote-device control and permanent offline downloads are outside this music integration.
 
+## Connect Telegram
+
+Telegram is a source of its own. It can be signed in beside a music server, and it plays the audio files in your Saved Messages, your chats and channels, and public channels.
+
+**Sign in.** Open **Settings → Connections → Telegram**, enter your phone number, then the code Telegram sends you and, if your account has one, your two-step password. The session is a file only you can read in Musix’s data folder. **Sign out** deletes it, the pictures Musix saved, and everything kept offline.
+
+**Choose music.** **Settings → Connections → Telegram music** lists Saved Messages, your joined chats, forum topics, and any public channel by its @name or link. Each one you choose becomes a playlist of its audio messages under **Library → Playlists**, with the chat’s picture as its cover.
+
+**Play.** A song starts after its first block arrives and keeps downloading as it plays; seeking ahead fetches from where you jumped. When it is whole it is cached, and later plays use the file like any local one, so gapless and crossfade work. Musix keeps the 12 songs you played most recently, within 1 GiB, and fetches the next song a minute before it is needed. Files over 200 MB are refused, and a song Telegram gives no size for is downloaded whole before it plays. Covers are fetched as rows scroll into view.
+
+**Titles and artists** are cleaned of channel marketing: `@handles`, `t.me` links, “Join @…”, and a file extension left in the title go. What belongs to the music stays: `(feat. …)`, `(Live)`, `(TMC & BLH Remix)`. When Telegram gives no performer, a title written `Artist - Title` is split. Songs already in your library keep their old titles until the next **Full resync**.
+
+**Refresh and Full resync.** In the header of a Telegram playlist (and in Settings), **Refresh** asks Telegram only for messages newer than the last sync, so it is quick. A message deleted in Telegram is noticed only by **Full resync**. The first refresh after an upgrade is a full one.
+
+**Keep offline.** A song’s menu, and **Keep offline** in a Telegram playlist’s header, pin songs so they play without Telegram, even if the message is later deleted. They are downloaded one at a time to their own folder, which the cache’s limits and **Clear cache** never touch. A song already gone from Telegram when its turn comes is reported and unpinned; any other failure leaves it marked as failed until you ask again. New downloads are refused when less than 500 MB of disk would be left. **Remove offline** unpins, and removing a chat’s last source or signing out deletes what was kept.
+
+Lyrics are looked up by title and artist, and radio and autoplay skip Telegram songs.
+
+## Listening history
+
+**Settings → Connections → Listening history** sends what you play to [ListenBrainz](https://listenbrainz.org). Paste the user token from your account’s settings page and choose **Sign in**. A song counts after half its length or four minutes, whichever comes first; songs under 30 seconds never count. Listens wait on your Mac and are retried until the server accepts them.
+
+macOS has no Secret Service, so the token is kept in a file only you can read (`scrobbler/token` in Musix’s data folder) rather than in the Keychain. **Sign out** deletes it. A Telegram song is sent under its cleaned artist and title, never with its chat as the release, and one with no artist is not sent.
+
 ## Accounts and saved data
 
 **Settings → Connections → YouTube → Streaming quality** chooses what a song costs to download. Standard takes the best stream YouTube offers, which is Opus at about 130 kbps. Data saver caps it, which lands on Opus at about 67 kbps and a little over half the bytes. Musix buffers the whole song before playing it, so this is the download either way. No account or sign-in is involved, and neither setting is a lossless one; for lossless audio use local files or a music server set to Original.
@@ -116,7 +146,7 @@ YouTube browsing is anonymous. YouTube likes, local playlists and local history 
 
 For streams requiring sign-in, Settings can import a user-selected Netscape-format cookie file. Musix does not read your browser profile. Cookies can be removed in Settings.
 
-Library data is stored in `~/Library/Application Support/Sung/sung/`, settings in `~/Library/Preferences/com.sung.sung.plist`, and cache in `~/Library/Caches/Sung/sung/`. Musix has no analytics or telemetry. Optional LRCLIB lyric lookups send the song’s title, artist and duration; they can be disabled in Settings.
+Telegram’s session, its choices and its kept-offline songs, and the listening-history token, are in that same data folder (`telegram/`, `telegram-offline/`, `scrobbler/`). Library data is stored in `~/Library/Application Support/Sung/sung/`, settings in `~/Library/Preferences/com.sung.sung.plist`, and cache in `~/Library/Caches/Sung/sung/`. Musix has no analytics or telemetry. Optional LRCLIB lyric lookups send the song’s title, artist and duration; they can be disabled in Settings.
 
 ## Troubleshooting
 
